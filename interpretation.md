@@ -1,86 +1,173 @@
-# Interpretation of the Product Memo and C_SQD.pdf
+# Interpretation Of The C-SQD / FEN Direction
 
 ## Purpose
 
-This document reconciles the product memo with `C_SQD.pdf` and establishes a working interpretation for product and implementation decisions.
+This document records the working interpretation for product and implementation decisions.
 
-The product memo supersedes `C_SQD.pdf` wherever the two documents conflict or leave an ambiguity, with one exception: revenue framing should default to `C_SQD.pdf`.
+C-SQD is now being built as **general epistemic audit infrastructure**. Academic Peer Review is the first active domain, not the full scope of the platform.
 
-## Precedence Rule
+## Source Precedence
 
-1. If the product memo and `C_SQD.pdf` agree, treat the shared position as authoritative.
-2. If they conflict or point in different directions, follow the product memo.
-3. If the conflict concerns revenue, monetization emphasis, or financial sustainability, follow `C_SQD.pdf`.
-4. If neither document resolves a question, prefer the interpretation that best supports C-SQD as a web-native scholarly evaluation network.
+Use this order when documents conflict:
 
-## Core Product Interpretation
+1. `CSQD_NEW.pdf`
+2. `FEN_Schema_for_CSQD.pdf`
+3. `NEXT_STEPS.md` for current engineering execution
+4. `build_decisions.md` for stack and architecture choices
+5. Older MVP documents in `old_mvp_docs/`
 
-C-SQD should be understood first as review marketplace and scholarly evaluation infrastructure, not as a document reader or PDF hosting product.
+Older MVP docs are useful history, especially for revenue and marketplace framing, but they should not override the current C-SQD/FEN model.
 
-The central asset is the review graph: ElementReviews, SynthesisReviews, bug bounty outcomes, reviewer histories, disagreements, challenge outcomes, endorsement records, tags, and evaluation tuples. Article display, manuscript hosting, and reading interfaces exist to support the creation, discovery, reuse, and evaluation of that graph.
+## Core Interpretation
 
-## Scholarly Objects
+C-SQD should be understood first as epistemic audit infrastructure.
 
-The primary object in the product should be a scholarly object rather than a PDF or journal article.
+The central product asset is not a document reader, PDF host, or narrow manuscript marketplace. The central asset is the audit graph:
 
-A scholarly object may represent a manuscript, preprint, published article, report, dataset, software package, protocol, or other intellectual contribution. Reviews attach to this canonical object rather than to a particular file, URL, or publisher location.
+- domain instantiations
+- audit objects
+- review events
+- review-event memberships
+- solicitations and solicitation events
+- synthesis structures
+- challenges
+- provenance
+- evaluation tuples
 
-This interpretation extends the manuscript-centered language in `C_SQD.pdf` without rejecting it. Manuscripts remain the initial and most important use case, but the product architecture should not assume that all reviewable objects are manuscripts.
+Academic Peer Review remains the first implemented domain. Its scholarly search, library, assignments, article access, and review workspace are domain-specific surfaces over the general audit infrastructure.
 
-## Hosting and Publisher-Controlled Content
+## Core Ontology
 
-The memo resolves ambiguity around "publishing," "uploading," and "open access" in `C_SQD.pdf`.
+Use the following interpretation when designing backend and UI behavior:
 
-C-SQD may host or natively render content when it has the rights to do so, such as author-submitted manuscripts, preprints, permissively licensed works, conference submissions, datasets, code, protocols, and other authorized materials.
+- `DomainInstantiation`: a configured epistemic audit domain, such as Academic Peer Review or Clinical Trial Protocol Review.
+- `AuditObject`: the durable thing being reviewed inside a domain.
+- `ReviewEvent`: an atomic, timestamped, provenance-bearing evaluative act.
+- `ReviewEventMembership`: the relationship between a review event and the audit object or objects it evaluates.
+- `ERSolicitation`: a request for element-review labor.
+- `SolicitationEvent`: append-only lifecycle history for a solicitation.
+- `SynthesisSection`: authored integrative interpretation.
+- `Challenge`: structured contestation over review events or syntheses.
+- Evaluation tuple `E(A | R, Teval) -> (N, M, S, L, U)`: a derived view, not ordinary stored state.
 
-For copyrighted or publisher-controlled works, C-SQD should preserve the external publisher or repository as the authoritative source. In those cases, C-SQD should store metadata, canonical identifiers, links, review records, and evaluation data, while review activity occurs inside C-SQD.
+The old scholarly/review terms should be treated as Academic Peer Review adapters, not as the universal platform model.
 
-Therefore, "uploaded, discovered, and reviewed on the C-SQD platform" should not be interpreted as requiring C-SQD to host unauthorized copies of publisher-controlled articles.
+## Academic Peer Review As First Domain
 
-## Web Platform First
+The current app may still use domain-specific language:
 
-The primary implementation should be web-native.
+- Scholarly Search
+- scholarly objects
+- articles/preprints
+- review assignments
+- manuscript or paper review
 
-Authors, reviewers, readers, institutions, and funders should be able to participate through a browser. Assignment acceptance, review submission, reviewer profiles, challenge workflows, bug bounties, payment workflows, evaluation tuples, tags, communities, and institutional reporting should all be accessible from the web platform.
+But these should be interpreted as Academic Peer Review surfaces over the general C-SQD substrate.
 
-A desktop application may eventually be useful, but it should be treated as a specialized productivity layer for intensive professional review work. It should synchronize with the underlying C-SQD review graph rather than define the platform.
+For example:
 
-## Review Visibility and Subscriptions
+- A `ScholarlyObject` is an Academic Peer Review adapter over `AuditObject`.
+- A legacy `ReviewEpisode` should become a `ReviewEvent`.
+- A legacy `ReviewAssignment` should become an `ERSolicitation` plus `SolicitationEvent`.
+- A synthesis review should become a `ReviewEvent` plus `SynthesisSection`.
 
-`C_SQD.pdf` says manuscripts are open access while reviews and other insights may require subscription. The memo emphasizes visibility, discoverability, citability, and reuse of the review graph.
+## Multi-Domain Product Framing
 
-These should be reconciled as follows:
+The live product should make clear that C-SQD has multiple possible domains.
 
-- The existence of reviews, review metadata, evaluation summaries, reviewer records, scholarly object identities, and public signals needed for discovery should be visible enough to support network effects.
-- Full review text, advanced analytics, custom community-filtered evaluations, institutional reports, and other higher-value insights may be subscription-gated.
-- Public review records should remain meaningful even if some detailed views or tools require payment.
-- The platform should avoid hiding so much review information that reviews cease to be discoverable, citable, or reusable.
+Current domain:
+
+- Academic Peer Review
+
+Planned domains may include:
+
+- Clinical Trial Protocol Review
+- AI System Auditing
+- Policy Evidence Review
+
+Do not create fake workflows for planned domains. It is fine to show them as planned, but they should become operational only when real domain configs, audit object types, and adapters exist.
+
+The Domains page should separate:
+
+- domain semantics: audit objects, review modes, shared primitives, evaluation basis
+- implemented UI surfaces: Scholarly Search, Library, Assignments, review workspaces
+
+Library is cross-domain user workspace infrastructure. Scholarly Search is an Academic Peer Review surface, not a global C-SQD primitive.
+
+Use "causal & statistical" for evaluation language that might otherwise be narrower.
+
+## Hosting And Publisher-Controlled Content
+
+C-SQD may host or natively render content when it has the rights to do so, such as:
+
+- author-submitted manuscripts
+- preprints
+- permissively licensed works
+- conference submissions
+- datasets
+- code
+- protocols
+- other authorized materials
+
+For copyrighted or publisher-controlled works, C-SQD should preserve the external publisher or repository as the authoritative source.
+
+In those cases, C-SQD should store:
+
+- metadata
+- canonical identifiers
+- links
+- access-rights signals
+- audit objects
+- review events
+- evaluation data
+
+C-SQD should not host or embed unauthorized copies of publisher-controlled articles. A random PDF URL alone is not enough for native display. Native display should require trustworthy rights signals.
+
+## Review Visibility And Subscriptions
+
+The existence of reviews, review metadata, object identities, and public discovery signals should be visible enough to support network effects.
+
+Full review text, advanced analytics, custom community-filtered evaluations, institutional reports, and other high-value views may be subscription-gated.
+
+The platform should avoid hiding so much review information that reviews cease to be discoverable, citable, or reusable.
 
 ## Revenue Framing
 
-Revenue and financial sustainability should follow `C_SQD.pdf`.
+Older MVP docs remain useful for revenue framing where they do not conflict with the C-SQD/FEN model.
 
-Manuscript submission fees primarily fund review activity and should not be framed as the main source of platform profit. Financial sustainability should be understood as coming mainly from secondary revenue streams, including subscriptions, review challenge fees, bug bounty fees, verified tags, nonstandard manuscript evaluations, institutional or community services, and AI assistant products.
+Submission or review fees should primarily support review activity and market functioning. Long-term sustainability may also come from:
 
-The product memo's claim that review creation is the economic engine should be interpreted operationally, not as a revenue-priority statement. Review activity creates the network value that enables the platform's revenue streams, but the platform's profit model should default to the framing in `C_SQD.pdf`.
+- subscriptions
+- challenge fees
+- bounty fees
+- verified tags
+- nonstandard evaluations
+- institutional services
+- community services
+- AI assistant products
+
+Revenue design should support the integrity and usefulness of the audit graph, not distort it.
 
 ## Implementation Implications
 
-Product and engineering decisions should optimize for low-friction participation in the review graph.
+Product and engineering decisions should optimize for low-friction participation in the audit graph.
 
-The platform should prioritize:
+Prioritize:
 
-- canonical scholarly object identity
-- review assignment and submission workflows
-- ElementReview and SynthesisReview records
-- reviewer profiles, tags, endorsements, and public reputation
-- challenge and bug bounty workflows
-- evaluation tuple computation and community-filtered recomputation
-- browser-accessible discovery and institutional inspection
+- durable audit-object identity
+- review-event creation
+- solicitation lifecycle history
+- synthesis and challenge workflows
+- provenance
+- evaluation tuple computation
+- domain-scoped search/intake
 - rights-aware handling of native versus externally controlled content
+- browser-accessible participation
 
-The platform should not prioritize a sophisticated document reader ahead of the core review marketplace, except where native rendering directly improves review creation, annotation, or evaluation workflows for content C-SQD is allowed to display.
+Do not prioritize a sophisticated document reader ahead of the core audit workflow, except where native rendering directly improves review creation or evaluation for content C-SQD is allowed to display.
 
 ## Short Form
 
-When in doubt, build C-SQD as a web-native review graph and evaluation marketplace. Treat manuscripts and articles as important reviewable objects, not as the product itself. Use native article display when rights permit, link out when rights require it, and follow `C_SQD.pdf` for revenue framing.
+When in doubt, build C-SQD as multi-domain epistemic audit infrastructure.
+
+Treat Academic Peer Review as the first domain. Treat articles and manuscripts as important audit objects, not as the product itself. Use native article display when rights permit, link out when rights require it, and keep review events, provenance, challenges, and evaluation tuples at the center of the platform.

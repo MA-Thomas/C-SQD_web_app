@@ -2,21 +2,23 @@
 
 ## Purpose
 
-This document records implementation decisions for beginning the C-SQD codebase. It should be read alongside `interpretation.md`, `C_SQD_web_app_build_plan.pdf`, `C_SQD_web_app_product_memo.pdf`, and `C_SQD.pdf`.
+This document records implementation decisions from the beginning of the C-SQD codebase.
 
-The immediate goal is an MVP, but the architecture should remain compatible with the eventual full C-SQD platform, including social network features, bug bounties, review challenges, subscriptions, AI-assisted workflows, institutional reporting, and richer community-based evaluation.
+Status note: this file is still useful for stack and local architecture decisions, but it is partly MVP-era. For current ontology, source precedence, and execution roadmap, read `interpretation.md` and `NEXT_STEPS.md` first. The current direction is the broader C-SQD/FEN epistemic audit infrastructure, with Academic Peer Review as the first active domain.
+
+Older MVP documents in `old_mvp_docs/` remain historical context.
 
 ## Product Posture
 
-C-SQD will be built as a web-native review graph and scholarly evaluation marketplace.
+C-SQD will be built as web-native epistemic audit infrastructure.
 
-The MVP should prove the core loop:
+The first active domain, Academic Peer Review, should prove the core loop:
 
-1. C-SQD identifies or ingests a reviewable scholarly object.
-2. A reviewer receives or accepts a review assignment.
+1. C-SQD identifies or ingests a reviewable audit object.
+2. A reviewer receives or accepts a review solicitation.
 3. The reviewer submits structured evaluation.
-4. The system records the review as part of the evaluation graph.
-5. Any associated payment or bounty state is tracked.
+4. The system records the review as a provenance-bearing review event.
+5. Any associated payment, solicitation, challenge, or bounty state is tracked.
 
 The platform should not be designed as a paper repository or document reader. Native article display may be added when rights permit and when it directly improves review workflows.
 
@@ -60,15 +62,15 @@ Rationale:
 - productive for dense web application workflows
 - good fit for admin screens, reviewer workspaces, dashboards, search, and social features
 - large ecosystem for forms, tables, data visualization, auth integrations, and design systems
-- faster path to a polished browser-tested MVP than a full Rust frontend
+- faster path to polished browser-tested workflows than a full Rust frontend
 
 ### Browser Extension Companion
 
-Include an optional cross-browser browser extension in the MVP as a first-class reviewer companion.
+Treat a cross-browser browser extension as a possible future reviewer companion, not as a prerequisite for the current product slice.
 
 The core C-SQD web app must remain browser-agnostic and fully usable without an extension. The extension should improve the workflow for externally hosted journal and publisher content by connecting the publisher page to the C-SQD review graph.
 
-The MVP extension should support:
+A future extension could support:
 
 - detecting a DOI, canonical URL, title, and basic article metadata from the current publisher or repository page
 - matching the current page to an existing C-SQD scholarly object, or starting a create/import flow when no match exists
@@ -81,7 +83,7 @@ The extension must not be required for ordinary platform participation. It must 
 
 ### Search
 
-Use PostgreSQL full-text search for the MVP.
+Use PostgreSQL full-text search for the initial implementation.
 
 Add a dedicated search service, such as Meilisearch or OpenSearch, only when product needs exceed PostgreSQL search. Future needs may include higher-quality ranking, faceted discovery at scale, typo tolerance, semantic search, and community-aware ranking.
 
@@ -101,9 +103,9 @@ Avoid heavyweight queue infrastructure until the platform's load or reliability 
 
 ### Payments
 
-Use an internal payment ledger and a manual provider adapter for the MVP.
+Use an internal payment ledger and a manual provider adapter for early payment workflows.
 
-Do not begin with live payment processing or payouts. The MVP should track obligations, approval states, funding sources, payout states, and provider references in a processor-agnostic way.
+Do not begin with live payment processing or payouts. The early system should track obligations, approval states, funding sources, payout states, and provider references in a processor-agnostic way.
 
 Stripe Connect or another payment provider can be added later through an adapter.
 
@@ -118,20 +120,22 @@ Expected development shape:
 - PostgreSQL available locally or through Docker
 - seeded demo users, reviewer profiles, scholarly objects, assignments, reviews, bounties, and payment records
 
-The local app should support browser testing of the core MVP flows without requiring live ingestion or live payment processing.
+The local app should support browser testing of core flows without requiring live ingestion or live payment processing.
 
-## F-E-N Architecture
+## F-E-N / C-SQD Audit Architecture
 
-C-SQD should adapt the Fact-Episode-Narrative structure to scholarly evaluation.
+C-SQD should adapt the Fact-Episode-Narrative structure into the broader audit model described by `interpretation.md` and `NEXT_STEPS.md`.
+
+The older names below remain useful as design ancestry, but the current implementation should center `AuditObject`, `ReviewEvent`, `ReviewEventMembership`, solicitations, synthesis structures, challenges, provenance, and derived evaluation tuples.
 
 ### EvaluationFact
 
-An EvaluationFact is an atomic evaluative assertion.
+An EvaluationFact is an older compatibility concept for an atomic evaluative assertion. Where appropriate, it should become an element-review payload inside a `ReviewEvent`.
 
 Examples:
 
 - a claim is unsupported by cited evidence
-- a statistical method is inappropriate for the data structure
+- a causal & statistical method is inappropriate for the data structure
 - data are unavailable
 - code is unavailable
 - an interpretation overstates the result
@@ -141,7 +145,7 @@ EvaluationFacts should be typed, linked to a scholarly object, optionally linked
 
 ### ReviewEpisode
 
-A ReviewEpisode groups related facts into a coherent evaluative event.
+A ReviewEpisode is an older compatibility concept for a coherent evaluative event. Most future workflow should use `ReviewEvent`.
 
 Examples:
 
@@ -156,7 +160,7 @@ ReviewEpisodes should carry workflow state, authorship, visibility, assignment, 
 
 ### SynthesisReview
 
-A SynthesisReview provides narrative interpretation across facts and episodes.
+A SynthesisReview provides narrative interpretation across facts and episodes. In the current backbone, this should be modeled as a review event plus synthesis sections and relations.
 
 It should summarize contribution, strengths, weaknesses, reliability concerns, and overall interpretation while linking back to the structured evaluation graph.
 
@@ -170,7 +174,7 @@ Recommended pattern:
 
 1. Store normalized F-E-N records.
 2. Build searchable projection documents from those records.
-3. Index projections in PostgreSQL full-text search for the MVP.
+3. Index projections in PostgreSQL full-text search for the initial implementation.
 4. Add external search or vector indexes later if needed.
 5. Expose search through C-SQD domain APIs rather than raw database queries.
 
@@ -224,22 +228,22 @@ Recommended architecture:
 
 `C-SQD payment state machine -> internal ledger + F-E-N audit trail -> payment provider adapter -> manual provider / Stripe / future processor`
 
-## MVP Role Model
+## Initial Role Model
 
 Begin with a small role model:
 
-- `reader`: can discover public scholarly objects and visible review records
+- `reader`: can discover public audit objects and visible review records
 - `reviewer`: can maintain a reviewer profile and complete assigned reviews
-- `admin`: can manage scholarly objects, assignments, reviews, bounties, payments, and publication states
+- `admin`: can manage audit objects, solicitations, reviews, bounties, payments, and publication states
 - `funder`: can be attached to funding sources or bounties, initially through admin-managed records
 
-Author-specific workflows can be added after the review marketplace loop is working, unless needed for a specific early pilot.
+Author-specific workflows can be added after the first review-event loop is working, unless needed for a specific early pilot.
 
 ## Initial Workflow Defaults
 
-Use conservative workflow defaults for the MVP:
+Use conservative workflow defaults:
 
-- assignments are created by admins
+- review solicitations are created by admins
 - submitted reviews route to admin quality control before publication
 - bug bounty claims route through manual triage
 - payment records are tracked internally and approved manually
@@ -250,7 +254,7 @@ These defaults preserve the future platform shape without pretending the early s
 
 ## Expansion Commitments
 
-The MVP architecture should remain compatible with:
+The architecture should remain compatible with:
 
 - reviewer communities and tags
 - verified tags
