@@ -1,127 +1,155 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 
-import { AppSidebar } from "./components/app-sidebar";
+import { AppSidebar } from "../components/app-sidebar";
 import {
   addLibraryItem,
+  browseProblemAreaWorks,
   formatLabel,
+  getDomainInstantiation,
+  getDomainInstantiations,
   getLibraryItems,
-  retrieveArticle,
-  searchScholarlyObjects,
+  type ProblemAreaWorkSummary,
   type ScholarlyObjectSummary,
-} from "./lib/csqd-api";
+} from "../lib/csqd-api";
 
 type PageProps = {
   searchParams: Promise<{
-    include_preprints?: string;
+    problem_area?: string;
     q?: string;
   }>;
 };
 
-export default async function Home({ searchParams }: PageProps) {
-  const { include_preprints, q } = await searchParams;
+export default async function BrowsePage({ searchParams }: PageProps) {
+  const { problem_area, q } = await searchParams;
+  const problemAreaId = problem_area?.trim() ?? "";
   const query = q?.trim() ?? "";
-  const includePreprints = isCheckedSearchParam(include_preprints);
-  let objects = query ? await searchScholarlyObjects(query) : [];
-  const libraryItems = await getLibraryItems();
+  const [cweNodes, libraryItems, problemAreaWorks] = await Promise.all([
+    getAcademicCweNodes(),
+    getLibraryItems(),
+    browseProblemAreaWorks({ cweNodeId: problemAreaId, query }),
+  ]);
+  const selectedNode =
+    cweNodes.find((node) => node.id === problemAreaId) ?? null;
+  const workGroups = groupProblemAreaWorks(problemAreaWorks);
   const libraryWorkIds = new Set(
     libraryItems.map((item) => workIdentityForObject(item.scholarly_object)),
   );
-  let objectGroups = groupObjectsByWork(objects);
-  let retrievalError: string | null = null;
-  const shouldRetrieve =
-    query &&
-    (objectGroups.length === 0 ||
-      (includePreprints && !objectGroups.some((group) => group.hasPreprint)));
-
-  if (shouldRetrieve) {
-    const retrieval = await retrieveArticle(query, { includePreprints });
-
-    if (retrieval.error) {
-      retrievalError = retrieval.error;
-    } else {
-      objects = await searchScholarlyObjects(query);
-      objectGroups = groupObjectsByWork(objects);
-    }
-  }
+  const reviewLinkedWorkCount = workGroups.filter(
+    (group) => group.problemReviewEventCount > 0,
+  ).length;
+  const problemReviewEventCount = workGroups.reduce(
+    (sum, group) => sum + group.problemReviewEventCount,
+    0,
+  );
 
   return (
     <main className="app-shell">
-      <AppSidebar activeItem="search" />
+      <AppSidebar activeItem="browse" />
 
       <section className="workspace">
         <header className="topbar">
           <div>
             <p className="eyebrow">Academic Peer Review domain</p>
-            <h1>Scholarly Search</h1>
+            <h1>Browse Problem Areas</h1>
           </div>
-          <div className="status-pill">Local + retrieval</div>
+          <div className="status-pill">
+            {selectedNode ? selectedNode.label : "All problem areas"}
+          </div>
         </header>
 
-        <form className="retrieval-form" action="/">
-          <label htmlFor="work-query">Work</label>
+        <form className="retrieval-form browse-form" action="/browse">
+          <label htmlFor="problem-area-query">Problem area</label>
           <div className="retrieval-controls">
             <input
               defaultValue={query}
-              id="work-query"
+              id="problem-area-query"
               name="q"
-              placeholder="Title, DOI, PMID, PMCID, arXiv ID, article URL, author, or venue"
+              placeholder="Problem, topic, claim, method, or evidence concern"
               type="search"
             />
-            <button type="submit">Search</button>
+            <button type="submit">Browse</button>
           </div>
-          <label className="retrieval-option" htmlFor="include-preprints">
-            <input
-              defaultChecked={includePreprints}
-              id="include-preprints"
-              name="include_preprints"
-              type="checkbox"
-              value="true"
-            />
-            <span>Include matching preprints</span>
+          <label className="browse-select-label" htmlFor="problem-area-select">
+            <span>Peer-review criterion</span>
+            <select
+              defaultValue={selectedNode?.id ?? ""}
+              id="problem-area-select"
+              name="problem_area"
+            >
+              <option value="">Any criterion</option>
+              {cweNodes.map((node) => (
+                <option key={node.id} value={node.id}>
+                  {node.label}
+                </option>
+              ))}
+            </select>
           </label>
         </form>
 
-        <section className="metric-grid" aria-label="Workspace metrics">
+        <section className="metric-grid" aria-label="Browse metrics">
           <div className="metric">
-            <span>Matches</span>
-            <strong>{objectGroups.length}</strong>
+            <span>Problem areas</span>
+            <strong>{cweNodes.length}</strong>
           </div>
           <div className="metric">
-            <span>Versions</span>
-            <strong>{objects.length}</strong>
+            <span>Related works</span>
+            <strong>{workGroups.length}</strong>
           </div>
           <div className="metric">
-            <span>Review events</span>
-            <strong>
-              {objects.reduce((sum, object) => sum + object.review_event_count, 0)}
-            </strong>
+            <span>Criterion reviews</span>
+            <strong>{problemReviewEventCount}</strong>
           </div>
         </section>
 
-        <section className="object-list" aria-label="Scholarly object list">
-          {objectGroups.length === 0 ? (
+        <section className="problem-area-grid" aria-label="Peer-review problem areas">
+          <Link
+            className={`problem-area-card${selectedNode ? "" : " active"}`}
+            href={browseHref(query, "")}
+          >
+            <strong>All problem areas</strong>
+            <span>{reviewLinkedWorkCount} works with criterion-linked reviews</span>
+          </Link>
+          {cweNodes.map((node) => (
+            <Link
+              className={`problem-area-card${
+                selectedNode?.id === node.id ? " active" : ""
+              }`}
+              href={browseHref(query, node.id)}
+              key={node.id}
+            >
+              <strong>{node.label}</strong>
+              <span>{node.description}</span>
+            </Link>
+          ))}
+        </section>
+
+        <section className="object-list" aria-label="Problem-area work list">
+          {workGroups.length === 0 ? (
             <div className="empty-state">
-              <h2>{query ? "No work found" : "Search scholarly works"}</h2>
+              <h2>No related works found</h2>
               <p>
-                {query
-                  ? retrievalError ?? "No local or retrievable record matched this query."
-                  : "Use a title, DOI, PMID, PMCID, arXiv ID, article URL, author, or venue."}
+                {selectedNode
+                  ? `${selectedNode.label} has no matching local works yet.`
+                  : "No local works match this problem area yet."}
               </p>
             </div>
           ) : (
-            objectGroups.map((group) => {
+            workGroups.map((group) => {
               const isInLibrary = libraryWorkIds.has(group.id);
 
               return (
                 <article className="object-card work-card" key={group.id}>
                   <div className="object-main">
                     <div className="object-kicker">
-                      <span>Article work</span>
-                      <span>
-                        {group.versionCount}{" "}
-                        {group.versionCount === 1 ? "version" : "versions"}
-                      </span>
+                      <span>Problem-area work</span>
+                      <span>{formatLabel(group.relevance)}</span>
+                      {group.problemReviewEventCount > 0 ? (
+                        <span>
+                          {group.problemReviewEventCount} criterion{" "}
+                          {group.problemReviewEventCount === 1 ? "review" : "reviews"}
+                        </span>
+                      ) : null}
                       {group.primaryVersion.publication_year ? (
                         <span>{group.primaryVersion.publication_year}</span>
                       ) : null}
@@ -188,8 +216,8 @@ export default async function Home({ searchParams }: PageProps) {
                       <dd>{group.reviewEventCount}</dd>
                     </div>
                     <div>
-                      <dt>Primary</dt>
-                      <dd>{formatLabel(versionKindForObject(group.primaryVersion))}</dd>
+                      <dt>Problem reviews</dt>
+                      <dd>{group.problemReviewEventCount}</dd>
                     </div>
                   </dl>
                 </article>
@@ -202,6 +230,21 @@ export default async function Home({ searchParams }: PageProps) {
   );
 }
 
+async function getAcademicCweNodes() {
+  const domains = await getDomainInstantiations();
+  const academicDomain = domains.find(
+    (domain) => domain.domain_type === "academic_publishing",
+  );
+
+  if (!academicDomain) {
+    return [];
+  }
+
+  const detail = await getDomainInstantiation(academicDomain.id);
+
+  return detail?.cwe_nodes ?? [];
+}
+
 async function addToLibraryAction(formData: FormData) {
   "use server";
 
@@ -209,28 +252,31 @@ async function addToLibraryAction(formData: FormData) {
 
   if (scholarlyObjectId) {
     await addLibraryItem(scholarlyObjectId);
-    revalidatePath("/");
+    revalidatePath("/browse");
     revalidatePath("/library");
   }
 }
 
-type ScholarlyWorkGroup = {
+type ProblemAreaWorkGroup = {
   id: string;
   title: string;
   primaryVersion: ScholarlyObjectSummary;
   versions: ScholarlyObjectSummary[];
   versionCount: number;
   reviewStatus: string;
-  evaluationFactCount: number;
   reviewEventCount: number;
-  hasPreprint: boolean;
+  problemReviewEventCount: number;
+  relevance: string;
 };
 
-function groupObjectsByWork(objects: ScholarlyObjectSummary[]): ScholarlyWorkGroup[] {
-  const groups = new Map<string, ScholarlyWorkGroup>();
+function groupProblemAreaWorks(
+  works: ProblemAreaWorkSummary[],
+): ProblemAreaWorkGroup[] {
+  const groups = new Map<string, ProblemAreaWorkGroup>();
 
-  for (const object of objects) {
-    const groupId = object.work_group?.id ?? normalizedTitle(object.title);
+  for (const work of works) {
+    const object = work.scholarly_object;
+    const groupId = workIdentityForObject(object);
     const existing = groups.get(groupId);
 
     if (existing) {
@@ -239,8 +285,12 @@ function groupObjectsByWork(objects: ScholarlyObjectSummary[]): ScholarlyWorkGro
         existing.versionCount,
         object.work_group?.version_count ?? existing.versions.length,
       );
-      existing.evaluationFactCount += object.evaluation_fact_count;
       existing.reviewEventCount += object.review_event_count;
+      existing.problemReviewEventCount += work.problem_review_event_count;
+
+      if (relevanceRank(work.relevance) < relevanceRank(existing.relevance)) {
+        existing.relevance = work.relevance;
+      }
 
       if (
         versionRank(versionKindForObject(object)) <
@@ -256,9 +306,9 @@ function groupObjectsByWork(objects: ScholarlyObjectSummary[]): ScholarlyWorkGro
         versions: [object],
         versionCount: object.work_group?.version_count ?? 1,
         reviewStatus: object.review_status,
-        evaluationFactCount: object.evaluation_fact_count,
         reviewEventCount: object.review_event_count,
-        hasPreprint: versionKindForObject(object) === "preprint",
+        problemReviewEventCount: work.problem_review_event_count,
+        relevance: work.relevance,
       });
     }
   }
@@ -267,14 +317,28 @@ function groupObjectsByWork(objects: ScholarlyObjectSummary[]): ScholarlyWorkGro
     ...group,
     versionCount: Math.max(group.versionCount, group.versions.length),
     reviewStatus: highestReviewStatus(group.versions),
-    hasPreprint: group.versions.some(
-      (version) => versionKindForObject(version) === "preprint",
-    ),
     versions: group.versions.sort(
       (left, right) =>
-        versionRank(versionKindForObject(left)) - versionRank(versionKindForObject(right)),
+        versionRank(versionKindForObject(left)) -
+        versionRank(versionKindForObject(right)),
     ),
   }));
+}
+
+function browseHref(query: string, problemAreaId: string) {
+  const params = new URLSearchParams();
+
+  if (query) {
+    params.set("q", query);
+  }
+
+  if (problemAreaId) {
+    params.set("problem_area", problemAreaId);
+  }
+
+  const queryString = params.toString();
+
+  return queryString ? `/browse?${queryString}` : "/browse";
 }
 
 function versionKindForObject(object: ScholarlyObjectSummary) {
@@ -331,6 +395,13 @@ function reviewStatusRank(status: string) {
   }
 }
 
-function isCheckedSearchParam(value: string | undefined) {
-  return value === "true" || value === "on" || value === "1";
+function relevanceRank(relevance: string) {
+  switch (relevance) {
+    case "review_activity":
+      return 0;
+    case "text_match":
+      return 1;
+    default:
+      return 2;
+  }
 }

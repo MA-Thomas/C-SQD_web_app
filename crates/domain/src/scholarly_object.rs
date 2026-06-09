@@ -5,6 +5,7 @@ use crate::article_retrieval::{ArticleVersionGroupSummary, ArticleVersionKind};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScholarlyObjectSummary {
     pub id: String,
+    pub audit_object_id: Option<String>,
     pub object_type: ScholarlyObjectType,
     pub work_group: Option<ArticleVersionGroupSummary>,
     pub version_kind: ArticleVersionKind,
@@ -16,6 +17,37 @@ pub struct ScholarlyObjectSummary {
     pub license: Option<String>,
     pub review_status: ReviewStatus,
     pub evaluation_fact_count: i64,
+    pub review_event_count: i64,
+    pub active_element_review_count: i64,
+    pub active_synthesis_review_count: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProblemAreaWorkSummary {
+    pub scholarly_object: ScholarlyObjectSummary,
+    pub problem_review_event_count: i64,
+    pub relevance: ProblemAreaRelevance,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProblemAreaRelevance {
+    ReviewActivity,
+    TextMatch,
+    RecentDomainWork,
+}
+
+impl TryFrom<&str> for ProblemAreaRelevance {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "review_activity" => Ok(Self::ReviewActivity),
+            "text_match" => Ok(Self::TextMatch),
+            "recent_domain_work" => Ok(Self::RecentDomainWork),
+            other => Err(format!("unknown problem area relevance: {other}")),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,6 +88,7 @@ impl TryFrom<&str> for LibraryAddedReason {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScholarlyObjectDetail {
     pub id: String,
+    pub audit_object_id: Option<String>,
     pub object_type: ScholarlyObjectType,
     pub work_group: Option<ArticleVersionGroupSummary>,
     pub version_kind: ArticleVersionKind,
@@ -72,6 +105,9 @@ pub struct ScholarlyObjectDetail {
     pub native_display_permitted: bool,
     pub review_status: ReviewStatus,
     pub evaluation_fact_count: i64,
+    pub review_event_count: i64,
+    pub active_element_review_count: i64,
+    pub active_synthesis_review_count: i64,
     pub external_locations: Vec<ExternalArticleLocationSummary>,
 }
 

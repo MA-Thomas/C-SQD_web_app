@@ -9,7 +9,7 @@ Academic Peer Review remains the first active product surface and first demo dom
 The live app should continue to make this visible:
 
 - Global C-SQD surfaces: Domains, Library.
-- Active domain surfaces: Scholarly Search, Assignments, Review Episodes, Bounties, Payments.
+- Active domain surfaces: Browse, Scholarly Search, Assignments, Review Episodes, Bounties, Payments.
 - Planned domains remain visible but inactive until their backend adapters and domain configs are meaningful.
 - Use "causal & statistical" for evaluation language that might otherwise be narrower.
 
@@ -27,6 +27,11 @@ The general audit backbone is now present in the codebase:
 - Native article display is rights-gated by trusted access signals; a random PDF URL alone is not enough.
 - The Library is now explicit user curation through `user_library_items`, not viewed-history spillover.
 - `/api/library-items` supports listing and manually adding works to the Library.
+- The review page can create an Academic Peer Review element review as a `ReviewEvent` with a matching `ReviewEventMembership`.
+- Creating an element review automatically adds the target audit object to Library with `added_reason = 'review_created'`.
+- Scholarly object list/detail/library status and counts now prefer active `review_events` over legacy review scaffolding.
+- `/api/peer-review/problem-area-works` exposes a first problem-area browse adapter over Academic Peer Review CWE criteria plus free-text matching.
+- `/browse` lets users browse works by peer-review problem area, using CWE nodes as the current browse facets.
 - The UI now includes a Domains page and a sidebar domain context showing C-SQD as multi-domain epistemic audit infrastructure.
 
 ## Existing Code To Preserve
@@ -47,6 +52,7 @@ The current codebase has useful Academic Peer Review infrastructure:
 - Scholarly Search frontend flow.
 - Library page and explicit library membership API.
 - Scholarly object detail, viewer, and review-shell pages.
+- Peer Review problem-area browse page.
 - Domains page and active-domain sidebar framing.
 
 These should remain the Academic Peer Review adapter while the backend grows the general audit infrastructure.
@@ -73,6 +79,8 @@ Also keep UI concepts separate from domain concepts:
 
 Library is cross-domain user workspace infrastructure. Scholarly Search is an Academic Peer Review surface, not a general C-SQD primitive.
 
+For now, Academic Peer Review problem areas are represented by CWE nodes. This is a practical browse adapter, not a complete research-topic ontology. Future topic clustering can sit beside the CWE taxonomy, but CWE criteria remain the review/evaluation facets.
+
 ## Product/UI Direction
 
 The Domains page should remain the place where the broader C-SQD substrate is legible:
@@ -80,7 +88,7 @@ The Domains page should remain the place where the broader C-SQD substrate is le
 - Active domains should be backed by real `domain_instantiations`.
 - Planned domains can be shown as planned but should not pretend to be operational.
 - Domain cards should use one shared grammar: audit objects, review modes, shared primitives, evaluation basis, and live surfaces.
-- Academic Peer Review can list "Scholarly Search, Library, Assignments" only under "Live surfaces".
+- Academic Peer Review can list "Browse, Scholarly Search, Library, Assignments" only under "Live surfaces".
 - Clinical Trial Protocol Review, AI System Auditing, and Policy Evidence Review should remain planned until they have real schema/config/adapter work.
 
 For future navigation:
@@ -91,32 +99,31 @@ For future navigation:
 
 ## Next Implementation Order
 
-1. Build the first true Academic Peer Review `ReviewEvent` workflow.
-2. Auto-add an audit object to the user's Library when the user creates a review.
-3. Replace review status derivation from legacy `review_episodes` / `review_assignments` with `ReviewEvent`, `ERSolicitation`, and `Challenge`-derived status.
-4. Replace mutable assignment state with `ERSolicitation` plus append-only `SolicitationEvent`.
-5. Add the first evaluation tuple computation endpoint for Academic Peer Review.
-6. Add domain-scoped object search abstractions so future domains can define their own search/intake surfaces.
-7. Make Library and audit-object APIs user-aware instead of fixed to the demo user.
-8. Add domain-aware counts to the Domains page from real `audit_objects`, `review_events`, and library rows.
+1. Add read-side `ReviewEvent` APIs and UI surfaces so users can see actual element reviews on scholarly object detail, review workspace, and problem-area browse.
+2. Replace the remaining review status derivation from legacy `review_episodes` / `review_assignments` with `ReviewEvent`, `ERSolicitation`, and `Challenge`-derived status.
+3. Replace mutable assignment state with `ERSolicitation` plus append-only `SolicitationEvent`.
+4. Add the first evaluation tuple computation endpoint for Academic Peer Review.
+5. Generalize the problem-area browse/query adapter into domain-scoped object search abstractions so future domains can define their own search/intake surfaces.
+6. Make Library and audit-object APIs user-aware instead of fixed to the demo user.
+7. Add domain-aware counts to the Domains page from real `audit_objects`, `review_events`, and library rows.
+8. Add first synthesis-review creation/read surfaces after element-review reads are stable.
 9. Seed planned domains only when their `DomainConfig`, audit object types, and CWE base taxonomy are meaningful.
 
 ## Immediate Product Slice
 
-Build the first real `ReviewEvent` workflow for Academic Peer Review.
+Build review-event visibility for Academic Peer Review.
 
 Target behavior:
 
-- The review page creates an element-review draft tied to an `AuditObject`.
-- The review is stored as a `ReviewEvent` with an `element_review` payload.
-- The payload records CWE criterion, finding text, severity/confidence fields, reviewer principal, provenance, and status.
-- `ReviewEventMembership` attaches the review event to the target audit object.
-- Submitting or publishing the review updates derived object status without mutating legacy state.
-- The scholarly object detail page shows review-event count/status from the new backbone.
-- Creating a review automatically adds the audit object to Library with `added_reason = 'review_created'`.
-- Legacy review tables remain compatibility scaffolding until this path is stable.
+- Add a `GET` endpoint for review events attached to an audit object / scholarly object.
+- Return typed `ReviewEventSummary` records with CWE criterion, finding, severity, confidence, status, provenance, and occurred-at time.
+- Show recent element reviews on the scholarly object detail page.
+- Show existing element reviews in the review workspace, grouped by peer-review criterion where useful.
+- Let problem-area browse distinguish works with direct criterion-linked review activity from text-only matches.
+- Keep object status derived from active review events, not by mutating legacy state.
+- Legacy review tables remain compatibility scaffolding until the new read/write path is stable.
 
-This slice proves the new ontology while keeping the demo grounded in the Academic Peer Review domain.
+This slice makes the new ontology visible to users, not only present in the database.
 
 ## Backend Transition Notes
 
@@ -148,8 +155,8 @@ If default app ports are occupied, use fallback demo ports:
 
 Recent local demos have used:
 
-- Web app: `http://127.0.0.1:3003`
-- API: `http://127.0.0.1:18132`
+- Web app: `http://127.0.0.1:3012`
+- API: `http://127.0.0.1:18081`
 
 ## Verification
 
@@ -171,6 +178,7 @@ curl -s http://127.0.0.1:18080/health
 curl -s http://127.0.0.1:18080/api/domain-instantiations
 curl -s http://127.0.0.1:18080/api/audit-objects
 curl -s http://127.0.0.1:18080/api/library-items
+curl -s 'http://127.0.0.1:18080/api/peer-review/problem-area-works?cwe_node_id=00000000-0000-0000-0000-000000000602'
 ```
 
 For frontend/domain UI changes, verify:
@@ -178,6 +186,7 @@ For frontend/domain UI changes, verify:
 ```sh
 npm run build:web
 curl -s http://127.0.0.1:3000/domains
+curl -s http://127.0.0.1:3000/browse
 curl -s http://127.0.0.1:3000/library
 curl -s http://127.0.0.1:3000/
 ```

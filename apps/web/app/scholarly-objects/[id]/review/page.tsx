@@ -1,10 +1,15 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { notFound, redirect } from "next/navigation";
 
 import {
+  createElementReview,
   formatLabel,
   getArticleAccess,
+  getDomainInstantiation,
+  getDomainInstantiations,
   getScholarlyObject,
+  type CWENode,
   type ScholarlyObjectDetail,
 } from "../../../lib/csqd-api";
 
@@ -12,13 +17,21 @@ type PageProps = {
   params: Promise<{
     id: string;
   }>;
+  searchParams: Promise<{
+    review_error?: string;
+  }>;
 };
 
-export default async function ScholarlyObjectReviewPage({ params }: PageProps) {
+export default async function ScholarlyObjectReviewPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { id } = await params;
-  const [object, articleAccess] = await Promise.all([
+  const { review_error } = await searchParams;
+  const [object, articleAccess, cweNodes] = await Promise.all([
     getScholarlyObject(id),
     getArticleAccess(id),
+    getAcademicCweNodes(),
   ]);
 
   if (!object || !articleAccess) {
@@ -114,6 +127,83 @@ export default async function ScholarlyObjectReviewPage({ params }: PageProps) {
         </section>
 
         <section className="review-placeholder-grid" aria-label="Review drafting areas">
+          <article className="review-event-panel">
+            <div className="panel-heading">
+              <div>
+                <p className="eyebrow">Element review</p>
+                <h2>Record Criterion Review</h2>
+              </div>
+              <span className="access-badge">ReviewEvent</span>
+            </div>
+            {review_error ? (
+              <p className="form-error">
+                The review could not be saved. Check the criterion and review text.
+              </p>
+            ) : null}
+            <form className="element-review-form" action={createElementReviewAction}>
+              <input name="scholarly_object_id" type="hidden" value={object.id} />
+              <label>
+                <span>CWE criterion</span>
+                <select disabled={cweNodes.length === 0} name="cwe_node_id" required>
+                  {cweNodes.length === 0 ? (
+                    <option value="">No criteria available</option>
+                  ) : (
+                    cweNodes.map((node) => (
+                      <option key={node.id} value={node.id}>
+                        {node.label}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
+              <div className="element-review-form-row">
+                <label>
+                  <span>Finding</span>
+                  <select name="finding" required>
+                    <option value="non_ethical_problem">Non-ethical problem</option>
+                    <option value="ethical_problem">Ethical problem</option>
+                    <option value="no_problems">No problems</option>
+                    <option value="inconclusive">Inconclusive</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Severity</span>
+                  <select name="severity">
+                    <option value="">Unspecified</option>
+                    <option value="minor">Minor</option>
+                    <option value="moderate">Moderate</option>
+                    <option value="major">Major</option>
+                    <option value="critical">Critical</option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                <span>Confidence</span>
+                <select name="confidence">
+                  <option value="">Unspecified</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </label>
+              <label>
+                <span>Finding text</span>
+                <textarea
+                  name="content"
+                  placeholder="Record the focused evaluation for this criterion."
+                  required
+                  rows={7}
+                />
+              </label>
+              <button
+                className="primary-action action-button"
+                disabled={cweNodes.length === 0}
+                type="submit"
+              >
+                Save review event
+              </button>
+            </form>
+          </article>
           <article className="review-placeholder-panel">
             <h2>Claims</h2>
             <p>No claims recorded yet.</p>
@@ -169,6 +259,61 @@ export default async function ScholarlyObjectReviewPage({ params }: PageProps) {
       </section>
     </main>
   );
+}
+
+async function getAcademicCweNodes(): Promise<CWENode[]> {
+  const domains = await getDomainInstantiations();
+  const academicDomain = domains.find(
+    (domain) => domain.domain_type === "academic_publishing",
+  );
+
+  if (!academicDomain) {
+    return [];
+  }
+
+  const detail = await getDomainInstantiation(academicDomain.id);
+
+  return detail?.cwe_nodes ?? [];
+}
+
+async function createElementReviewAction(formData: FormData) {
+  "use server";
+
+  const scholarlyObjectId = String(formData.get("scholarly_object_id") ?? "");
+  const cweNodeId = String(formData.get("cwe_node_id") ?? "");
+  const finding = String(formData.get("finding") ?? "inconclusive");
+  const severity = optionalFormValue(formData.get("severity"));
+  const confidence = optionalFormValue(formData.get("confidence"));
+  const content = String(formData.get("content") ?? "");
+
+  if (!scholarlyObjectId) {
+    return;
+  }
+
+  const reviewEvent = await createElementReview(scholarlyObjectId, {
+    content,
+    confidence,
+    cwe_node_id: cweNodeId,
+    finding,
+    severity,
+    solicitation: null,
+  });
+
+  if (!reviewEvent) {
+    redirect(`/scholarly-objects/${scholarlyObjectId}/review?review_error=1`);
+  }
+
+  revalidatePath("/");
+  revalidatePath("/library");
+  revalidatePath(`/scholarly-objects/${scholarlyObjectId}`);
+  revalidatePath(`/scholarly-objects/${scholarlyObjectId}/review`);
+  redirect(`/scholarly-objects/${scholarlyObjectId}`);
+}
+
+function optionalFormValue(value: FormDataEntryValue | null) {
+  const text = String(value ?? "").trim();
+
+  return text === "" ? null : text;
 }
 
 function VersionContextList({ object }: { object: ScholarlyObjectDetail }) {

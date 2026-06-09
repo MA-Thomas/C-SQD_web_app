@@ -7,6 +7,7 @@ pub mod doi_retrieval;
 pub mod domain_instantiations;
 pub mod pubmed_retrieval;
 pub mod review_assignments;
+pub mod review_events;
 pub mod scholarly_objects;
 pub mod title_retrieval;
 pub mod user_library;

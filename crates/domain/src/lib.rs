@@ -36,14 +36,15 @@ pub use review_assignment::{
     CompensationStatus, ReviewAssignmentState, ReviewAssignmentSummary, ReviewAssignmentType,
 };
 pub use review_event::{
-    AdjudicationOutcome, Finding, FindingSeverity, MembershipStatus, ResponseType, ReviewEvent,
-    ReviewEventMembership, ReviewEventPayload, ReviewEventPayloadKind, ReviewEventRole,
-    ReviewEventStatus, ReviewEventSummary, SynthesisSection, SynthesisSectionType,
+    AdjudicationOutcome, CreateElementReviewRequest, Finding, FindingConfidence, FindingSeverity,
+    MembershipStatus, ResponseType, ReviewEvent, ReviewEventMembership, ReviewEventPayload,
+    ReviewEventPayloadKind, ReviewEventRole, ReviewEventStatus, ReviewEventSummary,
+    SynthesisSection, SynthesisSectionType,
 };
 pub use scholarly_object::{
     ArticleVersionSummary, ExternalArticleLocationSummary, ExternalArticleLocationType,
-    LibraryAddedReason, LibraryItemSummary, ReviewStatus, ScholarlyObjectDetail,
-    ScholarlyObjectSummary, ScholarlyObjectType,
+    LibraryAddedReason, LibraryItemSummary, ProblemAreaRelevance, ProblemAreaWorkSummary,
+    ReviewStatus, ScholarlyObjectDetail, ScholarlyObjectSummary, ScholarlyObjectType,
 };
 pub use solicitation::{
     ERSolicitationSummary, PaymentCondition, PaymentScheme, PenaltySeverity, SolicitationEvent,

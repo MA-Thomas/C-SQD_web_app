@@ -12,8 +12,8 @@ export default async function LibraryPage() {
   const workCount = new Set(
     libraryItems.map((item) => workIdentityForObject(item.scholarly_object)),
   ).size;
-  const evaluationFactCount = libraryItems.reduce(
-    (sum, item) => sum + item.scholarly_object.evaluation_fact_count,
+  const reviewEventCount = libraryItems.reduce(
+    (sum, item) => sum + item.scholarly_object.review_event_count,
     0,
   );
 
@@ -40,8 +40,8 @@ export default async function LibraryPage() {
             <strong>{workCount}</strong>
           </div>
           <div className="metric">
-            <span>Evaluation facts</span>
-            <strong>{evaluationFactCount}</strong>
+            <span>Review events</span>
+            <strong>{reviewEventCount}</strong>
           </div>
         </section>
 
@@ -85,8 +85,8 @@ export default async function LibraryPage() {
                       <dd>{formatLabel(object.review_status)}</dd>
                     </div>
                     <div>
-                      <dt>Facts</dt>
-                      <dd>{object.evaluation_fact_count}</dd>
+                      <dt>Events</dt>
+                      <dd>{object.review_event_count}</dd>
                     </div>
                     <div>
                       <dt>Source</dt>

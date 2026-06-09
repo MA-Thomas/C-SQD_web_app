@@ -2,6 +2,7 @@ import Link from "next/link";
 
 type ActiveItem =
   | "domains"
+  | "browse"
   | "search"
   | "library"
   | "assignments"
@@ -27,6 +28,7 @@ const domainNavItems: Array<{
   href: string;
   label: string;
 }> = [
+  { id: "browse", href: "/browse", label: "Browse" },
   { id: "search", href: "/", label: "Scholarly Search" },
   { id: "assignments", href: "/assignments", label: "Assignments" },
   { id: "review-episodes", href: "/", label: "Review episodes" },

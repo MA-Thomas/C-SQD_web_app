@@ -1,12 +1,13 @@
 use axum::{
     extract::{Path, Query, State},
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use csqd_domain::{
     ApiHealth, ArticleAccessSummary, ArticleRetrievalResult, ArticleRetrievalSet,
-    AuditObjectDetail, AuditObjectSummary, DomainInstantiationDetail, DomainInstantiationSummary,
-    LibraryItemSummary, ReviewAssignmentSummary, ScholarlyObjectDetail, ScholarlyObjectSummary,
+    AuditObjectDetail, AuditObjectSummary, CreateElementReviewRequest, DomainInstantiationDetail,
+    DomainInstantiationSummary, LibraryItemSummary, ProblemAreaWorkSummary,
+    ReviewAssignmentSummary, ReviewEvent, ScholarlyObjectDetail, ScholarlyObjectSummary,
 };
 use serde::Deserialize;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -15,7 +16,8 @@ use crate::{
     error::ApiError,
     repositories::{
         article_access, article_retrieval, audit_objects, doi_retrieval, domain_instantiations,
-        pubmed_retrieval, review_assignments, scholarly_objects, title_retrieval, user_library,
+        pubmed_retrieval, review_assignments, review_events, scholarly_objects, title_retrieval,
+        user_library,
     },
     state::AppState,
 };
@@ -29,6 +31,12 @@ struct ArticleRetrievalQuery {
 #[derive(Debug, Deserialize)]
 struct WorkSearchQuery {
     query: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ProblemAreaBrowseQuery {
+    query: Option<String>,
+    cwe_node_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,12 +68,20 @@ pub fn router(state: AppState) -> Router {
             "/api/library-items",
             get(list_library_items).post(add_library_item),
         )
+        .route(
+            "/api/peer-review/problem-area-works",
+            get(browse_problem_area_works),
+        )
         .route("/api/review-assignments", get(list_review_assignments))
         .route("/api/scholarly-objects", get(list_scholarly_objects))
         .route("/api/work-search", get(search_work_summaries))
         .route(
             "/api/scholarly-objects/:id/article-access",
             get(get_article_access),
+        )
+        .route(
+            "/api/scholarly-objects/:id/review-events/element-review",
+            post(create_element_review),
         )
         .route("/api/scholarly-objects/:id", get(get_scholarly_object))
         .layer(CorsLayer::permissive())
@@ -199,6 +215,20 @@ async fn search_work_summaries(
     Ok(Json(objects))
 }
 
+async fn browse_problem_area_works(
+    State(state): State<AppState>,
+    Query(query): Query<ProblemAreaBrowseQuery>,
+) -> Result<Json<Vec<ProblemAreaWorkSummary>>, ApiError> {
+    let works = scholarly_objects::browse_problem_area_works(
+        &state.db,
+        query.query.as_deref().unwrap_or_default(),
+        query.cwe_node_id.as_deref(),
+    )
+    .await?;
+
+    Ok(Json(works))
+}
+
 async fn get_scholarly_object(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -215,4 +245,15 @@ async fn get_article_access(
     let access = article_access::find_for_scholarly_object(&state.db, &id).await?;
 
     Ok(Json(access))
+}
+
+async fn create_element_review(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(request): Json<CreateElementReviewRequest>,
+) -> Result<Json<ReviewEvent>, ApiError> {
+    let review_event =
+        review_events::create_element_review_for_scholarly_object(&state.db, &id, request).await?;
+
+    Ok(Json(review_event))
 }

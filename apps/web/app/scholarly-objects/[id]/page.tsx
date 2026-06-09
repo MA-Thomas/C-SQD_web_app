@@ -121,8 +121,8 @@ export default async function ScholarlyObjectPage({ params }: PageProps) {
                 <dd>{formatLabel(object.review_status)}</dd>
               </div>
               <div>
-                <dt>Evaluation facts</dt>
-                <dd>{object.evaluation_fact_count}</dd>
+                <dt>Review events</dt>
+                <dd>{object.review_event_count}</dd>
               </div>
               <div>
                 <dt>Display</dt>
@@ -261,6 +261,14 @@ export default async function ScholarlyObjectPage({ params }: PageProps) {
               <div>
                 <dt>Recorded facts</dt>
                 <dd>{object.evaluation_fact_count}</dd>
+              </div>
+              <div>
+                <dt>Review events</dt>
+                <dd>{object.review_event_count}</dd>
+              </div>
+              <div>
+                <dt>Element reviews</dt>
+                <dd>{object.active_element_review_count}</dd>
               </div>
               <div>
                 <dt>Review surface</dt>

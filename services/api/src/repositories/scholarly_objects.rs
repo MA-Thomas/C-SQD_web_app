@@ -1,7 +1,8 @@
 use csqd_domain::{
     ArticleVersionGroupSummary, ArticleVersionKind, ArticleVersionSummary,
-    ExternalArticleLocationSummary, ExternalArticleLocationType, ReviewStatus,
-    ScholarlyObjectDetail, ScholarlyObjectSummary, ScholarlyObjectType,
+    ExternalArticleLocationSummary, ExternalArticleLocationType, ProblemAreaRelevance,
+    ProblemAreaWorkSummary, ReviewStatus, ScholarlyObjectDetail, ScholarlyObjectSummary,
+    ScholarlyObjectType,
 };
 use serde_json::Value;
 use sqlx::{postgres::PgRow, PgPool, Row};
@@ -13,6 +14,7 @@ pub async fn list_summaries(db: &PgPool) -> Result<Vec<ScholarlyObjectSummary>, 
         r#"
         SELECT
             so.id::text AS id,
+            ao.id::text AS audit_object_id,
             so.object_type,
             swg.id::text AS work_group_id,
             swg.title AS work_group_title,
@@ -30,6 +32,14 @@ pub async fn list_summaries(db: &PgPool) -> Result<Vec<ScholarlyObjectSummary>, 
             so.canonical_url,
             so.license,
             CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM review_event_memberships rem
+                    JOIN review_events re ON re.id = rem.review_event_id
+                    WHERE rem.audit_object_id = ao.id
+                      AND rem.status = 'active'
+                      AND re.status = 'active'
+                ) THEN 'submitted'
                 WHEN EXISTS (
                     SELECT 1 FROM review_episodes re
                     WHERE re.scholarly_object_id = so.id
@@ -55,11 +65,40 @@ pub async fn list_summaries(db: &PgPool) -> Result<Vec<ScholarlyObjectSummary>, 
             (
                 SELECT COUNT(*) FROM evaluation_facts ef
                 WHERE ef.scholarly_object_id = so.id
-            ) AS evaluation_fact_count
+            ) AS evaluation_fact_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS review_event_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.role = 'element_review'
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS active_element_review_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.role = 'synthesis_review'
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS active_synthesis_review_count
         FROM scholarly_objects so
         LEFT JOIN journals j ON j.id = so.journal_id
         LEFT JOIN scholarly_work_versions swv ON swv.scholarly_object_id = so.id
         LEFT JOIN scholarly_work_groups swg ON swg.id = swv.work_group_id
+        LEFT JOIN audit_objects ao
+            ON ao.source_entity_type = 'scholarly_object'
+           AND ao.source_entity_id = so.id
         ORDER BY COALESCE(swg.updated_at, so.updated_at) DESC, swv.version_rank ASC NULLS LAST, so.created_at ASC
         LIMIT 50
         "#,
@@ -105,6 +144,7 @@ pub async fn search_summaries(
         )
         SELECT
             so.id::text AS id,
+            ao.id::text AS audit_object_id,
             so.object_type,
             swg.id::text AS work_group_id,
             swg.title AS work_group_title,
@@ -122,6 +162,14 @@ pub async fn search_summaries(
             so.canonical_url,
             so.license,
             CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM review_event_memberships rem
+                    JOIN review_events re ON re.id = rem.review_event_id
+                    WHERE rem.audit_object_id = ao.id
+                      AND rem.status = 'active'
+                      AND re.status = 'active'
+                ) THEN 'submitted'
                 WHEN EXISTS (
                     SELECT 1 FROM review_episodes re
                     WHERE re.scholarly_object_id = so.id
@@ -147,12 +195,41 @@ pub async fn search_summaries(
             (
                 SELECT COUNT(*) FROM evaluation_facts ef
                 WHERE ef.scholarly_object_id = so.id
-            ) AS evaluation_fact_count
+            ) AS evaluation_fact_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS review_event_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.role = 'element_review'
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS active_element_review_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.role = 'synthesis_review'
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS active_synthesis_review_count
         FROM scholarly_objects so
         JOIN matched_objects ON matched_objects.id = so.id
         LEFT JOIN journals j ON j.id = so.journal_id
         LEFT JOIN scholarly_work_versions swv ON swv.scholarly_object_id = so.id
         LEFT JOIN scholarly_work_groups swg ON swg.id = swv.work_group_id
+        LEFT JOIN audit_objects ao
+            ON ao.source_entity_type = 'scholarly_object'
+           AND ao.source_entity_id = so.id
         ORDER BY
             CASE
                 WHEN lower(COALESCE(swg.title, so.title)) = lower($1) THEN 0
@@ -173,6 +250,255 @@ pub async fn search_summaries(
     rows.into_iter().map(row_to_summary).collect()
 }
 
+pub async fn browse_problem_area_works(
+    db: &PgPool,
+    query: &str,
+    cwe_node_id: Option<&str>,
+) -> Result<Vec<ProblemAreaWorkSummary>, RepositoryError> {
+    let cwe_context = find_cwe_browse_context(db, cwe_node_id).await?;
+    let search_text = normalized_search_text(query);
+    let text_patterns = browse_text_patterns(query, cwe_context.as_ref());
+    let cwe_node_id = cwe_context.as_ref().map(|context| context.id.as_str());
+    let rows = sqlx::query(
+        r#"
+        WITH browse_input AS (
+            SELECT
+                NULLIF(BTRIM($1::text), '') AS search_text,
+                NULLIF(BTRIM($2::text), '') AS cwe_node_id,
+                $3::text[] AS text_patterns
+        ),
+        matched_objects AS (
+            SELECT
+                so.id,
+                COALESCE(problem_reviews.problem_review_event_count, 0) AS problem_review_event_count,
+                (
+                    (
+                        browse_input.search_text IS NOT NULL
+                        AND (
+                            to_tsvector(
+                                'english',
+                                concat_ws(
+                                    ' ',
+                                    so.title,
+                                    so.abstract,
+                                    so.authors::text,
+                                    COALESCE(j.name, ''),
+                                    COALESCE(swg.title, ''),
+                                    COALESCE(sos.search_text, '')
+                                )
+                            ) @@ plainto_tsquery('english', browse_input.search_text)
+                            OR lower(
+                                concat_ws(
+                                    ' ',
+                                    so.title,
+                                    so.abstract,
+                                    so.authors::text,
+                                    COALESCE(j.name, ''),
+                                    COALESCE(swg.title, ''),
+                                    COALESCE(sos.search_text, '')
+                                )
+                            ) LIKE '%' || lower(browse_input.search_text) || '%'
+                        )
+                    )
+                    OR (
+                        cardinality(browse_input.text_patterns) > 0
+                        AND lower(
+                            concat_ws(
+                                ' ',
+                                so.title,
+                                so.abstract,
+                                so.authors::text,
+                                COALESCE(j.name, ''),
+                                COALESCE(swg.title, ''),
+                                COALESCE(sos.search_text, '')
+                            )
+                        ) LIKE ANY(browse_input.text_patterns)
+                    )
+                ) AS text_match
+            FROM scholarly_objects so
+            LEFT JOIN journals j ON j.id = so.journal_id
+            LEFT JOIN scholarly_object_search sos ON sos.scholarly_object_id = so.id
+            LEFT JOIN scholarly_work_versions swv ON swv.scholarly_object_id = so.id
+            LEFT JOIN scholarly_work_groups swg ON swg.id = swv.work_group_id
+            LEFT JOIN audit_objects ao
+                ON ao.source_entity_type = 'scholarly_object'
+               AND ao.source_entity_id = so.id
+            CROSS JOIN browse_input
+            LEFT JOIN LATERAL (
+                SELECT COUNT(DISTINCT re.id) AS problem_review_event_count
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+                  AND re.payload_kind = 'element_review'
+                  AND browse_input.cwe_node_id IS NOT NULL
+                  AND re.payload #>> '{element_review,cwe_criterion,node_id}' = browse_input.cwe_node_id
+            ) problem_reviews ON true
+            WHERE
+                (
+                    browse_input.search_text IS NULL
+                    AND browse_input.cwe_node_id IS NULL
+                    AND cardinality(browse_input.text_patterns) = 0
+                )
+                OR COALESCE(problem_reviews.problem_review_event_count, 0) > 0
+                OR (
+                    (
+                        browse_input.search_text IS NOT NULL
+                        AND (
+                            to_tsvector(
+                                'english',
+                                concat_ws(
+                                    ' ',
+                                    so.title,
+                                    so.abstract,
+                                    so.authors::text,
+                                    COALESCE(j.name, ''),
+                                    COALESCE(swg.title, ''),
+                                    COALESCE(sos.search_text, '')
+                                )
+                            ) @@ plainto_tsquery('english', browse_input.search_text)
+                            OR lower(
+                                concat_ws(
+                                    ' ',
+                                    so.title,
+                                    so.abstract,
+                                    so.authors::text,
+                                    COALESCE(j.name, ''),
+                                    COALESCE(swg.title, ''),
+                                    COALESCE(sos.search_text, '')
+                                )
+                            ) LIKE '%' || lower(browse_input.search_text) || '%'
+                        )
+                    )
+                    OR (
+                        cardinality(browse_input.text_patterns) > 0
+                        AND lower(
+                            concat_ws(
+                                ' ',
+                                so.title,
+                                so.abstract,
+                                so.authors::text,
+                                COALESCE(j.name, ''),
+                                COALESCE(swg.title, ''),
+                                COALESCE(sos.search_text, '')
+                            )
+                        ) LIKE ANY(browse_input.text_patterns)
+                    )
+                )
+        )
+        SELECT
+            so.id::text AS id,
+            ao.id::text AS audit_object_id,
+            so.object_type,
+            swg.id::text AS work_group_id,
+            swg.title AS work_group_title,
+            swg.primary_scholarly_object_id::text AS primary_scholarly_object_id,
+            swv.version_kind,
+            (
+                SELECT COUNT(*)
+                FROM scholarly_work_versions sibling_versions
+                WHERE sibling_versions.work_group_id = swg.id
+            ) AS version_count,
+            so.title,
+            so.authors,
+            COALESCE(j.name, 'Unknown source') AS source_name,
+            EXTRACT(YEAR FROM so.publication_date)::int AS publication_year,
+            so.canonical_url,
+            so.license,
+            CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM review_event_memberships rem
+                    JOIN review_events re ON re.id = rem.review_event_id
+                    WHERE rem.audit_object_id = ao.id
+                      AND rem.status = 'active'
+                      AND re.status = 'active'
+                ) THEN 'submitted'
+                WHEN EXISTS (
+                    SELECT 1 FROM review_episodes re
+                    WHERE re.scholarly_object_id = so.id
+                      AND re.state = 'published'
+                ) THEN 'published'
+                WHEN EXISTS (
+                    SELECT 1 FROM review_episodes re
+                    WHERE re.scholarly_object_id = so.id
+                      AND re.state = 'submitted'
+                ) THEN 'submitted'
+                WHEN EXISTS (
+                    SELECT 1 FROM review_assignments ra
+                    WHERE ra.scholarly_object_id = so.id
+                      AND ra.state IN ('accepted', 'in_progress')
+                ) THEN 'in_review'
+                WHEN EXISTS (
+                    SELECT 1 FROM review_assignments ra
+                    WHERE ra.scholarly_object_id = so.id
+                      AND ra.state IN ('created', 'offered')
+                ) THEN 'assigned'
+                ELSE 'not_assigned'
+            END AS review_status,
+            (
+                SELECT COUNT(*) FROM evaluation_facts ef
+                WHERE ef.scholarly_object_id = so.id
+            ) AS evaluation_fact_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS review_event_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.role = 'element_review'
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS active_element_review_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.role = 'synthesis_review'
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS active_synthesis_review_count,
+            matched_objects.problem_review_event_count,
+            CASE
+                WHEN matched_objects.problem_review_event_count > 0 THEN 'review_activity'
+                WHEN matched_objects.text_match THEN 'text_match'
+                ELSE 'recent_domain_work'
+            END AS relevance
+        FROM matched_objects
+        JOIN scholarly_objects so ON so.id = matched_objects.id
+        LEFT JOIN journals j ON j.id = so.journal_id
+        LEFT JOIN scholarly_work_versions swv ON swv.scholarly_object_id = so.id
+        LEFT JOIN scholarly_work_groups swg ON swg.id = swv.work_group_id
+        LEFT JOIN audit_objects ao
+            ON ao.source_entity_type = 'scholarly_object'
+           AND ao.source_entity_id = so.id
+        ORDER BY
+            matched_objects.problem_review_event_count DESC,
+            CASE WHEN matched_objects.text_match THEN 0 ELSE 1 END,
+            COALESCE(swg.updated_at, so.updated_at) DESC,
+            swv.version_rank ASC NULLS LAST,
+            so.created_at ASC
+        LIMIT 50
+        "#,
+    )
+    .bind(search_text)
+    .bind(cwe_node_id)
+    .bind(text_patterns)
+    .fetch_all(db)
+    .await?;
+
+    rows.into_iter().map(row_to_problem_area_work).collect()
+}
+
 pub async fn find_detail(
     db: &PgPool,
     object_id: &str,
@@ -181,6 +507,7 @@ pub async fn find_detail(
         r#"
         SELECT
             so.id::text AS id,
+            ao.id::text AS audit_object_id,
             so.object_type,
             swg.id::text AS work_group_id,
             swg.title AS work_group_title,
@@ -203,6 +530,14 @@ pub async fn find_detail(
             so.native_display_permitted,
             CASE
                 WHEN EXISTS (
+                    SELECT 1
+                    FROM review_event_memberships rem
+                    JOIN review_events re ON re.id = rem.review_event_id
+                    WHERE rem.audit_object_id = ao.id
+                      AND rem.status = 'active'
+                      AND re.status = 'active'
+                ) THEN 'submitted'
+                WHEN EXISTS (
                     SELECT 1 FROM review_episodes re
                     WHERE re.scholarly_object_id = so.id
                       AND re.state = 'published'
@@ -227,11 +562,40 @@ pub async fn find_detail(
             (
                 SELECT COUNT(*) FROM evaluation_facts ef
                 WHERE ef.scholarly_object_id = so.id
-            ) AS evaluation_fact_count
+            ) AS evaluation_fact_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS review_event_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.role = 'element_review'
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS active_element_review_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.role = 'synthesis_review'
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS active_synthesis_review_count
         FROM scholarly_objects so
         LEFT JOIN journals j ON j.id = so.journal_id
         LEFT JOIN scholarly_work_versions swv ON swv.scholarly_object_id = so.id
         LEFT JOIN scholarly_work_groups swg ON swg.id = swv.work_group_id
+        LEFT JOIN audit_objects ao
+            ON ao.source_entity_type = 'scholarly_object'
+           AND ao.source_entity_id = so.id
         WHERE so.id::text = $1
         "#,
     )
@@ -289,6 +653,52 @@ pub async fn find_detail(
     row_to_detail(object_row, location_rows, version_rows)
 }
 
+struct CweBrowseContext {
+    id: String,
+    label: String,
+    description: String,
+    browse_keywords: Vec<String>,
+}
+
+async fn find_cwe_browse_context(
+    db: &PgPool,
+    cwe_node_id: Option<&str>,
+) -> Result<Option<CweBrowseContext>, RepositoryError> {
+    let Some(cwe_node_id) = cwe_node_id.map(str::trim).filter(|id| !id.is_empty()) else {
+        return Ok(None);
+    };
+
+    let row = sqlx::query(
+        r#"
+        SELECT
+            cwe_nodes.id::text AS id,
+            cwe_nodes.label,
+            cwe_nodes.description,
+            COALESCE(cwe_nodes.source_metadata->'browse_keywords', '[]'::jsonb) AS browse_keywords
+        FROM cwe_nodes
+        JOIN domain_instantiations
+            ON domain_instantiations.id = cwe_nodes.domain_instantiation_id
+        WHERE cwe_nodes.id::text = $1
+          AND domain_instantiations.domain_type = 'academic_publishing'
+        "#,
+    )
+    .bind(cwe_node_id)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| RepositoryError::NotFound {
+        entity: "cwe_node",
+        id: cwe_node_id.to_string(),
+    })?;
+    let browse_keywords: Value = row.get("browse_keywords");
+
+    Ok(Some(CweBrowseContext {
+        id: row.get("id"),
+        label: row.get("label"),
+        description: row.get("description"),
+        browse_keywords: jsonb_string_array(browse_keywords),
+    }))
+}
+
 fn row_to_summary(row: PgRow) -> Result<ScholarlyObjectSummary, RepositoryError> {
     let object_type: String = row.get("object_type");
     let review_status: String = row.get("review_status");
@@ -304,6 +714,7 @@ fn row_to_summary(row: PgRow) -> Result<ScholarlyObjectSummary, RepositoryError>
 
     Ok(ScholarlyObjectSummary {
         id: row.get("id"),
+        audit_object_id: row.get("audit_object_id"),
         object_type: ScholarlyObjectType::try_from(object_type.as_str())
             .map_err(RepositoryError::Domain)?,
         work_group,
@@ -322,6 +733,21 @@ fn row_to_summary(row: PgRow) -> Result<ScholarlyObjectSummary, RepositoryError>
         review_status: ReviewStatus::try_from(review_status.as_str())
             .map_err(RepositoryError::Domain)?,
         evaluation_fact_count: row.get("evaluation_fact_count"),
+        review_event_count: row.get("review_event_count"),
+        active_element_review_count: row.get("active_element_review_count"),
+        active_synthesis_review_count: row.get("active_synthesis_review_count"),
+    })
+}
+
+fn row_to_problem_area_work(row: PgRow) -> Result<ProblemAreaWorkSummary, RepositoryError> {
+    let relevance: String = row.get("relevance");
+    let problem_review_event_count = row.get("problem_review_event_count");
+
+    Ok(ProblemAreaWorkSummary {
+        scholarly_object: row_to_summary(row)?,
+        problem_review_event_count,
+        relevance: ProblemAreaRelevance::try_from(relevance.as_str())
+            .map_err(RepositoryError::Domain)?,
     })
 }
 
@@ -352,6 +778,7 @@ fn row_to_detail(
 
     Ok(ScholarlyObjectDetail {
         id: row.get("id"),
+        audit_object_id: row.get("audit_object_id"),
         object_type: ScholarlyObjectType::try_from(object_type.as_str())
             .map_err(RepositoryError::Domain)?,
         work_group,
@@ -375,8 +802,49 @@ fn row_to_detail(
         review_status: ReviewStatus::try_from(review_status.as_str())
             .map_err(RepositoryError::Domain)?,
         evaluation_fact_count: row.get("evaluation_fact_count"),
+        review_event_count: row.get("review_event_count"),
+        active_element_review_count: row.get("active_element_review_count"),
+        active_synthesis_review_count: row.get("active_synthesis_review_count"),
         external_locations,
     })
+}
+
+fn normalized_search_text(query: &str) -> Option<String> {
+    let trimmed = query.trim();
+
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn browse_text_patterns(query: &str, cwe_context: Option<&CweBrowseContext>) -> Vec<String> {
+    let mut patterns = Vec::new();
+    push_text_pattern(&mut patterns, query);
+
+    if let Some(context) = cwe_context {
+        push_text_pattern(&mut patterns, &context.label);
+        push_text_pattern(&mut patterns, &context.description);
+
+        for keyword in &context.browse_keywords {
+            push_text_pattern(&mut patterns, keyword);
+        }
+    }
+
+    patterns.sort();
+    patterns.dedup();
+    patterns
+}
+
+fn push_text_pattern(patterns: &mut Vec<String>, value: &str) {
+    let trimmed = value.trim().to_ascii_lowercase();
+
+    if trimmed.is_empty() {
+        return;
+    }
+
+    patterns.push(format!("%{trimmed}%"));
 }
 
 fn row_to_version_summary(row: PgRow) -> Result<ArticleVersionSummary, RepositoryError> {

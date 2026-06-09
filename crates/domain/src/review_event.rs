@@ -27,7 +27,18 @@ pub struct ReviewEventSummary {
     pub submitted_by: Option<String>,
     pub finding: Option<Finding>,
     pub severity: Option<FindingSeverity>,
+    pub confidence: Option<FindingConfidence>,
     pub featured: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateElementReviewRequest {
+    pub cwe_node_id: String,
+    pub finding: Finding,
+    pub severity: Option<FindingSeverity>,
+    pub confidence: Option<FindingConfidence>,
+    pub content: String,
+    pub solicitation: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,6 +50,7 @@ pub enum ReviewEventPayload {
         solicitation: Option<String>,
         finding: Finding,
         severity: Option<FindingSeverity>,
+        confidence: Option<FindingConfidence>,
         content: String,
         featured: bool,
     },
@@ -165,6 +177,27 @@ impl TryFrom<&str> for FindingSeverity {
             "major" => Ok(Self::Major),
             "critical" => Ok(Self::Critical),
             other => Err(format!("unknown finding severity: {other}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FindingConfidence {
+    Low,
+    Medium,
+    High,
+}
+
+impl TryFrom<&str> for FindingConfidence {
+    type Error = String;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "low" => Ok(Self::Low),
+            "medium" => Ok(Self::Medium),
+            "high" => Ok(Self::High),
+            other => Err(format!("unknown finding confidence: {other}")),
         }
     }
 }

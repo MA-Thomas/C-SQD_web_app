@@ -88,6 +88,7 @@ fn library_base_select_sql() -> &'static str {
             uli.added_reason,
             uli.added_at::text AS added_at,
             so.id::text AS id,
+            ao.id::text AS audit_object_id,
             so.object_type,
             swg.id::text AS work_group_id,
             swg.title AS work_group_title,
@@ -105,6 +106,14 @@ fn library_base_select_sql() -> &'static str {
             so.canonical_url,
             so.license,
             CASE
+                WHEN EXISTS (
+                    SELECT 1
+                    FROM review_event_memberships rem
+                    JOIN review_events re ON re.id = rem.review_event_id
+                    WHERE rem.audit_object_id = ao.id
+                      AND rem.status = 'active'
+                      AND re.status = 'active'
+                ) THEN 'submitted'
                 WHEN EXISTS (
                     SELECT 1 FROM review_episodes re
                     WHERE re.scholarly_object_id = so.id
@@ -130,7 +139,33 @@ fn library_base_select_sql() -> &'static str {
             (
                 SELECT COUNT(*) FROM evaluation_facts ef
                 WHERE ef.scholarly_object_id = so.id
-            ) AS evaluation_fact_count
+            ) AS evaluation_fact_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS review_event_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.role = 'element_review'
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS active_element_review_count,
+            (
+                SELECT COUNT(*)
+                FROM review_event_memberships rem
+                JOIN review_events re ON re.id = rem.review_event_id
+                WHERE rem.audit_object_id = ao.id
+                  AND rem.role = 'synthesis_review'
+                  AND rem.status = 'active'
+                  AND re.status = 'active'
+            ) AS active_synthesis_review_count
         FROM user_library_items uli
         JOIN audit_objects ao ON ao.id = uli.audit_object_id
         JOIN scholarly_objects so
@@ -173,6 +208,7 @@ fn row_to_scholarly_summary(row: PgRow) -> Result<ScholarlyObjectSummary, Reposi
 
     Ok(ScholarlyObjectSummary {
         id: row.get("id"),
+        audit_object_id: row.get("audit_object_id"),
         object_type: ScholarlyObjectType::try_from(object_type.as_str())
             .map_err(RepositoryError::Domain)?,
         work_group,
@@ -191,6 +227,9 @@ fn row_to_scholarly_summary(row: PgRow) -> Result<ScholarlyObjectSummary, Reposi
         review_status: ReviewStatus::try_from(review_status.as_str())
             .map_err(RepositoryError::Domain)?,
         evaluation_fact_count: row.get("evaluation_fact_count"),
+        review_event_count: row.get("review_event_count"),
+        active_element_review_count: row.get("active_element_review_count"),
+        active_synthesis_review_count: row.get("active_synthesis_review_count"),
     })
 }
 

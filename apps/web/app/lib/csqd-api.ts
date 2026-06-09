@@ -1,5 +1,6 @@
 export type ScholarlyObjectSummary = {
   id: string;
+  audit_object_id: string | null;
   object_type: string;
   work_group: ArticleVersionGroupSummary | null;
   version_kind: string;
@@ -11,6 +12,9 @@ export type ScholarlyObjectSummary = {
   license: string | null;
   review_status: string;
   evaluation_fact_count: number;
+  review_event_count: number;
+  active_element_review_count: number;
+  active_synthesis_review_count: number;
 };
 
 export type LibraryItemSummary = {
@@ -22,12 +26,32 @@ export type LibraryItemSummary = {
   scholarly_object: ScholarlyObjectSummary;
 };
 
+export type ProblemAreaWorkSummary = {
+  scholarly_object: ScholarlyObjectSummary;
+  problem_review_event_count: number;
+  relevance: string;
+};
+
 export type DomainInstantiationSummary = {
   id: string;
   domain_type: string;
   name: string;
   created_at: string;
   governed_by: unknown;
+};
+
+export type CWENode = {
+  id: string;
+  domain_instantiation_id: string;
+  parent: string | null;
+  label: string;
+  description: string;
+  source: string;
+};
+
+export type DomainInstantiationDetail = DomainInstantiationSummary & {
+  config: unknown;
+  cwe_nodes: CWENode[];
 };
 
 export type ExternalArticleLocation = {
@@ -121,6 +145,25 @@ export type ArticleRetrievalResponse = {
   error: string | null;
 };
 
+export type CreateElementReviewRequest = {
+  cwe_node_id: string;
+  finding: string;
+  severity: string | null;
+  confidence: string | null;
+  content: string;
+  solicitation: string | null;
+};
+
+export type ReviewEvent = {
+  id: string;
+  audit_object_id: string;
+  domain_instantiation_id: string;
+  occurred_at: string;
+  payload: unknown;
+  status: string;
+  provenance: unknown;
+};
+
 export type ArticleRetrievalOptions = {
   includePreprints?: boolean;
 };
@@ -151,6 +194,38 @@ export async function searchScholarlyObjects(
     const response = await fetch(`${apiBaseUrl}/api/work-search?${params.toString()}`, {
       cache: "no-store",
     });
+
+    if (!response.ok) {
+      return [];
+    }
+
+    return response.json();
+  } catch {
+    return [];
+  }
+}
+
+export async function browseProblemAreaWorks(options: {
+  cweNodeId?: string;
+  query?: string;
+}): Promise<ProblemAreaWorkSummary[]> {
+  const params = new URLSearchParams();
+
+  if (options.query?.trim()) {
+    params.set("query", options.query.trim());
+  }
+
+  if (options.cweNodeId?.trim()) {
+    params.set("cwe_node_id", options.cweNodeId.trim());
+  }
+
+  try {
+    const response = await fetch(
+      `${apiBaseUrl}/api/peer-review/problem-area-works?${params.toString()}`,
+      {
+        cache: "no-store",
+      },
+    );
 
     if (!response.ok) {
       return [];
@@ -219,6 +294,24 @@ export async function getDomainInstantiations(): Promise<
   }
 }
 
+export async function getDomainInstantiation(
+  id: string,
+): Promise<DomainInstantiationDetail | null> {
+  try {
+    const response = await fetch(`${apiBaseUrl}/api/domain-instantiations/${id}`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function getScholarlyObject(
   id: string,
 ): Promise<ScholarlyObjectDetail | null> {
@@ -245,6 +338,33 @@ export async function getArticleAccess(
       `${apiBaseUrl}/api/scholarly-objects/${id}/article-access`,
       {
         cache: "no-store",
+      },
+    );
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function createElementReview(
+  scholarlyObjectId: string,
+  request: CreateElementReviewRequest,
+): Promise<ReviewEvent | null> {
+  try {
+    const response = await fetch(
+      `${apiBaseUrl}/api/scholarly-objects/${scholarlyObjectId}/review-events/element-review`,
+      {
+        body: JSON.stringify(request),
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        method: "POST",
       },
     );
 
