@@ -1,8 +1,8 @@
 # README For Eunice
 
-This repo contains the C-SQD web app: a Next.js frontend, Rust API, and local PostgreSQL database for epistemic audit infrastructure.
+This repo contains the C-SQD web app: a Next.js frontend, Rust API, and local PostgreSQL database for commissioned epistemic audit infrastructure.
 
-The first active domain is **Academic Peer Review**. The broader system is meant to support other domains too, such as clinical trial protocol review, AI system auditing, and policy evidence review.
+The current app still has an Academic Publishing / Scholarly Search adapter, but the current GTM direction is broader: organizations commission decomposed audits of claims, papers, models, datasets, reports, and other artifacts.
 
 ## 1. Clone The Repo
 
@@ -91,10 +91,13 @@ http://localhost:3000
 
 Useful pages:
 
-- `/` Scholarly Search
+- `/` Audit Console for commissioned audit episodes
+- `/commission` commission a scoped audit
+- `/audit-episodes/:id` episode workspace for facts and element reviews
+- `/intake` Scholarly Intake / Academic Publishing metadata adapter
+- `/browse` Academic Publishing problem-area browse
 - `/domains` C-SQD domain overview
-- `/library` saved audit objects
-- `/assignments` review assignments
+- `/library` saved audit subjects
 
 API health check:
 
@@ -121,13 +124,14 @@ http://localhost:3001
 
 Read these first:
 
-- `CSQD_NEW.pdf`: current C-SQD concept.
-- `FEN_Schema_for_CSQD.pdf`: FEN/C-SQD schema framing.
+- `C_SQD_NEW_GTM.pdf`: current go-to-market strategy.
+- `FEN_for_CSQD_GTM.pdf`: rendered current FEN schema / GTM ontology.
+- `FEN_Schema_for_CSQD_GTM.tex`: source for the current FEN schema.
 - `NEXT_STEPS.md`: current engineering roadmap.
 - `build_decisions.md`: stack and architecture decisions.
 - `interpretation.md`: notes connecting earlier source materials.
 
-Older MVP docs live in:
+Older documents, including the previous `CSQD_NEW.pdf`, `FEN_Schema_for_CSQD.pdf`, and MVP docs, live in:
 
 ```text
 old_mvp_docs/
@@ -171,13 +175,14 @@ curl http://localhost:8080/api/audit-objects
 
 C-SQD is not just an academic peer review app.
 
-It is general epistemic audit infrastructure:
+It is general commissioned epistemic audit infrastructure:
 
 - **DomainInstantiation**: a configured audit domain.
-- **AuditObject**: the thing being reviewed.
-- **ReviewEvent**: an evaluative act.
-- **Solicitation**: a request for review work.
-- **Challenge**: a structured contestation process.
+- **AuditSubject**: referenced metadata for the artifact or claim being evaluated.
+- **Fact**: an atomic epistemic or administrative act.
+- **AuditEpisode**: a coherent commissioned audit question over time.
+- **EpisodeMembership**: the provenance-bearing link between a fact and an episode.
+- **SynthesisReview**: an authored interpretation of an audit episode.
 - **Evaluation tuple**: a derived view of scrutiny and uptake.
 
-Academic Peer Review is the first implemented domain. Future domains should reuse the same infrastructure.
+Academic Publishing is the first implemented adapter. Future domains should reuse the same FEN infrastructure.

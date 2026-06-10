@@ -1,6 +1,6 @@
 export type ScholarlyObjectSummary = {
   id: string;
-  audit_object_id: string | null;
+  audit_subject_id: string | null;
   object_type: string;
   work_group: ArticleVersionGroupSummary | null;
   version_kind: string;
@@ -10,17 +10,17 @@ export type ScholarlyObjectSummary = {
   publication_year: number | null;
   canonical_url: string;
   license: string | null;
-  review_status: string;
-  evaluation_fact_count: number;
-  review_event_count: number;
-  active_element_review_count: number;
-  active_synthesis_review_count: number;
+  audit_status: string;
+  audit_episode_count: number;
+  fact_count: number;
+  element_review_fact_count: number;
+  synthesis_review_count: number;
 };
 
 export type LibraryItemSummary = {
   id: string;
   user_id: string;
-  audit_object_id: string;
+  subject_id: string;
   added_reason: string;
   added_at: string;
   scholarly_object: ScholarlyObjectSummary;
@@ -28,7 +28,7 @@ export type LibraryItemSummary = {
 
 export type ProblemAreaWorkSummary = {
   scholarly_object: ScholarlyObjectSummary;
-  problem_review_event_count: number;
+  problem_fact_count: number;
   relevance: string;
 };
 
@@ -100,24 +100,13 @@ export type ArticleAccessSummary = {
   external_locations: ExternalArticleLocation[];
 };
 
-export type ReviewAssignmentSummary = {
-  id: string;
-  scholarly_object_id: string;
-  scholarly_object_title: string;
-  scholarly_object_canonical_url: string;
-  reviewer_display_name: string;
-  assignment_type: string;
-  compensation_status: string;
-  state: string;
-  due_at: string | null;
-};
-
 export type ArticleRetrievalResult = {
   source: string;
   source_identifier: string;
   work_group: ArticleVersionGroupSummary;
   version_kind: string;
   scholarly_object_id: string;
+  audit_subject_id: string;
   title: string;
   authors: string[];
   abstract_text: string | null;
@@ -145,23 +134,163 @@ export type ArticleRetrievalResponse = {
   error: string | null;
 };
 
-export type CreateElementReviewRequest = {
+export type AuditSubject = {
+  id: string;
+  domain_instantiation_id: string;
+  subject_type: string;
+  title: string | null;
+  external_refs: unknown[];
+  registered_by: unknown;
+  registered_at: string;
+};
+
+export type AuditEpisode = {
+  id: string;
+  subject_id: string;
+  domain_instantiation_id: string;
+  label: string;
+  status: string;
+  authored_by: unknown;
+  authored_at: string;
+  notes: string | null;
+};
+
+export type AuditEpisodeSummary = AuditEpisode & {
+  subject_title: string | null;
+  subject_type: string;
+  sponsor_name: string | null;
+  sponsor_organization_type: string | null;
+  fact_count: number;
+  element_review_count: number;
+  synthesis_review_count: number;
+  latest_activity_at: string | null;
+  synthesis_ready: boolean;
+};
+
+export type Money = {
+  amount: number;
+  currency: string;
+};
+
+export type CreateAuditSubjectRequest = {
+  domain_instantiation_id: string;
+  subject_type: string;
+  title: string | null;
+  external_refs?: unknown[];
+  registered_by?: unknown;
+};
+
+export type CommissionAuditEpisodeRequest = {
+  label: string;
+  sponsor_organization_name: string;
+  sponsor_organization_type: string;
+  funding: Money;
+  scope_cwe_node_ids: string[];
+  deadline: string | null;
+  confidential: boolean;
+  notes: string | null;
+};
+
+export type CommissionAuditEpisodeResult = {
+  organization: {
+    id: string;
+    name: string;
+    org_type: string;
+    created_at: string;
+  };
+  episode: AuditEpisode;
+  commission_fact: Fact;
+};
+
+export type CreateEpisodeElementReviewRequest = {
   cwe_node_id: string;
+  submitted_by: string | null;
+  solicitation: string | null;
   finding: string;
   severity: string | null;
   confidence: string | null;
+  limitations: string | null;
+  recommendations: string | null;
   content: string;
-  solicitation: string | null;
+  featured: boolean;
 };
 
-export type ReviewEvent = {
+export type PaymentScheme = {
+  amount: Money;
+  currency: string;
+  condition: string | { tiered: { on_submission: Money; on_acceptance: Money } };
+};
+
+export type CreateEpisodeSolicitationRequest = {
+  issued_to: string | null;
+  cwe_node_id: string;
+  commission_fact_id: string | null;
+  payment_scheme: PaymentScheme;
+};
+
+export type CreateEpisodeSolicitationEventRequest = {
+  solicitation_fact_id: string;
+  event_type: string;
+  principal: unknown | null;
+  note: string | null;
+};
+
+export type CreateSynthesisReviewSectionRequest = {
+  section_type: string;
+  content: string;
+  referenced_facts: string[];
+};
+
+export type CreateSynthesisReviewRequest = {
+  submitted_by: string | null;
+  status: string;
+  summary: string;
+  sections: CreateSynthesisReviewSectionRequest[];
+  featured: boolean;
+};
+
+export type SynthesisReviewSection = {
   id: string;
-  audit_object_id: string;
+  review_id: string;
+  section_type: string;
+  content: string;
+  referenced_facts: string[];
+};
+
+export type SynthesisReview = {
+  id: string;
+  episode_id: string;
+  submitted_by: string;
+  authored_at: string;
+  status: string;
+  summary: string;
+  sections: SynthesisReviewSection[];
+  featured: boolean;
+};
+
+export type EvalTuple = {
+  n: number;
+  m: number;
+  s: number;
+  l: number;
+  u: number;
+  computed_at: string;
+  community_filter: {
+    tags: string[];
+    domain_instantiation_id: string | null;
+    min_endorsements: number | null;
+  };
+};
+
+export type Fact = {
+  id: string;
+  subject_id: string;
   domain_instantiation_id: string;
   occurred_at: string;
   payload: unknown;
   status: string;
   provenance: unknown;
+  external_refs: unknown[];
 };
 
 export type ArticleRetrievalOptions = {
@@ -170,39 +299,119 @@ export type ArticleRetrievalOptions = {
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
+export async function getAuditEpisodes(): Promise<AuditEpisodeSummary[]> {
+  return fetchJson<AuditEpisodeSummary[]>("/api/audit-episodes", []);
+}
+
+export async function getAuditSubjects(): Promise<AuditSubject[]> {
+  return fetchJson<AuditSubject[]>("/api/audit-subjects", []);
+}
+
+export async function getAuditSubject(id: string): Promise<AuditSubject | null> {
+  return fetchJson<AuditSubject | null>(`/api/audit-subjects/${id}`, null);
+}
+
+export async function createAuditSubject(
+  request: CreateAuditSubjectRequest,
+): Promise<AuditSubject | null> {
+  return postJson<AuditSubject>("/api/audit-subjects", request);
+}
+
+export async function getAuditEpisodesForSubject(
+  subjectId: string,
+): Promise<AuditEpisode[]> {
+  return fetchJson<AuditEpisode[]>(
+    `/api/audit-subjects/${subjectId}/audit-episodes`,
+    [],
+  );
+}
+
+export async function commissionAuditEpisode(
+  subjectId: string,
+  request: CommissionAuditEpisodeRequest,
+): Promise<CommissionAuditEpisodeResult | null> {
+  return postJson<CommissionAuditEpisodeResult>(
+    `/api/audit-subjects/${subjectId}/audit-episodes`,
+    request,
+  );
+}
+
+export async function getAuditEpisode(id: string): Promise<AuditEpisode | null> {
+  return fetchJson<AuditEpisode | null>(`/api/audit-episodes/${id}`, null);
+}
+
+export async function getFactsForEpisode(episodeId: string): Promise<Fact[]> {
+  return fetchJson<Fact[]>(`/api/audit-episodes/${episodeId}/facts`, []);
+}
+
+export async function createEpisodeElementReview(
+  episodeId: string,
+  request: CreateEpisodeElementReviewRequest,
+): Promise<Fact | null> {
+  return postJson<Fact>(
+    `/api/audit-episodes/${episodeId}/facts/element-review`,
+    request,
+  );
+}
+
+export async function createEpisodeSolicitation(
+  episodeId: string,
+  request: CreateEpisodeSolicitationRequest,
+): Promise<Fact | null> {
+  return postJson<Fact>(
+    `/api/audit-episodes/${episodeId}/facts/solicitation`,
+    request,
+  );
+}
+
+export async function createEpisodeSolicitationEvent(
+  episodeId: string,
+  request: CreateEpisodeSolicitationEventRequest,
+): Promise<Fact | null> {
+  return postJson<Fact>(
+    `/api/audit-episodes/${episodeId}/facts/solicitation-event`,
+    request,
+  );
+}
+
+export async function getSynthesisReviews(
+  episodeId: string,
+): Promise<SynthesisReview[]> {
+  return fetchJson<SynthesisReview[]>(
+    `/api/audit-episodes/${episodeId}/synthesis-reviews`,
+    [],
+  );
+}
+
+export async function createSynthesisReview(
+  episodeId: string,
+  request: CreateSynthesisReviewRequest,
+): Promise<SynthesisReview | null> {
+  return postJson<SynthesisReview>(
+    `/api/audit-episodes/${episodeId}/synthesis-reviews`,
+    request,
+  );
+}
+
+export async function getEvalTuple(episodeId: string): Promise<EvalTuple | null> {
+  return fetchJson<EvalTuple | null>(
+    `/api/audit-episodes/${episodeId}/eval-tuple`,
+    null,
+  );
+}
+
 export async function getScholarlyObjects(): Promise<ScholarlyObjectSummary[]> {
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/scholarly-objects`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    return response.json();
-  } catch {
-    return [];
-  }
+  return fetchJson<ScholarlyObjectSummary[]>("/api/scholarly-objects", []);
 }
 
 export async function searchScholarlyObjects(
   query: string,
 ): Promise<ScholarlyObjectSummary[]> {
-  try {
-    const params = new URLSearchParams({ query });
-    const response = await fetch(`${apiBaseUrl}/api/work-search?${params.toString()}`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    return response.json();
-  } catch {
-    return [];
-  }
+  const params = new URLSearchParams({ query });
+  return fetchJson<ScholarlyObjectSummary[]>(
+    `/api/work-search?${params.toString()}`,
+    [],
+  );
 }
 
 export async function browseProblemAreaWorks(options: {
@@ -219,179 +428,55 @@ export async function browseProblemAreaWorks(options: {
     params.set("cwe_node_id", options.cweNodeId.trim());
   }
 
-  try {
-    const response = await fetch(
-      `${apiBaseUrl}/api/peer-review/problem-area-works?${params.toString()}`,
-      {
-        cache: "no-store",
-      },
-    );
-
-    if (!response.ok) {
-      return [];
-    }
-
-    return response.json();
-  } catch {
-    return [];
-  }
+  return fetchJson<ProblemAreaWorkSummary[]>(
+    `/api/peer-review/problem-area-works?${params.toString()}`,
+    [],
+  );
 }
 
 export async function getLibraryItems(): Promise<LibraryItemSummary[]> {
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/library-items`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    return response.json();
-  } catch {
-    return [];
-  }
+  return fetchJson<LibraryItemSummary[]>("/api/library-items", []);
 }
 
 export async function addLibraryItem(
   scholarlyObjectId: string,
 ): Promise<LibraryItemSummary | null> {
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/library-items`, {
-      body: JSON.stringify({ scholarly_object_id: scholarlyObjectId }),
-      cache: "no-store",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      method: "POST",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return response.json();
-  } catch {
-    return null;
-  }
+  return postJson<LibraryItemSummary>("/api/library-items", {
+    scholarly_object_id: scholarlyObjectId,
+  });
 }
 
 export async function getDomainInstantiations(): Promise<
   DomainInstantiationSummary[]
 > {
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/domain-instantiations`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    return response.json();
-  } catch {
-    return [];
-  }
+  return fetchJson<DomainInstantiationSummary[]>("/api/domain-instantiations", []);
 }
 
 export async function getDomainInstantiation(
   id: string,
 ): Promise<DomainInstantiationDetail | null> {
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/domain-instantiations/${id}`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return response.json();
-  } catch {
-    return null;
-  }
+  return fetchJson<DomainInstantiationDetail | null>(
+    `/api/domain-instantiations/${id}`,
+    null,
+  );
 }
 
 export async function getScholarlyObject(
   id: string,
 ): Promise<ScholarlyObjectDetail | null> {
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/scholarly-objects/${id}`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return response.json();
-  } catch {
-    return null;
-  }
+  return fetchJson<ScholarlyObjectDetail | null>(
+    `/api/scholarly-objects/${id}`,
+    null,
+  );
 }
 
 export async function getArticleAccess(
   id: string,
 ): Promise<ArticleAccessSummary | null> {
-  try {
-    const response = await fetch(
-      `${apiBaseUrl}/api/scholarly-objects/${id}/article-access`,
-      {
-        cache: "no-store",
-      },
-    );
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return response.json();
-  } catch {
-    return null;
-  }
-}
-
-export async function createElementReview(
-  scholarlyObjectId: string,
-  request: CreateElementReviewRequest,
-): Promise<ReviewEvent | null> {
-  try {
-    const response = await fetch(
-      `${apiBaseUrl}/api/scholarly-objects/${scholarlyObjectId}/review-events/element-review`,
-      {
-        body: JSON.stringify(request),
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-      },
-    );
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return response.json();
-  } catch {
-    return null;
-  }
-}
-
-export async function getReviewAssignments(): Promise<ReviewAssignmentSummary[]> {
-  try {
-    const response = await fetch(`${apiBaseUrl}/api/review-assignments`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return [];
-    }
-
-    return response.json();
-  } catch {
-    return [];
-  }
+  return fetchJson<ArticleAccessSummary | null>(
+    `/api/scholarly-objects/${id}/article-access`,
+    null,
+  );
 }
 
 export async function retrieveArxivArticle(
@@ -438,6 +523,43 @@ export async function retrieveArticle(
   }
 
   return retrieveTitleArticle(query, options);
+}
+
+async function fetchJson<T>(endpoint: string, fallback: T): Promise<T> {
+  try {
+    const response = await fetch(`${apiBaseUrl}${endpoint}`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return fallback;
+    }
+
+    return response.json();
+  } catch {
+    return fallback;
+  }
+}
+
+async function postJson<T>(endpoint: string, body: unknown): Promise<T | null> {
+  try {
+    const response = await fetch(`${apiBaseUrl}${endpoint}`, {
+      body: JSON.stringify(body),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      method: "POST",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return response.json();
+  } catch {
+    return null;
+  }
 }
 
 async function retrieveArticleFromEndpoint(

@@ -1,8 +1,8 @@
 # C-SQD Web App
 
-C-SQD is being built as **multi-domain epistemic audit infrastructure**.
+C-SQD is being built as **general epistemic audit infrastructure** for commissioned, decomposed audits of important scientific and technical claims.
 
-The first active domain is **Academic Peer Review**. Current product surfaces include Scholarly Search, Library, Domains, Assignments, scholarly object detail pages, rights-aware native viewing, and an early review workspace.
+The current app still contains useful Academic Publishing / Scholarly Search infrastructure, but the active GTM direction is no longer "build a better journal." The first product wedge is sponsored epistemic audits: organizations commission audits of claims, papers, models, datasets, reports, and related artifacts; reviewers complete scoped ElementReviews; synthesis authors integrate those facts into audit-level interpretations.
 
 ## Current Stack
 
@@ -61,21 +61,25 @@ http://localhost:3000
 
 ## Useful Routes
 
-- `/` Scholarly Search
+- `/` Audit Console for commissioned audit episodes
+- `/commission` sponsor/scope form for commissioning an audit
+- `/audit-episodes/:id` episode workspace for facts and scoped element reviews
+- `/intake` Scholarly Intake / Academic Publishing metadata adapter
+- `/browse` Academic Publishing problem-area browse
 - `/domains` C-SQD domain overview
-- `/library` saved audit objects
-- `/assignments` review assignments
+- `/library` saved audit subjects
 
 ## Key Documents
 
-- `CSQD_NEW.pdf`: current C-SQD conceptual direction.
-- `FEN_Schema_for_CSQD.pdf`: FEN/C-SQD schema framing.
+- `C_SQD_NEW_GTM.pdf`: current go-to-market strategy.
+- `FEN_for_CSQD_GTM.pdf`: rendered current FEN schema / GTM ontology.
+- `FEN_Schema_for_CSQD_GTM.tex`: source for the current FEN schema.
 - `interpretation.md`: working interpretation and source precedence.
 - `NEXT_STEPS.md`: current engineering roadmap.
-- `build_decisions.md`: stack and architecture decisions; partly MVP-era, now superseded by `interpretation.md` and `NEXT_STEPS.md` for ontology and roadmap.
+- `build_decisions.md`: stack and architecture decisions; partly MVP-era, now superseded by `interpretation.md`, `NEXT_STEPS.md`, and the new GTM/FEN documents for ontology and roadmap.
 - `README_FOR_EUNICE.md`: concise onboarding guide for new collaborators.
 
-Older MVP documents live in `old_mvp_docs/`.
+Older documents, including `CSQD_NEW.pdf`, `FEN_Schema_for_CSQD.pdf`, and MVP documents in `old_mvp_docs/`, are useful history but no longer authoritative when they conflict with the GTM/FEN documents above.
 
 ## Verification
 
@@ -91,5 +95,5 @@ For a quick API smoke test:
 ```sh
 curl http://localhost:8080/health
 curl http://localhost:8080/api/domain-instantiations
-curl http://localhost:8080/api/audit-objects
+curl http://localhost:8080/api/audit-episodes
 ```

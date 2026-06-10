@@ -82,7 +82,6 @@ pub async fn ensure_version_group(
     .await?;
 
     let work_group_id: String = row.get("work_group_id");
-    backfill_review_targets(db, scholarly_object_id, &work_group_id).await?;
     find_version_group(db, &work_group_id).await
 }
 
@@ -119,53 +118,6 @@ async fn find_version_group(
         primary_scholarly_object_id: row.get("primary_scholarly_object_id"),
         version_count: row.get("version_count"),
     })
-}
-
-async fn backfill_review_targets(
-    db: &PgPool,
-    scholarly_object_id: &str,
-    work_group_id: &str,
-) -> Result<(), RepositoryError> {
-    sqlx::query(
-        r#"
-        UPDATE review_assignments
-        SET work_group_id = $2::uuid
-        WHERE scholarly_object_id::text = $1
-          AND work_group_id IS NULL
-        "#,
-    )
-    .bind(scholarly_object_id)
-    .bind(work_group_id)
-    .execute(db)
-    .await?;
-
-    sqlx::query(
-        r#"
-        UPDATE review_episodes
-        SET work_group_id = $2::uuid
-        WHERE scholarly_object_id::text = $1
-          AND work_group_id IS NULL
-        "#,
-    )
-    .bind(scholarly_object_id)
-    .bind(work_group_id)
-    .execute(db)
-    .await?;
-
-    sqlx::query(
-        r#"
-        UPDATE evaluation_facts
-        SET work_group_id = $2::uuid
-        WHERE scholarly_object_id::text = $1
-          AND work_group_id IS NULL
-        "#,
-    )
-    .bind(scholarly_object_id)
-    .bind(work_group_id)
-    .execute(db)
-    .await?;
-
-    Ok(())
 }
 
 fn version_rank(version_kind: &ArticleVersionKind) -> i32 {

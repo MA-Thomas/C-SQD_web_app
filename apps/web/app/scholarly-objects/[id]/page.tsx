@@ -51,16 +51,16 @@ export default async function ScholarlyObjectPage({ params }: PageProps) {
 
   return (
     <main className="app-shell">
-      <AppSidebar activeItem="search" />
+      <AppSidebar activeItem="intake" />
 
       <section className="workspace">
         <header className="topbar detail-topbar">
           <div>
-            <p className="eyebrow">Academic Peer Review audit object</p>
+            <p className="eyebrow">Academic Publishing intake record</p>
             <h1>{object.title}</h1>
           </div>
-          <Link className="status-pill" href="/">
-            Back to objects
+          <Link className="status-pill" href="/intake">
+            Back to intake
           </Link>
         </header>
 
@@ -79,12 +79,14 @@ export default async function ScholarlyObjectPage({ params }: PageProps) {
             ) : null}
 
             <div className="source-actions">
-              <Link
-                className="primary-action"
-                href={`/scholarly-objects/${object.id}/review`}
-              >
-                Start review
-              </Link>
+              {object.audit_subject_id ? (
+                <Link
+                  className="primary-action"
+                  href={`/commission?subject_id=${object.audit_subject_id}`}
+                >
+                  Commission audit
+                </Link>
+              ) : null}
               {canViewNatively ? (
                 <Link
                   className="secondary-action"
@@ -118,11 +120,11 @@ export default async function ScholarlyObjectPage({ params }: PageProps) {
             <dl className="detail-facts">
               <div>
                 <dt>Status</dt>
-                <dd>{formatLabel(object.review_status)}</dd>
+                <dd>{formatLabel(object.audit_status)}</dd>
               </div>
               <div>
-                <dt>Review events</dt>
-                <dd>{object.review_event_count}</dd>
+                <dt>Episodes</dt>
+                <dd>{object.audit_episode_count}</dd>
               </div>
               <div>
                 <dt>Display</dt>
@@ -204,12 +206,14 @@ export default async function ScholarlyObjectPage({ params }: PageProps) {
             </dl>
 
             <div className="source-actions">
-              <Link
-                className="primary-action"
-                href={`/scholarly-objects/${object.id}/review`}
-              >
-                Start review
-              </Link>
+              {object.audit_subject_id ? (
+                <Link
+                  className="primary-action"
+                  href={`/commission?subject_id=${object.audit_subject_id}`}
+                >
+                  Commission audit
+                </Link>
+              ) : null}
               {canViewNatively ? (
                 <Link
                   className="secondary-action"
@@ -252,26 +256,30 @@ export default async function ScholarlyObjectPage({ params }: PageProps) {
           </article>
 
           <article className="panel">
-            <h2>Review Graph</h2>
-            <dl className="review-graph">
+            <h2>Audit Subject Context</h2>
+            <dl className="audit-graph">
               <div>
                 <dt>Current state</dt>
-                <dd>{formatLabel(object.review_status)}</dd>
+                <dd>{formatLabel(object.audit_status)}</dd>
               </div>
               <div>
                 <dt>Recorded facts</dt>
-                <dd>{object.evaluation_fact_count}</dd>
+                <dd>{object.fact_count}</dd>
               </div>
               <div>
-                <dt>Review events</dt>
-                <dd>{object.review_event_count}</dd>
+                <dt>Episodes</dt>
+                <dd>{object.audit_episode_count}</dd>
               </div>
               <div>
                 <dt>Element reviews</dt>
-                <dd>{object.active_element_review_count}</dd>
+                <dd>{object.element_review_fact_count}</dd>
               </div>
               <div>
-                <dt>Review surface</dt>
+                <dt>Synthesis reviews</dt>
+                <dd>{object.synthesis_review_count}</dd>
+              </div>
+              <div>
+                <dt>Intake surface</dt>
                 <dd>{formatLabel(articleAccess.display_strategy)}</dd>
               </div>
               <div>

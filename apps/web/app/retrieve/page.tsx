@@ -21,5 +21,5 @@ export default async function RetrieveRedirectPage({ searchParams }: PageProps) 
 
   const query = params.toString();
 
-  redirect(query ? `/?${query}` : "/");
+  redirect(query ? `/intake?${query}` : "/intake");
 }

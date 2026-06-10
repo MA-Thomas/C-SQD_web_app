@@ -3,7 +3,7 @@ use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 use std::{env, time::Duration};
 
-use super::{access_policy, article_access, article_versions, audit_objects, RepositoryError};
+use super::{access_policy, article_access, article_versions, audit_subjects, RepositoryError};
 
 const CROSSREF_WORKS_URL: &str = "https://api.crossref.org/works";
 const UNPAYWALL_URL: &str = "https://api.unpaywall.org/v2";
@@ -48,6 +48,8 @@ pub async fn retrieve_doi(
     .await?;
     let article_access =
         article_access::find_for_scholarly_object(db, &scholarly_object_id).await?;
+    let audit_subject_id =
+        audit_subjects::ensure_academic_for_scholarly_object(db, &scholarly_object_id).await?;
 
     Ok(ArticleRetrievalResult {
         source: ArticleRetrievalSource::Doi,
@@ -55,6 +57,7 @@ pub async fn retrieve_doi(
         work_group,
         version_kind,
         scholarly_object_id,
+        audit_subject_id,
         title: entry.title,
         authors: entry.authors,
         abstract_text: entry.abstract_text,
@@ -343,7 +346,7 @@ async fn upsert_doi_entry(
     }
 
     upsert_search_projection(db, &scholarly_object_id, entry).await?;
-    audit_objects::ensure_academic_for_scholarly_object(db, &scholarly_object_id).await?;
+    audit_subjects::ensure_academic_for_scholarly_object(db, &scholarly_object_id).await?;
 
     Ok((scholarly_object_id, was_created))
 }

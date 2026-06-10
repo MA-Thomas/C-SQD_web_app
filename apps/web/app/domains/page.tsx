@@ -12,8 +12,8 @@ type DomainCard = {
   domainType: string;
   status: "active" | "planned";
   description: string;
-  auditObjects: string;
-  reviewModes: string;
+  auditSubjects: string;
+  auditModes: string;
   evaluationBasis: string;
   sharedPrimitives: string;
   liveSurfaces: string | null;
@@ -28,13 +28,13 @@ const plannedDomains: DomainCard[] = [
     status: "planned",
     description:
       "Protocol, endpoint, ethics, and causal & statistical review before and during clinical studies.",
-    auditObjects: "Protocols, amendments, endpoints, evidence packets",
-    reviewModes:
-      "Methodological review, ethics review, causal & statistical review, amendment challenge",
+    auditSubjects: "Protocols, amendments, endpoints, evidence packets",
+    auditModes:
+      "Methodological audit, ethics audit, causal & statistical audit, protocol response",
     evaluationBasis:
       "Public health consequentiality, feasibility, risk-benefit, endpoint validity",
     sharedPrimitives:
-      "Audit objects, review events, solicitations, synthesis, challenges, evaluation tuples",
+      "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
     liveSurfaces: null,
   },
   {
@@ -45,13 +45,13 @@ const plannedDomains: DomainCard[] = [
     status: "planned",
     description:
       "Structured review of model behavior, deployment claims, evaluations, and risk controls.",
-    auditObjects: "Model cards, eval reports, deployment claims",
-    reviewModes:
-      "Eval review, risk synthesis, red-team response, mitigation challenge",
+    auditSubjects: "Model cards, eval reports, deployment claims",
+    auditModes:
+      "Evaluation audit, risk synthesis, red-team response, mitigation follow-up",
     evaluationBasis:
       "Deployment risk, downstream uptake, evidence quality, causal & statistical validity",
     sharedPrimitives:
-      "Audit objects, review events, solicitations, synthesis, challenges, evaluation tuples",
+      "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
     liveSurfaces: null,
   },
   {
@@ -62,22 +62,24 @@ const plannedDomains: DomainCard[] = [
     status: "planned",
     description:
       "Audit trails for evidence packages, policy claims, implementation assumptions, and dissent.",
-    auditObjects: "Evidence packets, policy briefs, claims, responses",
-    reviewModes: "Evidence integration, claim review, public challenge, synthesis review",
+    auditSubjects: "Evidence packets, policy briefs, claims, responses",
+    auditModes: "Evidence integration, claim audit, response, synthesis review",
     evaluationBasis:
       "Downstream adoption, causal & statistical adequacy, implementation assumptions",
     sharedPrimitives:
-      "Audit objects, review events, solicitations, synthesis, challenges, evaluation tuples",
+      "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
     liveSurfaces: null,
   },
 ];
 
 const sharedPrimitives = [
-  "Audit objects",
-  "Review events",
+  "Audit subjects",
+  "Facts",
+  "Audit episodes",
+  "Episode memberships",
+  "Synthesis reviews",
   "Evaluation tuples",
   "Solicitations",
-  "Challenges",
 ];
 
 export default async function DomainsPage() {
@@ -139,8 +141,8 @@ export default async function DomainsPage() {
                 <p>{domain.description}</p>
                 <dl className="domain-concept-list">
                   <div>
-                    <dt>Review modes</dt>
-                    <dd>{domain.reviewModes}</dd>
+                    <dt>Audit modes</dt>
+                    <dd>{domain.auditModes}</dd>
                   </div>
                   <div>
                     <dt>Shared C-SQD primitives</dt>
@@ -160,8 +162,8 @@ export default async function DomainsPage() {
                   <dd>{domain.registryName}</dd>
                 </div>
                 <div>
-                  <dt>Audit objects</dt>
-                  <dd>{domain.auditObjects}</dd>
+                  <dt>Audit subjects</dt>
+                  <dd>{domain.auditSubjects}</dd>
                 </div>
                 <div>
                   <dt>Status</dt>
@@ -189,14 +191,14 @@ function domainCardFromRegistry(domain: DomainInstantiationSummary): DomainCard 
       domainType: domain.domain_type,
       status: "active",
       description:
-        "Scholarly works, preprints, element reviews, synthesis reviews, and challenge records.",
-      auditObjects: "Articles, preprints, datasets, software, protocols, reports",
-      reviewModes: "Element review, synthesis review, submitter response, challenge",
+        "Scholarly works and preprints enter as audit subjects; facts, episodes, and synthesis reviews hold the audit trail.",
+      auditSubjects: "Articles, preprints, datasets, software, protocols, reports",
+      auditModes: "Element review facts, synthesis review, submitter response",
       evaluationBasis:
         "Methodological adequacy, causal & statistical adequacy, interpretation strength",
       sharedPrimitives:
-        "Audit objects, review events, solicitations, synthesis, challenges, evaluation tuples",
-      liveSurfaces: "Scholarly Search, Library, Assignments",
+        "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
+      liveSurfaces: "Audit Console, Commission Audit, Library, Scholarly Intake",
     };
   }
 
@@ -207,12 +209,12 @@ function domainCardFromRegistry(domain: DomainInstantiationSummary): DomainCard 
     domainType: domain.domain_type,
     status: "active",
     description:
-      "Configured C-SQD domain with shared audit objects, review events, and criteria.",
-    auditObjects: "Configured by domain schema",
-    reviewModes: "Configured by domain schema",
+      "Configured C-SQD domain with shared audit subjects, facts, audit episodes, and criteria.",
+    auditSubjects: "Configured by domain schema",
+    auditModes: "Configured by domain schema",
     evaluationBasis: "Configured evaluation tuple",
     sharedPrimitives:
-      "Audit objects, review events, solicitations, synthesis, challenges, evaluation tuples",
+      "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
     liveSurfaces: null,
   };
 }
@@ -225,13 +227,13 @@ function fallbackAcademicDomain(): DomainCard {
     domainType: "academic_publishing",
     status: "active",
     description:
-      "Scholarly works, preprints, element reviews, synthesis reviews, and challenge records.",
-    auditObjects: "Articles, preprints, datasets, software, protocols, reports",
-    reviewModes: "Element review, synthesis review, submitter response, challenge",
+      "Scholarly works and preprints enter as audit subjects; facts, episodes, and synthesis reviews hold the audit trail.",
+    auditSubjects: "Articles, preprints, datasets, software, protocols, reports",
+    auditModes: "Element review facts, synthesis review, submitter response",
     evaluationBasis:
       "Methodological adequacy, causal & statistical adequacy, interpretation strength",
     sharedPrimitives:
-      "Audit objects, review events, solicitations, synthesis, challenges, evaluation tuples",
-    liveSurfaces: "Scholarly Search, Library, Assignments",
+      "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
+    liveSurfaces: "Audit Console, Commission Audit, Library, Scholarly Intake",
   };
 }

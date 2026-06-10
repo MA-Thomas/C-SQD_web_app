@@ -5,7 +5,7 @@ use sqlx::{PgPool, Row};
 use std::time::Duration;
 
 use super::{
-    access_policy, article_access, article_versions, audit_objects, doi_retrieval, RepositoryError,
+    access_policy, article_access, article_versions, audit_subjects, doi_retrieval, RepositoryError,
 };
 
 const PUBMED_EFETCH_URL: &str = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi";
@@ -89,6 +89,8 @@ pub async fn retrieve_pubmed(
     .await?;
     let article_access =
         article_access::find_for_scholarly_object(db, &scholarly_object_id).await?;
+    let audit_subject_id =
+        audit_subjects::ensure_academic_for_scholarly_object(db, &scholarly_object_id).await?;
 
     Ok(ArticleRetrievalResult {
         source: requested_source,
@@ -96,6 +98,7 @@ pub async fn retrieve_pubmed(
         work_group,
         version_kind,
         scholarly_object_id,
+        audit_subject_id,
         title: entry.title,
         authors: entry.authors,
         abstract_text: entry.abstract_text,
@@ -337,7 +340,7 @@ async fn upsert_pubmed_entry(
     }
 
     upsert_search_projection(db, &scholarly_object_id, entry).await?;
-    audit_objects::ensure_academic_for_scholarly_object(db, &scholarly_object_id).await?;
+    audit_subjects::ensure_academic_for_scholarly_object(db, &scholarly_object_id).await?;
 
     Ok((scholarly_object_id, was_created))
 }

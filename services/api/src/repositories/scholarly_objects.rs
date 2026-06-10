@@ -1,8 +1,7 @@
 use csqd_domain::{
-    ArticleVersionGroupSummary, ArticleVersionKind, ArticleVersionSummary,
+    ArticleVersionGroupSummary, ArticleVersionKind, ArticleVersionSummary, AuditWorkStatus,
     ExternalArticleLocationSummary, ExternalArticleLocationType, ProblemAreaRelevance,
-    ProblemAreaWorkSummary, ReviewStatus, ScholarlyObjectDetail, ScholarlyObjectSummary,
-    ScholarlyObjectType,
+    ProblemAreaWorkSummary, ScholarlyObjectDetail, ScholarlyObjectSummary, ScholarlyObjectType,
 };
 use serde_json::Value;
 use sqlx::{postgres::PgRow, PgPool, Row};
@@ -10,99 +9,14 @@ use sqlx::{postgres::PgRow, PgPool, Row};
 use super::RepositoryError;
 
 pub async fn list_summaries(db: &PgPool) -> Result<Vec<ScholarlyObjectSummary>, RepositoryError> {
-    let rows = sqlx::query(
+    let rows = sqlx::query(&format!(
         r#"
-        SELECT
-            so.id::text AS id,
-            ao.id::text AS audit_object_id,
-            so.object_type,
-            swg.id::text AS work_group_id,
-            swg.title AS work_group_title,
-            swg.primary_scholarly_object_id::text AS primary_scholarly_object_id,
-            swv.version_kind,
-            (
-                SELECT COUNT(*)
-                FROM scholarly_work_versions sibling_versions
-                WHERE sibling_versions.work_group_id = swg.id
-            ) AS version_count,
-            so.title,
-            so.authors,
-            COALESCE(j.name, 'Unknown source') AS source_name,
-            EXTRACT(YEAR FROM so.publication_date)::int AS publication_year,
-            so.canonical_url,
-            so.license,
-            CASE
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM review_event_memberships rem
-                    JOIN review_events re ON re.id = rem.review_event_id
-                    WHERE rem.audit_object_id = ao.id
-                      AND rem.status = 'active'
-                      AND re.status = 'active'
-                ) THEN 'submitted'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_episodes re
-                    WHERE re.scholarly_object_id = so.id
-                      AND re.state = 'published'
-                ) THEN 'published'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_episodes re
-                    WHERE re.scholarly_object_id = so.id
-                      AND re.state = 'submitted'
-                ) THEN 'submitted'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_assignments ra
-                    WHERE ra.scholarly_object_id = so.id
-                      AND ra.state IN ('accepted', 'in_progress')
-                ) THEN 'in_review'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_assignments ra
-                    WHERE ra.scholarly_object_id = so.id
-                      AND ra.state IN ('created', 'offered')
-                ) THEN 'assigned'
-                ELSE 'not_assigned'
-            END AS review_status,
-            (
-                SELECT COUNT(*) FROM evaluation_facts ef
-                WHERE ef.scholarly_object_id = so.id
-            ) AS evaluation_fact_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS review_event_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.role = 'element_review'
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS active_element_review_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.role = 'synthesis_review'
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS active_synthesis_review_count
-        FROM scholarly_objects so
-        LEFT JOIN journals j ON j.id = so.journal_id
-        LEFT JOIN scholarly_work_versions swv ON swv.scholarly_object_id = so.id
-        LEFT JOIN scholarly_work_groups swg ON swg.id = swv.work_group_id
-        LEFT JOIN audit_objects ao
-            ON ao.source_entity_type = 'scholarly_object'
-           AND ao.source_entity_id = so.id
+        {}
         ORDER BY COALESCE(swg.updated_at, so.updated_at) DESC, swv.version_rank ASC NULLS LAST, so.created_at ASC
         LIMIT 50
         "#,
-    )
+        scholarly_summary_select_sql()
+    ))
     .fetch_all(db)
     .await?;
 
@@ -120,7 +34,7 @@ pub async fn search_summaries(
     }
 
     let query_pattern = format!("%{}%", trimmed_query.to_ascii_lowercase());
-    let rows = sqlx::query(
+    let sql = format!(
         r#"
         WITH matched_objects AS (
             SELECT DISTINCT so.id
@@ -142,94 +56,8 @@ pub async fn search_summaries(
                 OR lower(COALESCE(so.metadata_provenance->>'pmcid', '')) = lower($1)
                 OR lower(COALESCE(so.metadata_provenance->>'arxiv_id', '')) = lower($1)
         )
-        SELECT
-            so.id::text AS id,
-            ao.id::text AS audit_object_id,
-            so.object_type,
-            swg.id::text AS work_group_id,
-            swg.title AS work_group_title,
-            swg.primary_scholarly_object_id::text AS primary_scholarly_object_id,
-            swv.version_kind,
-            (
-                SELECT COUNT(*)
-                FROM scholarly_work_versions sibling_versions
-                WHERE sibling_versions.work_group_id = swg.id
-            ) AS version_count,
-            so.title,
-            so.authors,
-            COALESCE(j.name, 'Unknown source') AS source_name,
-            EXTRACT(YEAR FROM so.publication_date)::int AS publication_year,
-            so.canonical_url,
-            so.license,
-            CASE
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM review_event_memberships rem
-                    JOIN review_events re ON re.id = rem.review_event_id
-                    WHERE rem.audit_object_id = ao.id
-                      AND rem.status = 'active'
-                      AND re.status = 'active'
-                ) THEN 'submitted'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_episodes re
-                    WHERE re.scholarly_object_id = so.id
-                      AND re.state = 'published'
-                ) THEN 'published'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_episodes re
-                    WHERE re.scholarly_object_id = so.id
-                      AND re.state = 'submitted'
-                ) THEN 'submitted'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_assignments ra
-                    WHERE ra.scholarly_object_id = so.id
-                      AND ra.state IN ('accepted', 'in_progress')
-                ) THEN 'in_review'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_assignments ra
-                    WHERE ra.scholarly_object_id = so.id
-                      AND ra.state IN ('created', 'offered')
-                ) THEN 'assigned'
-                ELSE 'not_assigned'
-            END AS review_status,
-            (
-                SELECT COUNT(*) FROM evaluation_facts ef
-                WHERE ef.scholarly_object_id = so.id
-            ) AS evaluation_fact_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS review_event_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.role = 'element_review'
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS active_element_review_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.role = 'synthesis_review'
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS active_synthesis_review_count
-        FROM scholarly_objects so
+        {}
         JOIN matched_objects ON matched_objects.id = so.id
-        LEFT JOIN journals j ON j.id = so.journal_id
-        LEFT JOIN scholarly_work_versions swv ON swv.scholarly_object_id = so.id
-        LEFT JOIN scholarly_work_groups swg ON swg.id = swv.work_group_id
-        LEFT JOIN audit_objects ao
-            ON ao.source_entity_type = 'scholarly_object'
-           AND ao.source_entity_id = so.id
         ORDER BY
             CASE
                 WHEN lower(COALESCE(swg.title, so.title)) = lower($1) THEN 0
@@ -241,11 +69,14 @@ pub async fn search_summaries(
             so.created_at ASC
         LIMIT 50
         "#,
-    )
-    .bind(trimmed_query)
-    .bind(query_pattern)
-    .fetch_all(db)
-    .await?;
+        scholarly_summary_select_sql()
+    );
+
+    let rows = sqlx::query(&sql)
+        .bind(trimmed_query)
+        .bind(query_pattern)
+        .fetch_all(db)
+        .await?;
 
     rows.into_iter().map(row_to_summary).collect()
 }
@@ -256,140 +87,99 @@ pub async fn browse_problem_area_works(
     cwe_node_id: Option<&str>,
 ) -> Result<Vec<ProblemAreaWorkSummary>, RepositoryError> {
     let cwe_context = find_cwe_browse_context(db, cwe_node_id).await?;
-    let search_text = normalized_search_text(query);
-    let text_patterns = browse_text_patterns(query, cwe_context.as_ref());
+    let patterns = browse_text_patterns(query, cwe_context.as_ref());
     let cwe_node_id = cwe_context.as_ref().map(|context| context.id.as_str());
-    let rows = sqlx::query(
+    let sql = format!(
         r#"
-        WITH browse_input AS (
-            SELECT
-                NULLIF(BTRIM($1::text), '') AS search_text,
-                NULLIF(BTRIM($2::text), '') AS cwe_node_id,
-                $3::text[] AS text_patterns
-        ),
-        matched_objects AS (
-            SELECT
-                so.id,
-                COALESCE(problem_reviews.problem_review_event_count, 0) AS problem_review_event_count,
-                (
-                    (
-                        browse_input.search_text IS NOT NULL
-                        AND (
-                            to_tsvector(
-                                'english',
-                                concat_ws(
-                                    ' ',
-                                    so.title,
-                                    so.abstract,
-                                    so.authors::text,
-                                    COALESCE(j.name, ''),
-                                    COALESCE(swg.title, ''),
-                                    COALESCE(sos.search_text, '')
-                                )
-                            ) @@ plainto_tsquery('english', browse_input.search_text)
-                            OR lower(
-                                concat_ws(
-                                    ' ',
-                                    so.title,
-                                    so.abstract,
-                                    so.authors::text,
-                                    COALESCE(j.name, ''),
-                                    COALESCE(swg.title, ''),
-                                    COALESCE(sos.search_text, '')
-                                )
-                            ) LIKE '%' || lower(browse_input.search_text) || '%'
-                        )
-                    )
-                    OR (
-                        cardinality(browse_input.text_patterns) > 0
-                        AND lower(
-                            concat_ws(
-                                ' ',
-                                so.title,
-                                so.abstract,
-                                so.authors::text,
-                                COALESCE(j.name, ''),
-                                COALESCE(swg.title, ''),
-                                COALESCE(sos.search_text, '')
-                            )
-                        ) LIKE ANY(browse_input.text_patterns)
-                    )
-                ) AS text_match
-            FROM scholarly_objects so
-            LEFT JOIN journals j ON j.id = so.journal_id
-            LEFT JOIN scholarly_object_search sos ON sos.scholarly_object_id = so.id
-            LEFT JOIN scholarly_work_versions swv ON swv.scholarly_object_id = so.id
-            LEFT JOIN scholarly_work_groups swg ON swg.id = swv.work_group_id
-            LEFT JOIN audit_objects ao
-                ON ao.source_entity_type = 'scholarly_object'
-               AND ao.source_entity_id = so.id
-            CROSS JOIN browse_input
-            LEFT JOIN LATERAL (
-                SELECT COUNT(DISTINCT re.id) AS problem_review_event_count
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-                  AND re.payload_kind = 'element_review'
-                  AND browse_input.cwe_node_id IS NOT NULL
-                  AND re.payload #>> '{element_review,cwe_criterion,node_id}' = browse_input.cwe_node_id
-            ) problem_reviews ON true
-            WHERE
-                (
-                    browse_input.search_text IS NULL
-                    AND browse_input.cwe_node_id IS NULL
-                    AND cardinality(browse_input.text_patterns) = 0
+        {}
+        WHERE
+            (
+                cardinality($1::text[]) = 0
+                OR EXISTS (
+                    SELECT 1
+                    FROM unnest($1::text[]) AS pattern
+                    WHERE lower(
+                        so.title || ' ' ||
+                        COALESCE(so.abstract, '') || ' ' ||
+                        so.authors::text || ' ' ||
+                        COALESCE(sos.search_text, '') || ' ' ||
+                        COALESCE(j.name, '')
+                    ) LIKE pattern
                 )
-                OR COALESCE(problem_reviews.problem_review_event_count, 0) > 0
-                OR (
-                    (
-                        browse_input.search_text IS NOT NULL
-                        AND (
-                            to_tsvector(
-                                'english',
-                                concat_ws(
-                                    ' ',
-                                    so.title,
-                                    so.abstract,
-                                    so.authors::text,
-                                    COALESCE(j.name, ''),
-                                    COALESCE(swg.title, ''),
-                                    COALESCE(sos.search_text, '')
-                                )
-                            ) @@ plainto_tsquery('english', browse_input.search_text)
-                            OR lower(
-                                concat_ws(
-                                    ' ',
-                                    so.title,
-                                    so.abstract,
-                                    so.authors::text,
-                                    COALESCE(j.name, ''),
-                                    COALESCE(swg.title, ''),
-                                    COALESCE(sos.search_text, '')
-                                )
-                            ) LIKE '%' || lower(browse_input.search_text) || '%'
-                        )
-                    )
-                    OR (
-                        cardinality(browse_input.text_patterns) > 0
-                        AND lower(
-                            concat_ws(
-                                ' ',
-                                so.title,
-                                so.abstract,
-                                so.authors::text,
-                                COALESCE(j.name, ''),
-                                COALESCE(swg.title, ''),
-                                COALESCE(sos.search_text, '')
-                            )
-                        ) LIKE ANY(browse_input.text_patterns)
-                    )
+            )
+            OR (
+                $2::text IS NOT NULL
+                AND EXISTS (
+                    SELECT 1
+                    FROM facts f
+                    WHERE f.subject_id = aus.id
+                      AND f.payload_kind = 'element_review'
+                      AND f.status = 'active'
+                      AND f.payload->'element_review'->'cwe_criterion'->>'node_id' = $2
                 )
-        )
+            )
+        ORDER BY problem_fact_count DESC, COALESCE(swg.updated_at, so.updated_at) DESC
+        LIMIT 50
+        "#,
+        scholarly_summary_select_sql()
+    );
+    let rows = sqlx::query(&sql)
+        .bind(patterns)
+        .bind(cwe_node_id)
+        .fetch_all(db)
+        .await?;
+
+    rows.into_iter()
+        .map(|row| {
+            let problem_fact_count = row.get("problem_fact_count");
+            let relevance = if problem_fact_count > 0 {
+                ProblemAreaRelevance::FactActivity
+            } else if !query.trim().is_empty() || cwe_context.is_some() {
+                ProblemAreaRelevance::TextMatch
+            } else {
+                ProblemAreaRelevance::RecentDomainWork
+            };
+
+            Ok(ProblemAreaWorkSummary {
+                scholarly_object: row_to_summary(row)?,
+                problem_fact_count,
+                relevance,
+            })
+        })
+        .collect()
+}
+
+pub async fn find_detail(
+    db: &PgPool,
+    scholarly_object_id: &str,
+) -> Result<ScholarlyObjectDetail, RepositoryError> {
+    let sql = format!(
+        r#"
+        {}
+        WHERE so.id::text = $1
+        "#,
+        scholarly_detail_select_sql()
+    );
+    let row = sqlx::query(&sql)
+        .bind(scholarly_object_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or_else(|| RepositoryError::NotFound {
+            entity: "scholarly_object",
+            id: scholarly_object_id.to_string(),
+        })?;
+
+    let versions = list_versions_for_object(db, scholarly_object_id).await?;
+    let external_locations = list_external_locations(db, scholarly_object_id).await?;
+
+    row_to_detail(row, versions, external_locations)
+}
+
+fn scholarly_summary_select_sql() -> &'static str {
+    r#"
         SELECT
             so.id::text AS id,
-            ao.id::text AS audit_object_id,
+            aus.id::text AS audit_subject_id,
             so.object_type,
             swg.id::text AS work_group_id,
             swg.title AS work_group_title,
@@ -406,108 +196,53 @@ pub async fn browse_problem_area_works(
             EXTRACT(YEAR FROM so.publication_date)::int AS publication_year,
             so.canonical_url,
             so.license,
-            CASE
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM review_event_memberships rem
-                    JOIN review_events re ON re.id = rem.review_event_id
-                    WHERE rem.audit_object_id = ao.id
-                      AND rem.status = 'active'
-                      AND re.status = 'active'
-                ) THEN 'submitted'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_episodes re
-                    WHERE re.scholarly_object_id = so.id
-                      AND re.state = 'published'
-                ) THEN 'published'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_episodes re
-                    WHERE re.scholarly_object_id = so.id
-                      AND re.state = 'submitted'
-                ) THEN 'submitted'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_assignments ra
-                    WHERE ra.scholarly_object_id = so.id
-                      AND ra.state IN ('accepted', 'in_progress')
-                ) THEN 'in_review'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_assignments ra
-                    WHERE ra.scholarly_object_id = so.id
-                      AND ra.state IN ('created', 'offered')
-                ) THEN 'assigned'
-                ELSE 'not_assigned'
-            END AS review_status,
-            (
-                SELECT COUNT(*) FROM evaluation_facts ef
-                WHERE ef.scholarly_object_id = so.id
-            ) AS evaluation_fact_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS review_event_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.role = 'element_review'
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS active_element_review_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.role = 'synthesis_review'
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS active_synthesis_review_count,
-            matched_objects.problem_review_event_count,
-            CASE
-                WHEN matched_objects.problem_review_event_count > 0 THEN 'review_activity'
-                WHEN matched_objects.text_match THEN 'text_match'
-                ELSE 'recent_domain_work'
-            END AS relevance
-        FROM matched_objects
-        JOIN scholarly_objects so ON so.id = matched_objects.id
+            COALESCE(episode_rollup.audit_status, 'not_commissioned') AS audit_status,
+            COALESCE(episode_rollup.audit_episode_count, 0) AS audit_episode_count,
+            COALESCE(episode_rollup.fact_count, 0) AS fact_count,
+            COALESCE(episode_rollup.element_review_fact_count, 0) AS element_review_fact_count,
+            COALESCE(episode_rollup.synthesis_review_count, 0) AS synthesis_review_count,
+            COALESCE(episode_rollup.element_review_fact_count, 0) AS problem_fact_count
+        FROM scholarly_objects so
         LEFT JOIN journals j ON j.id = so.journal_id
         LEFT JOIN scholarly_work_versions swv ON swv.scholarly_object_id = so.id
         LEFT JOIN scholarly_work_groups swg ON swg.id = swv.work_group_id
-        LEFT JOIN audit_objects ao
-            ON ao.source_entity_type = 'scholarly_object'
-           AND ao.source_entity_id = so.id
-        ORDER BY
-            matched_objects.problem_review_event_count DESC,
-            CASE WHEN matched_objects.text_match THEN 0 ELSE 1 END,
-            COALESCE(swg.updated_at, so.updated_at) DESC,
-            swv.version_rank ASC NULLS LAST,
-            so.created_at ASC
-        LIMIT 50
-        "#,
-    )
-    .bind(search_text)
-    .bind(cwe_node_id)
-    .bind(text_patterns)
-    .fetch_all(db)
-    .await?;
-
-    rows.into_iter().map(row_to_problem_area_work).collect()
+        LEFT JOIN audit_subjects aus
+            ON aus.source_entity_type = 'scholarly_object'
+           AND aus.source_entity_id = so.id
+        LEFT JOIN scholarly_object_search sos ON sos.scholarly_object_id = so.id
+        LEFT JOIN LATERAL (
+            SELECT
+                CASE
+                    WHEN bool_or(ae.status = 'delivered') THEN 'delivered'
+                    WHEN bool_or(ae.status = 'closed') THEN 'closed'
+                    WHEN bool_or(ae.status = 'synthesis_pending') THEN 'synthesis_pending'
+                    WHEN COUNT(*) FILTER (WHERE f.payload_kind = 'element_review' AND f.status = 'active') > 0 THEN 'in_progress'
+                    WHEN COUNT(ae.id) > 0 THEN 'commissioned'
+                    ELSE 'not_commissioned'
+                END AS audit_status,
+                COUNT(DISTINCT ae.id) AS audit_episode_count,
+                COUNT(DISTINCT f.id) FILTER (WHERE f.status = 'active') AS fact_count,
+                COUNT(DISTINCT f.id) FILTER (
+                    WHERE f.payload_kind = 'element_review'
+                      AND f.status = 'active'
+                ) AS element_review_fact_count,
+                COUNT(DISTINCT esr.id) FILTER (
+                    WHERE esr.status IN ('draft', 'current')
+                ) AS synthesis_review_count
+            FROM audit_subjects rollup_subject
+            LEFT JOIN audit_episodes ae ON ae.subject_id = rollup_subject.id
+            LEFT JOIN facts f ON f.subject_id = rollup_subject.id
+            LEFT JOIN episode_synthesis_reviews esr ON esr.episode_id = ae.id
+            WHERE rollup_subject.id = aus.id
+        ) episode_rollup ON true
+        "#
 }
 
-pub async fn find_detail(
-    db: &PgPool,
-    object_id: &str,
-) -> Result<ScholarlyObjectDetail, RepositoryError> {
-    let object_row = sqlx::query(
-        r#"
+fn scholarly_detail_select_sql() -> &'static str {
+    r#"
         SELECT
             so.id::text AS id,
-            ao.id::text AS audit_object_id,
+            aus.id::text AS audit_subject_id,
             so.object_type,
             swg.id::text AS work_group_id,
             swg.title AS work_group_title,
@@ -528,86 +263,104 @@ pub async fn find_detail(
             so.canonical_url,
             so.license,
             so.native_display_permitted,
-            CASE
-                WHEN EXISTS (
-                    SELECT 1
-                    FROM review_event_memberships rem
-                    JOIN review_events re ON re.id = rem.review_event_id
-                    WHERE rem.audit_object_id = ao.id
-                      AND rem.status = 'active'
-                      AND re.status = 'active'
-                ) THEN 'submitted'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_episodes re
-                    WHERE re.scholarly_object_id = so.id
-                      AND re.state = 'published'
-                ) THEN 'published'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_episodes re
-                    WHERE re.scholarly_object_id = so.id
-                      AND re.state = 'submitted'
-                ) THEN 'submitted'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_assignments ra
-                    WHERE ra.scholarly_object_id = so.id
-                      AND ra.state IN ('accepted', 'in_progress')
-                ) THEN 'in_review'
-                WHEN EXISTS (
-                    SELECT 1 FROM review_assignments ra
-                    WHERE ra.scholarly_object_id = so.id
-                      AND ra.state IN ('created', 'offered')
-                ) THEN 'assigned'
-                ELSE 'not_assigned'
-            END AS review_status,
-            (
-                SELECT COUNT(*) FROM evaluation_facts ef
-                WHERE ef.scholarly_object_id = so.id
-            ) AS evaluation_fact_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS review_event_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.role = 'element_review'
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS active_element_review_count,
-            (
-                SELECT COUNT(*)
-                FROM review_event_memberships rem
-                JOIN review_events re ON re.id = rem.review_event_id
-                WHERE rem.audit_object_id = ao.id
-                  AND rem.role = 'synthesis_review'
-                  AND rem.status = 'active'
-                  AND re.status = 'active'
-            ) AS active_synthesis_review_count
+            COALESCE(episode_rollup.audit_status, 'not_commissioned') AS audit_status,
+            COALESCE(episode_rollup.audit_episode_count, 0) AS audit_episode_count,
+            COALESCE(episode_rollup.fact_count, 0) AS fact_count,
+            COALESCE(episode_rollup.element_review_fact_count, 0) AS element_review_fact_count,
+            COALESCE(episode_rollup.synthesis_review_count, 0) AS synthesis_review_count
         FROM scholarly_objects so
         LEFT JOIN journals j ON j.id = so.journal_id
         LEFT JOIN scholarly_work_versions swv ON swv.scholarly_object_id = so.id
         LEFT JOIN scholarly_work_groups swg ON swg.id = swv.work_group_id
-        LEFT JOIN audit_objects ao
-            ON ao.source_entity_type = 'scholarly_object'
-           AND ao.source_entity_id = so.id
-        WHERE so.id::text = $1
+        LEFT JOIN audit_subjects aus
+            ON aus.source_entity_type = 'scholarly_object'
+           AND aus.source_entity_id = so.id
+        LEFT JOIN LATERAL (
+            SELECT
+                CASE
+                    WHEN bool_or(ae.status = 'delivered') THEN 'delivered'
+                    WHEN bool_or(ae.status = 'closed') THEN 'closed'
+                    WHEN bool_or(ae.status = 'synthesis_pending') THEN 'synthesis_pending'
+                    WHEN COUNT(*) FILTER (WHERE f.payload_kind = 'element_review' AND f.status = 'active') > 0 THEN 'in_progress'
+                    WHEN COUNT(ae.id) > 0 THEN 'commissioned'
+                    ELSE 'not_commissioned'
+                END AS audit_status,
+                COUNT(DISTINCT ae.id) AS audit_episode_count,
+                COUNT(DISTINCT f.id) FILTER (WHERE f.status = 'active') AS fact_count,
+                COUNT(DISTINCT f.id) FILTER (
+                    WHERE f.payload_kind = 'element_review'
+                      AND f.status = 'active'
+                ) AS element_review_fact_count,
+                COUNT(DISTINCT esr.id) FILTER (
+                    WHERE esr.status IN ('draft', 'current')
+                ) AS synthesis_review_count
+            FROM audit_subjects rollup_subject
+            LEFT JOIN audit_episodes ae ON ae.subject_id = rollup_subject.id
+            LEFT JOIN facts f ON f.subject_id = rollup_subject.id
+            LEFT JOIN episode_synthesis_reviews esr ON esr.episode_id = ae.id
+            WHERE rollup_subject.id = aus.id
+        ) episode_rollup ON true
+        "#
+}
+
+async fn list_versions_for_object(
+    db: &PgPool,
+    scholarly_object_id: &str,
+) -> Result<Vec<ArticleVersionSummary>, RepositoryError> {
+    let rows = sqlx::query(
+        r#"
+        WITH current_version AS (
+            SELECT work_group_id
+            FROM scholarly_work_versions
+            WHERE scholarly_object_id::text = $1
+        )
+        SELECT
+            so.id::text AS scholarly_object_id,
+            so.title,
+            swv.version_kind,
+            so.doi,
+            COALESCE(j.name, 'Unknown source') AS source_name,
+            so.canonical_url,
+            so.native_display_permitted,
+            so.id::text = $1 AS is_current,
+            swg.primary_scholarly_object_id = so.id AS is_primary
+        FROM current_version
+        JOIN scholarly_work_versions swv ON swv.work_group_id = current_version.work_group_id
+        JOIN scholarly_objects so ON so.id = swv.scholarly_object_id
+        JOIN scholarly_work_groups swg ON swg.id = swv.work_group_id
+        LEFT JOIN journals j ON j.id = so.journal_id
+        ORDER BY swv.version_rank ASC, so.created_at ASC
         "#,
     )
-    .bind(object_id)
-    .fetch_optional(db)
-    .await?
-    .ok_or_else(|| RepositoryError::NotFound {
-        entity: "scholarly_object",
-        id: object_id.to_string(),
-    })?;
+    .bind(scholarly_object_id)
+    .fetch_all(db)
+    .await?;
 
-    let location_rows = sqlx::query(
+    rows.into_iter()
+        .map(|row| {
+            let version_kind: String = row.get("version_kind");
+
+            Ok(ArticleVersionSummary {
+                scholarly_object_id: row.get("scholarly_object_id"),
+                title: row.get("title"),
+                version_kind: ArticleVersionKind::try_from(version_kind.as_str())
+                    .map_err(RepositoryError::Domain)?,
+                doi: row.get("doi"),
+                source_name: row.get("source_name"),
+                canonical_url: row.get("canonical_url"),
+                native_display_permitted: row.get("native_display_permitted"),
+                is_current: row.get("is_current"),
+                is_primary: row.get("is_primary"),
+            })
+        })
+        .collect()
+}
+
+async fn list_external_locations(
+    db: &PgPool,
+    scholarly_object_id: &str,
+) -> Result<Vec<ExternalArticleLocationSummary>, RepositoryError> {
+    let rows = sqlx::query(
         r#"
         SELECT
             id::text AS id,
@@ -620,88 +373,16 @@ pub async fn find_detail(
         ORDER BY is_canonical DESC, created_at ASC
         "#,
     )
-    .bind(object_id)
+    .bind(scholarly_object_id)
     .fetch_all(db)
     .await?;
 
-    let version_rows = sqlx::query(
-        r#"
-        SELECT
-            so.id::text AS scholarly_object_id,
-            so.title,
-            swv.version_kind,
-            so.doi,
-            COALESCE(j.name, 'Unknown source') AS source_name,
-            so.canonical_url,
-            so.native_display_permitted,
-            so.id::text = $1 AS is_current,
-            swg.primary_scholarly_object_id = so.id AS is_primary
-        FROM scholarly_work_versions current_version
-        JOIN scholarly_work_versions swv
-            ON swv.work_group_id = current_version.work_group_id
-        JOIN scholarly_objects so ON so.id = swv.scholarly_object_id
-        LEFT JOIN journals j ON j.id = so.journal_id
-        JOIN scholarly_work_groups swg ON swg.id = current_version.work_group_id
-        WHERE current_version.scholarly_object_id::text = $1
-        ORDER BY swv.version_rank ASC, so.created_at ASC
-        "#,
-    )
-    .bind(object_id)
-    .fetch_all(db)
-    .await?;
-
-    row_to_detail(object_row, location_rows, version_rows)
-}
-
-struct CweBrowseContext {
-    id: String,
-    label: String,
-    description: String,
-    browse_keywords: Vec<String>,
-}
-
-async fn find_cwe_browse_context(
-    db: &PgPool,
-    cwe_node_id: Option<&str>,
-) -> Result<Option<CweBrowseContext>, RepositoryError> {
-    let Some(cwe_node_id) = cwe_node_id.map(str::trim).filter(|id| !id.is_empty()) else {
-        return Ok(None);
-    };
-
-    let row = sqlx::query(
-        r#"
-        SELECT
-            cwe_nodes.id::text AS id,
-            cwe_nodes.label,
-            cwe_nodes.description,
-            COALESCE(cwe_nodes.source_metadata->'browse_keywords', '[]'::jsonb) AS browse_keywords
-        FROM cwe_nodes
-        JOIN domain_instantiations
-            ON domain_instantiations.id = cwe_nodes.domain_instantiation_id
-        WHERE cwe_nodes.id::text = $1
-          AND domain_instantiations.domain_type = 'academic_publishing'
-        "#,
-    )
-    .bind(cwe_node_id)
-    .fetch_optional(db)
-    .await?
-    .ok_or_else(|| RepositoryError::NotFound {
-        entity: "cwe_node",
-        id: cwe_node_id.to_string(),
-    })?;
-    let browse_keywords: Value = row.get("browse_keywords");
-
-    Ok(Some(CweBrowseContext {
-        id: row.get("id"),
-        label: row.get("label"),
-        description: row.get("description"),
-        browse_keywords: jsonb_string_array(browse_keywords),
-    }))
+    rows.into_iter().map(row_to_external_location).collect()
 }
 
 fn row_to_summary(row: PgRow) -> Result<ScholarlyObjectSummary, RepositoryError> {
     let object_type: String = row.get("object_type");
-    let review_status: String = row.get("review_status");
+    let audit_status: String = row.get("audit_status");
     let authors: Value = row.get("authors");
     let version_kind: Option<String> = row.get("version_kind");
     let work_group_id: Option<String> = row.get("work_group_id");
@@ -714,7 +395,7 @@ fn row_to_summary(row: PgRow) -> Result<ScholarlyObjectSummary, RepositoryError>
 
     Ok(ScholarlyObjectSummary {
         id: row.get("id"),
-        audit_object_id: row.get("audit_object_id"),
+        audit_subject_id: row.get("audit_subject_id"),
         object_type: ScholarlyObjectType::try_from(object_type.as_str())
             .map_err(RepositoryError::Domain)?,
         work_group,
@@ -730,34 +411,22 @@ fn row_to_summary(row: PgRow) -> Result<ScholarlyObjectSummary, RepositoryError>
         publication_year: row.get("publication_year"),
         canonical_url: row.get("canonical_url"),
         license: row.get("license"),
-        review_status: ReviewStatus::try_from(review_status.as_str())
+        audit_status: AuditWorkStatus::try_from(audit_status.as_str())
             .map_err(RepositoryError::Domain)?,
-        evaluation_fact_count: row.get("evaluation_fact_count"),
-        review_event_count: row.get("review_event_count"),
-        active_element_review_count: row.get("active_element_review_count"),
-        active_synthesis_review_count: row.get("active_synthesis_review_count"),
-    })
-}
-
-fn row_to_problem_area_work(row: PgRow) -> Result<ProblemAreaWorkSummary, RepositoryError> {
-    let relevance: String = row.get("relevance");
-    let problem_review_event_count = row.get("problem_review_event_count");
-
-    Ok(ProblemAreaWorkSummary {
-        scholarly_object: row_to_summary(row)?,
-        problem_review_event_count,
-        relevance: ProblemAreaRelevance::try_from(relevance.as_str())
-            .map_err(RepositoryError::Domain)?,
+        audit_episode_count: row.get("audit_episode_count"),
+        fact_count: row.get("fact_count"),
+        element_review_fact_count: row.get("element_review_fact_count"),
+        synthesis_review_count: row.get("synthesis_review_count"),
     })
 }
 
 fn row_to_detail(
     row: PgRow,
-    location_rows: Vec<PgRow>,
-    version_rows: Vec<PgRow>,
+    versions: Vec<ArticleVersionSummary>,
+    external_locations: Vec<ExternalArticleLocationSummary>,
 ) -> Result<ScholarlyObjectDetail, RepositoryError> {
     let object_type: String = row.get("object_type");
-    let review_status: String = row.get("review_status");
+    let audit_status: String = row.get("audit_status");
     let authors: Value = row.get("authors");
     let version_kind: Option<String> = row.get("version_kind");
     let work_group_id: Option<String> = row.get("work_group_id");
@@ -767,18 +436,10 @@ fn row_to_detail(
         primary_scholarly_object_id: row.get("primary_scholarly_object_id"),
         version_count: row.get("version_count"),
     });
-    let versions = version_rows
-        .into_iter()
-        .map(row_to_version_summary)
-        .collect::<Result<Vec<_>, _>>()?;
-    let external_locations = location_rows
-        .into_iter()
-        .map(row_to_external_location)
-        .collect::<Result<Vec<_>, _>>()?;
 
     Ok(ScholarlyObjectDetail {
         id: row.get("id"),
-        audit_object_id: row.get("audit_object_id"),
+        audit_subject_id: row.get("audit_subject_id"),
         object_type: ScholarlyObjectType::try_from(object_type.as_str())
             .map_err(RepositoryError::Domain)?,
         work_group,
@@ -799,68 +460,13 @@ fn row_to_detail(
         canonical_url: row.get("canonical_url"),
         license: row.get("license"),
         native_display_permitted: row.get("native_display_permitted"),
-        review_status: ReviewStatus::try_from(review_status.as_str())
+        audit_status: AuditWorkStatus::try_from(audit_status.as_str())
             .map_err(RepositoryError::Domain)?,
-        evaluation_fact_count: row.get("evaluation_fact_count"),
-        review_event_count: row.get("review_event_count"),
-        active_element_review_count: row.get("active_element_review_count"),
-        active_synthesis_review_count: row.get("active_synthesis_review_count"),
+        audit_episode_count: row.get("audit_episode_count"),
+        fact_count: row.get("fact_count"),
+        element_review_fact_count: row.get("element_review_fact_count"),
+        synthesis_review_count: row.get("synthesis_review_count"),
         external_locations,
-    })
-}
-
-fn normalized_search_text(query: &str) -> Option<String> {
-    let trimmed = query.trim();
-
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
-}
-
-fn browse_text_patterns(query: &str, cwe_context: Option<&CweBrowseContext>) -> Vec<String> {
-    let mut patterns = Vec::new();
-    push_text_pattern(&mut patterns, query);
-
-    if let Some(context) = cwe_context {
-        push_text_pattern(&mut patterns, &context.label);
-        push_text_pattern(&mut patterns, &context.description);
-
-        for keyword in &context.browse_keywords {
-            push_text_pattern(&mut patterns, keyword);
-        }
-    }
-
-    patterns.sort();
-    patterns.dedup();
-    patterns
-}
-
-fn push_text_pattern(patterns: &mut Vec<String>, value: &str) {
-    let trimmed = value.trim().to_ascii_lowercase();
-
-    if trimmed.is_empty() {
-        return;
-    }
-
-    patterns.push(format!("%{trimmed}%"));
-}
-
-fn row_to_version_summary(row: PgRow) -> Result<ArticleVersionSummary, RepositoryError> {
-    let version_kind: String = row.get("version_kind");
-
-    Ok(ArticleVersionSummary {
-        scholarly_object_id: row.get("scholarly_object_id"),
-        title: row.get("title"),
-        version_kind: ArticleVersionKind::try_from(version_kind.as_str())
-            .map_err(RepositoryError::Domain)?,
-        doi: row.get("doi"),
-        source_name: row.get("source_name"),
-        canonical_url: row.get("canonical_url"),
-        native_display_permitted: row.get("native_display_permitted"),
-        is_current: row.get("is_current"),
-        is_primary: row.get("is_primary"),
     })
 }
 
@@ -875,6 +481,86 @@ fn row_to_external_location(row: PgRow) -> Result<ExternalArticleLocationSummary
         license: row.get("license"),
         is_canonical: row.get("is_canonical"),
     })
+}
+
+struct CweBrowseContext {
+    id: String,
+    label: String,
+    description: String,
+    keywords: Vec<String>,
+}
+
+async fn find_cwe_browse_context(
+    db: &PgPool,
+    cwe_node_id: Option<&str>,
+) -> Result<Option<CweBrowseContext>, RepositoryError> {
+    let Some(cwe_node_id) = cwe_node_id.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(None);
+    };
+
+    let row = sqlx::query(
+        r#"
+        SELECT
+            id::text AS id,
+            label,
+            description,
+            source_metadata
+        FROM cwe_nodes
+        WHERE id::text = $1
+        "#,
+    )
+    .bind(cwe_node_id)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| RepositoryError::NotFound {
+        entity: "cwe_node",
+        id: cwe_node_id.to_string(),
+    })?;
+
+    let source_metadata: Value = row.get("source_metadata");
+    let keywords = source_metadata
+        .get("browse_keywords")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Ok(Some(CweBrowseContext {
+        id: row.get("id"),
+        label: row.get("label"),
+        description: row.get("description"),
+        keywords,
+    }))
+}
+
+fn browse_text_patterns(query: &str, cwe_context: Option<&CweBrowseContext>) -> Vec<String> {
+    let mut terms = Vec::new();
+    let query = query.trim();
+
+    if !query.is_empty() {
+        terms.push(query.to_string());
+    }
+
+    if let Some(context) = cwe_context {
+        terms.push(context.label.clone());
+        terms.push(context.description.clone());
+        terms.extend(context.keywords.iter().cloned());
+    }
+
+    terms
+        .into_iter()
+        .flat_map(|term| {
+            term.split(|character: char| !character.is_alphanumeric())
+                .filter(|part| part.len() >= 4)
+                .map(|part| format!("%{}%", part.to_ascii_lowercase()))
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 fn jsonb_string_array(value: Value) -> Vec<String> {

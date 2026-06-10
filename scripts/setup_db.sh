@@ -47,12 +47,44 @@ if [[ "$RESET_DB" == true ]]; then
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
 fi
 
-schema_exists="$(
+new_schema_exists="$(
   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At -c \
-    "SELECT to_regclass('public.scholarly_objects') IS NOT NULL;"
+    "SELECT
+       to_regclass('public.audit_subjects') IS NOT NULL
+       AND to_regclass('public.facts') IS NOT NULL
+       AND to_regclass('public.audit_episodes') IS NOT NULL
+       AND to_regclass('public.episode_memberships') IS NOT NULL;"
 )"
 
-if [[ "$schema_exists" == "t" ]]; then
+legacy_schema_exists="$(
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At -c \
+    "SELECT
+       to_regclass('public.audit_objects') IS NOT NULL
+       OR to_regclass('public.review_events') IS NOT NULL
+       OR to_regclass('public.review_assignments') IS NOT NULL
+       OR to_regclass('public.evaluation_facts') IS NOT NULL
+       OR to_regclass('public.bounties') IS NOT NULL
+       OR to_regclass('public.challenges') IS NOT NULL;"
+)"
+
+any_schema_exists="$(
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At -c \
+    "SELECT
+       to_regclass('public.users') IS NOT NULL
+       OR to_regclass('public.scholarly_objects') IS NOT NULL;"
+)"
+
+if [[ "$RESET_DB" != true && "$legacy_schema_exists" == "t" ]]; then
+  echo "Legacy MVP schema tables detected. Run scripts/setup_db.sh --reset for the clean GTM schema." >&2
+  exit 1
+fi
+
+if [[ "$RESET_DB" != true && "$any_schema_exists" == "t" && "$new_schema_exists" != "t" ]]; then
+  echo "Existing schema is not the clean GTM schema. Run scripts/setup_db.sh --reset." >&2
+  exit 1
+fi
+
+if [[ "$new_schema_exists" == "t" ]]; then
   echo "Schema already exists; skipping migration."
 else
   echo "Applying initial schema..."

@@ -1,21 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    common::{Money, Principal, Timestamp},
-    domain_instantiation::CWECriterionId,
-};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ERSolicitationSummary {
-    pub id: String,
-    pub audit_object_id: String,
-    pub cwe_criterion: CWECriterionId,
-    pub issued_to: String,
-    pub payment_scheme: PaymentScheme,
-    pub issued_at: Timestamp,
-    pub domain_instantiation_id: String,
-    pub current_state: Option<SolicitationEventType>,
-}
+use crate::common::{Money, Principal, Timestamp};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentScheme {
@@ -53,7 +38,6 @@ pub enum SolicitationEventType {
     Declined,
     Expired,
     Completed,
-    PenaltyFlagged,
 }
 
 impl TryFrom<&str> for SolicitationEventType {
@@ -66,16 +50,7 @@ impl TryFrom<&str> for SolicitationEventType {
             "declined" => Ok(Self::Declined),
             "expired" => Ok(Self::Expired),
             "completed" => Ok(Self::Completed),
-            "penalty_flagged" => Ok(Self::PenaltyFlagged),
             other => Err(format!("unknown solicitation event type: {other}")),
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PenaltySeverity {
-    Moderate,
-    Severe,
-    EthicsViolation,
 }

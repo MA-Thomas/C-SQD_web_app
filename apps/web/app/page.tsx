@@ -1,336 +1,144 @@
 import Link from "next/link";
-import { revalidatePath } from "next/cache";
 
 import { AppSidebar } from "./components/app-sidebar";
 import {
-  addLibraryItem,
   formatLabel,
-  getLibraryItems,
-  retrieveArticle,
-  searchScholarlyObjects,
-  type ScholarlyObjectSummary,
+  getAuditEpisodes,
+  type AuditEpisodeSummary,
 } from "./lib/csqd-api";
 
-type PageProps = {
-  searchParams: Promise<{
-    include_preprints?: string;
-    q?: string;
-  }>;
-};
-
-export default async function Home({ searchParams }: PageProps) {
-  const { include_preprints, q } = await searchParams;
-  const query = q?.trim() ?? "";
-  const includePreprints = isCheckedSearchParam(include_preprints);
-  let objects = query ? await searchScholarlyObjects(query) : [];
-  const libraryItems = await getLibraryItems();
-  const libraryWorkIds = new Set(
-    libraryItems.map((item) => workIdentityForObject(item.scholarly_object)),
-  );
-  let objectGroups = groupObjectsByWork(objects);
-  let retrievalError: string | null = null;
-  const shouldRetrieve =
-    query &&
-    (objectGroups.length === 0 ||
-      (includePreprints && !objectGroups.some((group) => group.hasPreprint)));
-
-  if (shouldRetrieve) {
-    const retrieval = await retrieveArticle(query, { includePreprints });
-
-    if (retrieval.error) {
-      retrievalError = retrieval.error;
-    } else {
-      objects = await searchScholarlyObjects(query);
-      objectGroups = groupObjectsByWork(objects);
-    }
-  }
+export default async function AuditConsolePage() {
+  const episodes = await getAuditEpisodes();
+  const activeEpisodes = episodes.filter((episode) => episode.status === "active");
+  const synthesisReady = episodes.filter((episode) => episode.synthesis_ready);
+  const factCount = episodes.reduce((sum, episode) => sum + episode.fact_count, 0);
 
   return (
     <main className="app-shell">
-      <AppSidebar activeItem="search" />
+      <AppSidebar activeItem="console" />
 
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">Academic Peer Review domain</p>
-            <h1>Scholarly Search</h1>
+            <p className="eyebrow">Commissioned audit operations</p>
+            <h1>Audit Console</h1>
           </div>
-          <div className="status-pill">Local + retrieval</div>
+          <Link className="status-pill" href="/commission">
+            Commission audit
+          </Link>
         </header>
 
-        <form className="retrieval-form" action="/">
-          <label htmlFor="work-query">Work</label>
-          <div className="retrieval-controls">
-            <input
-              defaultValue={query}
-              id="work-query"
-              name="q"
-              placeholder="Title, DOI, PMID, PMCID, arXiv ID, article URL, author, or venue"
-              type="search"
-            />
-            <button type="submit">Search</button>
-          </div>
-          <label className="retrieval-option" htmlFor="include-preprints">
-            <input
-              defaultChecked={includePreprints}
-              id="include-preprints"
-              name="include_preprints"
-              type="checkbox"
-              value="true"
-            />
-            <span>Include matching preprints</span>
-          </label>
-        </form>
-
-        <section className="metric-grid" aria-label="Workspace metrics">
+        <section className="metric-grid" aria-label="Audit console metrics">
           <div className="metric">
-            <span>Matches</span>
-            <strong>{objectGroups.length}</strong>
+            <span>Episodes</span>
+            <strong>{episodes.length}</strong>
           </div>
           <div className="metric">
-            <span>Versions</span>
-            <strong>{objects.length}</strong>
+            <span>Active</span>
+            <strong>{activeEpisodes.length}</strong>
           </div>
           <div className="metric">
-            <span>Review events</span>
-            <strong>
-              {objects.reduce((sum, object) => sum + object.review_event_count, 0)}
-            </strong>
+            <span>Facts</span>
+            <strong>{factCount}</strong>
           </div>
         </section>
 
-        <section className="object-list" aria-label="Scholarly object list">
-          {objectGroups.length === 0 ? (
+        <section className="object-list" aria-label="Commissioned audit episodes">
+          {episodes.length === 0 ? (
             <div className="empty-state">
-              <h2>{query ? "No work found" : "Search scholarly works"}</h2>
-              <p>
-                {query
-                  ? retrievalError ?? "No local or retrievable record matched this query."
-                  : "Use a title, DOI, PMID, PMCID, arXiv ID, article URL, author, or venue."}
-              </p>
+              <h2>No commissioned audits yet</h2>
+              <p>Register an audit subject and commission the first scoped episode.</p>
             </div>
           ) : (
-            objectGroups.map((group) => {
-              const isInLibrary = libraryWorkIds.has(group.id);
-
-              return (
-                <article className="object-card work-card" key={group.id}>
-                  <div className="object-main">
-                    <div className="object-kicker">
-                      <span>Article work</span>
-                      <span>
-                        {group.versionCount}{" "}
-                        {group.versionCount === 1 ? "version" : "versions"}
-                      </span>
-                      {group.primaryVersion.publication_year ? (
-                        <span>{group.primaryVersion.publication_year}</span>
-                      ) : null}
-                    </div>
-                    <h2>{group.title}</h2>
-                    <p>{group.primaryVersion.authors.join(", ")}</p>
-                    <div className="object-actions">
-                      <Link href={`/scholarly-objects/${group.primaryVersion.id}`}>
-                        Open primary
-                      </Link>
-                      <Link
-                        href={`/scholarly-objects/${group.primaryVersion.id}/review`}
-                      >
-                        Start review
-                      </Link>
-                      {isInLibrary ? (
-                        <span className="library-state">In Library</span>
-                      ) : (
-                        <form action={addToLibraryAction}>
-                          <input
-                            name="scholarly_object_id"
-                            type="hidden"
-                            value={group.primaryVersion.id}
-                          />
-                          <button
-                            className="secondary-action action-button"
-                            type="submit"
-                          >
-                            Add to Library
-                          </button>
-                        </form>
-                      )}
-                    </div>
-                    <div className="version-context-list work-version-list">
-                      {group.versions.map((version) => (
-                        <Link
-                          className="version-context-row"
-                          href={`/scholarly-objects/${version.id}`}
-                          key={version.id}
-                        >
-                          <div>
-                            <strong>
-                              {formatLabel(versionKindForObject(version))}
-                            </strong>
-                            <span>
-                              {version.source_name}
-                              {version.publication_year
-                                ? ` - ${version.publication_year}`
-                                : ""}
-                            </span>
-                          </div>
-                          <span>{formatLabel(version.review_status)}</span>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                  <dl className="object-facts">
-                    <div>
-                      <dt>Status</dt>
-                      <dd>{formatLabel(group.reviewStatus)}</dd>
-                    </div>
-                    <div>
-                      <dt>Events</dt>
-                      <dd>{group.reviewEventCount}</dd>
-                    </div>
-                    <div>
-                      <dt>Primary</dt>
-                      <dd>{formatLabel(versionKindForObject(group.primaryVersion))}</dd>
-                    </div>
-                  </dl>
-                </article>
-              );
-            })
+            episodes.map((episode) => (
+              <EpisodeRow episode={episode} key={episode.id} />
+            ))
           )}
         </section>
+
+        {synthesisReady.length > 0 ? (
+          <section className="detail-panels audit-console-secondary">
+            <article className="panel">
+              <div className="panel-heading">
+                <div>
+                  <p className="eyebrow">Synthesis queue</p>
+                  <h2>Ready For Interpretation</h2>
+                </div>
+                <span className="access-badge">{synthesisReady.length}</span>
+              </div>
+              <div className="version-context-list">
+                {synthesisReady.map((episode) => (
+                  <Link
+                    className="version-context-row"
+                    href={`/audit-episodes/${episode.id}`}
+                    key={episode.id}
+                  >
+                    <div>
+                      <strong>{episode.label}</strong>
+                      <span>{episode.subject_title ?? "Untitled subject"}</span>
+                    </div>
+                    <span>{episode.element_review_count} facts</span>
+                  </Link>
+                ))}
+              </div>
+            </article>
+          </section>
+        ) : null}
       </section>
     </main>
   );
 }
 
-async function addToLibraryAction(formData: FormData) {
-  "use server";
-
-  const scholarlyObjectId = String(formData.get("scholarly_object_id") ?? "");
-
-  if (scholarlyObjectId) {
-    await addLibraryItem(scholarlyObjectId);
-    revalidatePath("/");
-    revalidatePath("/library");
-  }
+function EpisodeRow({ episode }: { episode: AuditEpisodeSummary }) {
+  return (
+    <article className="object-card work-card">
+      <div className="object-main">
+        <div className="object-kicker">
+          <span>{formatLabel(episode.status)}</span>
+          <span>{formatLabel(episode.subject_type)}</span>
+          {episode.sponsor_name ? <span>{episode.sponsor_name}</span> : null}
+        </div>
+        <h2>{episode.label}</h2>
+        <p>{episode.subject_title ?? "Untitled audit subject"}</p>
+        <div className="object-actions">
+          <Link href={`/audit-episodes/${episode.id}`}>Open workspace</Link>
+          <Link href={`/commission?subject_id=${episode.subject_id}`}>
+            Commission related audit
+          </Link>
+        </div>
+      </div>
+      <dl className="object-facts">
+        <div>
+          <dt>Facts</dt>
+          <dd>{episode.fact_count}</dd>
+        </div>
+        <div>
+          <dt>Element reviews</dt>
+          <dd>{episode.element_review_count}</dd>
+        </div>
+        <div>
+          <dt>Synthesis</dt>
+          <dd>{episode.synthesis_ready ? "Ready" : "Pending"}</dd>
+        </div>
+        <div>
+          <dt>Latest activity</dt>
+          <dd>{formatDate(episode.latest_activity_at ?? episode.authored_at)}</dd>
+        </div>
+      </dl>
+    </article>
+  );
 }
 
-type ScholarlyWorkGroup = {
-  id: string;
-  title: string;
-  primaryVersion: ScholarlyObjectSummary;
-  versions: ScholarlyObjectSummary[];
-  versionCount: number;
-  reviewStatus: string;
-  evaluationFactCount: number;
-  reviewEventCount: number;
-  hasPreprint: boolean;
-};
+function formatDate(value: string) {
+  const date = new Date(value);
 
-function groupObjectsByWork(objects: ScholarlyObjectSummary[]): ScholarlyWorkGroup[] {
-  const groups = new Map<string, ScholarlyWorkGroup>();
-
-  for (const object of objects) {
-    const groupId = object.work_group?.id ?? normalizedTitle(object.title);
-    const existing = groups.get(groupId);
-
-    if (existing) {
-      existing.versions.push(object);
-      existing.versionCount = Math.max(
-        existing.versionCount,
-        object.work_group?.version_count ?? existing.versions.length,
-      );
-      existing.evaluationFactCount += object.evaluation_fact_count;
-      existing.reviewEventCount += object.review_event_count;
-
-      if (
-        versionRank(versionKindForObject(object)) <
-        versionRank(versionKindForObject(existing.primaryVersion))
-      ) {
-        existing.primaryVersion = object;
-      }
-    } else {
-      groups.set(groupId, {
-        id: groupId,
-        title: object.work_group?.title ?? object.title,
-        primaryVersion: object,
-        versions: [object],
-        versionCount: object.work_group?.version_count ?? 1,
-        reviewStatus: object.review_status,
-        evaluationFactCount: object.evaluation_fact_count,
-        reviewEventCount: object.review_event_count,
-        hasPreprint: versionKindForObject(object) === "preprint",
-      });
-    }
+  if (Number.isNaN(date.getTime())) {
+    return value;
   }
 
-  return Array.from(groups.values()).map((group) => ({
-    ...group,
-    versionCount: Math.max(group.versionCount, group.versions.length),
-    reviewStatus: highestReviewStatus(group.versions),
-    hasPreprint: group.versions.some(
-      (version) => versionKindForObject(version) === "preprint",
-    ),
-    versions: group.versions.sort(
-      (left, right) =>
-        versionRank(versionKindForObject(left)) - versionRank(versionKindForObject(right)),
-    ),
-  }));
-}
-
-function versionKindForObject(object: ScholarlyObjectSummary) {
-  if (object.version_kind) {
-    return object.version_kind;
-  }
-
-  return object.object_type === "preprint" ? "preprint" : "publisher";
-}
-
-function normalizedTitle(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim()
-    .replace(/\s+/g, " ");
-}
-
-function workIdentityForObject(object: ScholarlyObjectSummary) {
-  return object.work_group?.id ?? normalizedTitle(object.title);
-}
-
-function versionRank(versionKind: string) {
-  switch (versionKind) {
-    case "publisher":
-      return 0;
-    case "preprint":
-      return 10;
-    case "repository":
-      return 20;
-    default:
-      return 99;
-  }
-}
-
-function highestReviewStatus(versions: ScholarlyObjectSummary[]) {
-  return versions
-    .map((version) => version.review_status)
-    .sort((left, right) => reviewStatusRank(left) - reviewStatusRank(right))[0];
-}
-
-function reviewStatusRank(status: string) {
-  switch (status) {
-    case "published":
-      return 0;
-    case "submitted":
-      return 1;
-    case "in_review":
-      return 2;
-    case "assigned":
-      return 3;
-    default:
-      return 4;
-  }
-}
-
-function isCheckedSearchParam(value: string | undefined) {
-  return value === "true" || value === "on" || value === "1";
+  return new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }

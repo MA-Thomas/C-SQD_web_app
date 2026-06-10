@@ -5,7 +5,7 @@ use crate::article_retrieval::{ArticleVersionGroupSummary, ArticleVersionKind};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScholarlyObjectSummary {
     pub id: String,
-    pub audit_object_id: Option<String>,
+    pub audit_subject_id: Option<String>,
     pub object_type: ScholarlyObjectType,
     pub work_group: Option<ArticleVersionGroupSummary>,
     pub version_kind: ArticleVersionKind,
@@ -15,24 +15,24 @@ pub struct ScholarlyObjectSummary {
     pub publication_year: Option<i32>,
     pub canonical_url: String,
     pub license: Option<String>,
-    pub review_status: ReviewStatus,
-    pub evaluation_fact_count: i64,
-    pub review_event_count: i64,
-    pub active_element_review_count: i64,
-    pub active_synthesis_review_count: i64,
+    pub audit_status: AuditWorkStatus,
+    pub audit_episode_count: i64,
+    pub fact_count: i64,
+    pub element_review_fact_count: i64,
+    pub synthesis_review_count: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProblemAreaWorkSummary {
     pub scholarly_object: ScholarlyObjectSummary,
-    pub problem_review_event_count: i64,
+    pub problem_fact_count: i64,
     pub relevance: ProblemAreaRelevance,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProblemAreaRelevance {
-    ReviewActivity,
+    FactActivity,
     TextMatch,
     RecentDomainWork,
 }
@@ -42,7 +42,7 @@ impl TryFrom<&str> for ProblemAreaRelevance {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
-            "review_activity" => Ok(Self::ReviewActivity),
+            "fact_activity" => Ok(Self::FactActivity),
             "text_match" => Ok(Self::TextMatch),
             "recent_domain_work" => Ok(Self::RecentDomainWork),
             other => Err(format!("unknown problem area relevance: {other}")),
@@ -54,7 +54,7 @@ impl TryFrom<&str> for ProblemAreaRelevance {
 pub struct LibraryItemSummary {
     pub id: String,
     pub user_id: String,
-    pub audit_object_id: String,
+    pub subject_id: String,
     pub added_reason: LibraryAddedReason,
     pub added_at: String,
     pub scholarly_object: ScholarlyObjectSummary,
@@ -64,8 +64,7 @@ pub struct LibraryItemSummary {
 #[serde(rename_all = "snake_case")]
 pub enum LibraryAddedReason {
     Manual,
-    ReviewCreated,
-    AssignmentAccepted,
+    Commissioned,
     Imported,
     AdminSeeded,
 }
@@ -76,8 +75,7 @@ impl TryFrom<&str> for LibraryAddedReason {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             "manual" => Ok(Self::Manual),
-            "review_created" => Ok(Self::ReviewCreated),
-            "assignment_accepted" => Ok(Self::AssignmentAccepted),
+            "commissioned" => Ok(Self::Commissioned),
             "imported" => Ok(Self::Imported),
             "admin_seeded" => Ok(Self::AdminSeeded),
             other => Err(format!("unknown library added reason: {other}")),
@@ -88,7 +86,7 @@ impl TryFrom<&str> for LibraryAddedReason {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScholarlyObjectDetail {
     pub id: String,
-    pub audit_object_id: Option<String>,
+    pub audit_subject_id: Option<String>,
     pub object_type: ScholarlyObjectType,
     pub work_group: Option<ArticleVersionGroupSummary>,
     pub version_kind: ArticleVersionKind,
@@ -103,11 +101,11 @@ pub struct ScholarlyObjectDetail {
     pub canonical_url: String,
     pub license: Option<String>,
     pub native_display_permitted: bool,
-    pub review_status: ReviewStatus,
-    pub evaluation_fact_count: i64,
-    pub review_event_count: i64,
-    pub active_element_review_count: i64,
-    pub active_synthesis_review_count: i64,
+    pub audit_status: AuditWorkStatus,
+    pub audit_episode_count: i64,
+    pub fact_count: i64,
+    pub element_review_fact_count: i64,
+    pub synthesis_review_count: i64,
     pub external_locations: Vec<ExternalArticleLocationSummary>,
 }
 
@@ -187,25 +185,27 @@ impl TryFrom<&str> for ScholarlyObjectType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ReviewStatus {
-    NotAssigned,
-    Assigned,
-    InReview,
-    Submitted,
-    Published,
+pub enum AuditWorkStatus {
+    NotCommissioned,
+    Commissioned,
+    InProgress,
+    SynthesisPending,
+    Delivered,
+    Closed,
 }
 
-impl TryFrom<&str> for ReviewStatus {
+impl TryFrom<&str> for AuditWorkStatus {
     type Error = String;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
-            "not_assigned" => Ok(Self::NotAssigned),
-            "assigned" => Ok(Self::Assigned),
-            "in_review" => Ok(Self::InReview),
-            "submitted" => Ok(Self::Submitted),
-            "published" => Ok(Self::Published),
-            other => Err(format!("unknown review status: {other}")),
+            "not_commissioned" => Ok(Self::NotCommissioned),
+            "commissioned" => Ok(Self::Commissioned),
+            "in_progress" => Ok(Self::InProgress),
+            "synthesis_pending" => Ok(Self::SynthesisPending),
+            "delivered" => Ok(Self::Delivered),
+            "closed" => Ok(Self::Closed),
+            other => Err(format!("unknown audit work status: {other}")),
         }
     }
 }

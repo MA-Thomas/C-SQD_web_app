@@ -12,8 +12,8 @@ export default async function LibraryPage() {
   const workCount = new Set(
     libraryItems.map((item) => workIdentityForObject(item.scholarly_object)),
   ).size;
-  const reviewEventCount = libraryItems.reduce(
-    (sum, item) => sum + item.scholarly_object.review_event_count,
+  const factCount = libraryItems.reduce(
+    (sum, item) => sum + item.scholarly_object.fact_count,
     0,
   );
 
@@ -40,8 +40,8 @@ export default async function LibraryPage() {
             <strong>{workCount}</strong>
           </div>
           <div className="metric">
-            <span>Review events</span>
-            <strong>{reviewEventCount}</strong>
+            <span>Facts</span>
+            <strong>{factCount}</strong>
           </div>
         </section>
 
@@ -67,9 +67,11 @@ export default async function LibraryPage() {
                     <p>{object.authors.join(", ")}</p>
                     <div className="object-actions">
                       <Link href={`/scholarly-objects/${object.id}`}>Open</Link>
-                      <Link href={`/scholarly-objects/${object.id}/review`}>
-                        Start review
-                      </Link>
+                      {object.audit_subject_id ? (
+                        <Link href={`/commission?subject_id=${object.audit_subject_id}`}>
+                          Commission audit
+                        </Link>
+                      ) : null}
                       <a
                         href={object.canonical_url}
                         rel="noreferrer"
@@ -82,11 +84,11 @@ export default async function LibraryPage() {
                   <dl className="object-facts">
                     <div>
                       <dt>Status</dt>
-                      <dd>{formatLabel(object.review_status)}</dd>
+                      <dd>{formatLabel(object.audit_status)}</dd>
                     </div>
                     <div>
-                      <dt>Events</dt>
-                      <dd>{object.review_event_count}</dd>
+                      <dt>Facts</dt>
+                      <dd>{object.fact_count}</dd>
                     </div>
                     <div>
                       <dt>Source</dt>

@@ -1,14 +1,12 @@
 import Link from "next/link";
 
 type ActiveItem =
+  | "console"
+  | "commission"
   | "domains"
+  | "intake"
   | "browse"
-  | "search"
-  | "library"
-  | "assignments"
-  | "review-episodes"
-  | "bounties"
-  | "payments";
+  | "library";
 
 type AppSidebarProps = {
   activeItem: ActiveItem;
@@ -19,6 +17,8 @@ const navItems: Array<{
   href: string;
   label: string;
 }> = [
+  { id: "console", href: "/", label: "Audit Console" },
+  { id: "commission", href: "/commission", label: "Commission Audit" },
   { id: "domains", href: "/domains", label: "Domains" },
   { id: "library", href: "/library", label: "Library" },
 ];
@@ -29,11 +29,7 @@ const domainNavItems: Array<{
   label: string;
 }> = [
   { id: "browse", href: "/browse", label: "Browse" },
-  { id: "search", href: "/", label: "Scholarly Search" },
-  { id: "assignments", href: "/assignments", label: "Assignments" },
-  { id: "review-episodes", href: "/", label: "Review episodes" },
-  { id: "bounties", href: "/", label: "Bounties" },
-  { id: "payments", href: "/", label: "Payments" },
+  { id: "intake", href: "/intake", label: "Scholarly Intake" },
 ];
 
 export function AppSidebar({ activeItem }: AppSidebarProps) {
@@ -53,7 +49,7 @@ export function AppSidebar({ activeItem }: AppSidebarProps) {
         <span className="domain-switcher-label">Active domain</span>
         <Link className="domain-switcher-current" href="/domains">
           <strong>Academic Peer Review</strong>
-          <span>Scholarly works, reviews, synthesis</span>
+          <span>Scholarly works as audit subjects</span>
         </Link>
         <div className="domain-switcher-planned" aria-label="Planned domains">
           <span>Clinical Trial Protocol Review</span>
@@ -73,7 +69,7 @@ export function AppSidebar({ activeItem }: AppSidebarProps) {
             {item.label}
           </Link>
         ))}
-        <p className="nav-section-label">Academic Peer Review</p>
+        <p className="nav-section-label">Academic Publishing Intake</p>
         {domainNavItems.map((item) => (
           <Link
             aria-current={item.id === activeItem ? "page" : undefined}

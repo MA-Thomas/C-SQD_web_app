@@ -49,15 +49,16 @@ impl TryFrom<&str> for DomainType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DomainConfig {
-    pub phase_config: PhaseConfig,
     pub eval_tuple_config: EvalTupleConfig,
-    pub audit_object_types: Vec<String>,
-    pub reviewer_concurrency: ReviewerConcurrencyLimits,
+    #[serde(default)]
+    pub audit_subject_types: Vec<String>,
+    #[serde(default)]
+    pub phase_config: Option<PhaseConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PhaseConfig {
-    pub public_review_duration_seconds: Option<i64>,
+    pub public_review_duration: Option<i64>,
     pub response_rounds_permitted: u32,
     pub synthesis_significance_threshold: f64,
     pub anonymity_rules: AnonymityConfig,
@@ -67,13 +68,7 @@ pub struct PhaseConfig {
 pub struct AnonymityConfig {
     pub blind_submitter: bool,
     pub blind_reviewer: bool,
-    pub reviewer_reidentification_delay_seconds: Option<i64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReviewerConcurrencyLimits {
-    pub max_active_element_reviews: u32,
-    pub max_active_synthesis_reviews: u32,
+    pub reviewer_reidentification_delay: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,7 +99,6 @@ pub enum UptakeDefinition {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScrutinyWeightParams {
     pub solicited_review_multiplier: f64,
-    pub bounty_triggered_multiplier: f64,
     pub expertise_weight_fn: String,
 }
 
@@ -123,7 +117,6 @@ pub struct CWENode {
 pub enum CWESource {
     BaseTaxonomy,
     CommunityExtension,
-    VerifiedTag,
 }
 
 impl TryFrom<&str> for CWESource {
@@ -133,7 +126,6 @@ impl TryFrom<&str> for CWESource {
         match value {
             "base_taxonomy" => Ok(Self::BaseTaxonomy),
             "community_extension" => Ok(Self::CommunityExtension),
-            "verified_tag" => Ok(Self::VerifiedTag),
             other => Err(format!("unknown CWE source: {other}")),
         }
     }
@@ -154,30 +146,16 @@ mod tests {
     #[test]
     fn decodes_seeded_academic_domain_config_shape() {
         let config: DomainConfig = serde_json::from_value(json!({
-            "phase_config": {
-                "public_review_duration_seconds": 2592000,
-                "response_rounds_permitted": 2,
-                "synthesis_significance_threshold": 0.65,
-                "anonymity_rules": {
-                    "blind_submitter": true,
-                    "blind_reviewer": true,
-                    "reviewer_reidentification_delay_seconds": 2592000
-                }
-            },
+            "phase_config": null,
             "eval_tuple_config": {
                 "stakes_operationalization": "scientific_significance",
                 "uptake_operationalization": "citation_impact",
                 "l_weight_params": {
                     "solicited_review_multiplier": 1.5,
-                    "bounty_triggered_multiplier": 2.0,
                     "expertise_weight_fn": "academic_tag_endorsement_weight_v1"
                 }
             },
-            "audit_object_types": ["article", "preprint"],
-            "reviewer_concurrency": {
-                "max_active_element_reviews": 5,
-                "max_active_synthesis_reviews": 2
-            }
+            "audit_subject_types": ["research_manuscript", "preprint"]
         }))
         .unwrap();
 
@@ -189,6 +167,10 @@ mod tests {
             config.eval_tuple_config.uptake_operationalization,
             UptakeDefinition::CitationImpact
         ));
-        assert_eq!(config.reviewer_concurrency.max_active_element_reviews, 5);
+        assert!(config.phase_config.is_none());
+        assert_eq!(
+            config.audit_subject_types,
+            ["research_manuscript", "preprint"]
+        );
     }
 }

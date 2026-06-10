@@ -4,7 +4,7 @@ use serde_json::json;
 use sqlx::{PgPool, Row};
 use std::time::Duration;
 
-use super::{access_policy, article_access, article_versions, audit_objects, RepositoryError};
+use super::{access_policy, article_access, article_versions, audit_subjects, RepositoryError};
 
 const ARXIV_API_URL: &str = "http://export.arxiv.org/api/query";
 const ARXIV_JOURNAL_NAME: &str = "arXiv";
@@ -49,6 +49,8 @@ pub async fn retrieve_arxiv(
     .await?;
     let article_access =
         article_access::find_for_scholarly_object(db, &scholarly_object_id).await?;
+    let audit_subject_id =
+        audit_subjects::ensure_academic_for_scholarly_object(db, &scholarly_object_id).await?;
 
     Ok(ArticleRetrievalResult {
         source: ArticleRetrievalSource::Arxiv,
@@ -56,6 +58,7 @@ pub async fn retrieve_arxiv(
         work_group,
         version_kind,
         scholarly_object_id,
+        audit_subject_id,
         title: entry.title,
         authors: entry.authors,
         abstract_text: entry.abstract_text,
@@ -293,7 +296,7 @@ async fn upsert_arxiv_entry(
     }
 
     upsert_search_projection(db, &scholarly_object_id, entry).await?;
-    audit_objects::ensure_academic_for_scholarly_object(db, &scholarly_object_id).await?;
+    audit_subjects::ensure_academic_for_scholarly_object(db, &scholarly_object_id).await?;
 
     Ok((scholarly_object_id, was_created))
 }

@@ -4,10 +4,13 @@ use axum::{
     Json, Router,
 };
 use csqd_domain::{
-    ApiHealth, ArticleAccessSummary, ArticleRetrievalResult, ArticleRetrievalSet,
-    AuditObjectDetail, AuditObjectSummary, CreateElementReviewRequest, DomainInstantiationDetail,
-    DomainInstantiationSummary, LibraryItemSummary, ProblemAreaWorkSummary,
-    ReviewAssignmentSummary, ReviewEvent, ScholarlyObjectDetail, ScholarlyObjectSummary,
+    ApiHealth, ArticleAccessSummary, ArticleRetrievalResult, ArticleRetrievalSet, AuditEpisode,
+    AuditEpisodeSummary, AuditSubject, CommissionAuditEpisodeRequest, CommissionAuditEpisodeResult,
+    CreateAuditSubjectRequest, CreateEpisodeElementReviewRequest,
+    CreateEpisodeSolicitationEventRequest, CreateEpisodeSolicitationRequest,
+    CreateSynthesisReviewRequest, DomainInstantiationDetail, DomainInstantiationSummary, EvalTuple,
+    Fact, LibraryItemSummary, ProblemAreaWorkSummary, ScholarlyObjectDetail,
+    ScholarlyObjectSummary, SynthesisReview,
 };
 use serde::Deserialize;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
@@ -15,9 +18,8 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use crate::{
     error::ApiError,
     repositories::{
-        article_access, article_retrieval, audit_objects, doi_retrieval, domain_instantiations,
-        pubmed_retrieval, review_assignments, review_events, scholarly_objects, title_retrieval,
-        user_library,
+        article_access, article_retrieval, audit_episodes, audit_subjects, doi_retrieval,
+        domain_instantiations, pubmed_retrieval, scholarly_objects, title_retrieval, user_library,
     },
     state::AppState,
 };
@@ -54,8 +56,36 @@ pub fn router(state: AppState) -> Router {
             get(retrieve_pubmed_article),
         )
         .route("/api/article-retrieval/title", get(retrieve_title_article))
-        .route("/api/audit-objects", get(list_audit_objects))
-        .route("/api/audit-objects/:id", get(get_audit_object))
+        .route(
+            "/api/audit-subjects",
+            get(list_audit_subjects).post(create_audit_subject),
+        )
+        .route("/api/audit-subjects/:id", get(get_audit_subject))
+        .route(
+            "/api/audit-subjects/:id/audit-episodes",
+            get(list_audit_episodes_for_subject).post(commission_audit_episode),
+        )
+        .route("/api/audit-subjects/:id/facts", get(list_facts_for_subject))
+        .route("/api/audit-episodes", get(list_audit_episodes))
+        .route("/api/audit-episodes/:id", get(get_audit_episode))
+        .route("/api/audit-episodes/:id/facts", get(list_facts_for_episode))
+        .route(
+            "/api/audit-episodes/:id/facts/element-review",
+            post(create_episode_element_review),
+        )
+        .route(
+            "/api/audit-episodes/:id/facts/solicitation",
+            post(create_episode_solicitation),
+        )
+        .route(
+            "/api/audit-episodes/:id/facts/solicitation-event",
+            post(create_episode_solicitation_event),
+        )
+        .route(
+            "/api/audit-episodes/:id/synthesis-reviews",
+            get(list_synthesis_reviews).post(create_synthesis_review),
+        )
+        .route("/api/audit-episodes/:id/eval-tuple", get(get_eval_tuple))
         .route(
             "/api/domain-instantiations",
             get(list_domain_instantiations),
@@ -72,16 +102,11 @@ pub fn router(state: AppState) -> Router {
             "/api/peer-review/problem-area-works",
             get(browse_problem_area_works),
         )
-        .route("/api/review-assignments", get(list_review_assignments))
         .route("/api/scholarly-objects", get(list_scholarly_objects))
         .route("/api/work-search", get(search_work_summaries))
         .route(
             "/api/scholarly-objects/:id/article-access",
             get(get_article_access),
-        )
-        .route(
-            "/api/scholarly-objects/:id/review-events/element-review",
-            post(create_element_review),
         )
         .route("/api/scholarly-objects/:id", get(get_scholarly_object))
         .layer(CorsLayer::permissive())
@@ -154,14 +179,6 @@ async fn retrieve_title_article(
     Ok(Json(result))
 }
 
-async fn list_review_assignments(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<ReviewAssignmentSummary>>, ApiError> {
-    let assignments = review_assignments::list_summaries(&state.db).await?;
-
-    Ok(Json(assignments))
-}
-
 async fn list_domain_instantiations(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<DomainInstantiationSummary>>, ApiError> {
@@ -179,21 +196,142 @@ async fn get_domain_instantiation(
     Ok(Json(domain))
 }
 
-async fn list_audit_objects(
+async fn list_audit_subjects(
     State(state): State<AppState>,
-) -> Result<Json<Vec<AuditObjectSummary>>, ApiError> {
-    let objects = audit_objects::list_summaries(&state.db).await?;
+) -> Result<Json<Vec<AuditSubject>>, ApiError> {
+    let subjects = audit_subjects::list(&state.db).await?;
 
-    Ok(Json(objects))
+    Ok(Json(subjects))
 }
 
-async fn get_audit_object(
+async fn create_audit_subject(
+    State(state): State<AppState>,
+    Json(request): Json<CreateAuditSubjectRequest>,
+) -> Result<Json<AuditSubject>, ApiError> {
+    let subject = audit_subjects::create(&state.db, request).await?;
+
+    Ok(Json(subject))
+}
+
+async fn get_audit_subject(
     State(state): State<AppState>,
     Path(id): Path<String>,
-) -> Result<Json<AuditObjectDetail>, ApiError> {
-    let object = audit_objects::find_detail(&state.db, &id).await?;
+) -> Result<Json<AuditSubject>, ApiError> {
+    let subject = audit_subjects::find(&state.db, &id).await?;
 
-    Ok(Json(object))
+    Ok(Json(subject))
+}
+
+async fn list_audit_episodes_for_subject(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<AuditEpisode>>, ApiError> {
+    let episodes = audit_episodes::list_for_subject(&state.db, &id).await?;
+
+    Ok(Json(episodes))
+}
+
+async fn commission_audit_episode(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(request): Json<CommissionAuditEpisodeRequest>,
+) -> Result<Json<CommissionAuditEpisodeResult>, ApiError> {
+    let result = audit_episodes::commission_for_subject(&state.db, &id, request).await?;
+
+    Ok(Json(result))
+}
+
+async fn list_audit_episodes(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<AuditEpisodeSummary>>, ApiError> {
+    let episodes = audit_episodes::list_summaries(&state.db).await?;
+
+    Ok(Json(episodes))
+}
+
+async fn get_audit_episode(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<AuditEpisode>, ApiError> {
+    let episode = audit_episodes::find(&state.db, &id).await?;
+
+    Ok(Json(episode))
+}
+
+async fn list_facts_for_subject(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<Fact>>, ApiError> {
+    let facts = audit_episodes::list_facts_for_subject(&state.db, &id).await?;
+
+    Ok(Json(facts))
+}
+
+async fn list_facts_for_episode(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<Fact>>, ApiError> {
+    let facts = audit_episodes::list_facts_for_episode(&state.db, &id).await?;
+
+    Ok(Json(facts))
+}
+
+async fn create_episode_element_review(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(request): Json<CreateEpisodeElementReviewRequest>,
+) -> Result<Json<Fact>, ApiError> {
+    let fact = audit_episodes::create_element_review_fact(&state.db, &id, request).await?;
+
+    Ok(Json(fact))
+}
+
+async fn create_episode_solicitation(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(request): Json<CreateEpisodeSolicitationRequest>,
+) -> Result<Json<Fact>, ApiError> {
+    let fact = audit_episodes::create_solicitation_fact(&state.db, &id, request).await?;
+
+    Ok(Json(fact))
+}
+
+async fn create_episode_solicitation_event(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(request): Json<CreateEpisodeSolicitationEventRequest>,
+) -> Result<Json<Fact>, ApiError> {
+    let fact = audit_episodes::create_solicitation_event_fact(&state.db, &id, request).await?;
+
+    Ok(Json(fact))
+}
+
+async fn list_synthesis_reviews(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<SynthesisReview>>, ApiError> {
+    let reviews = audit_episodes::list_synthesis_reviews(&state.db, &id).await?;
+
+    Ok(Json(reviews))
+}
+
+async fn create_synthesis_review(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(request): Json<CreateSynthesisReviewRequest>,
+) -> Result<Json<SynthesisReview>, ApiError> {
+    let review = audit_episodes::create_synthesis_review(&state.db, &id, request).await?;
+
+    Ok(Json(review))
+}
+
+async fn get_eval_tuple(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<EvalTuple>, ApiError> {
+    let eval_tuple = audit_episodes::compute_eval_tuple(&state.db, &id).await?;
+
+    Ok(Json(eval_tuple))
 }
 
 async fn list_scholarly_objects(
@@ -245,15 +383,4 @@ async fn get_article_access(
     let access = article_access::find_for_scholarly_object(&state.db, &id).await?;
 
     Ok(Json(access))
-}
-
-async fn create_element_review(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-    Json(request): Json<CreateElementReviewRequest>,
-) -> Result<Json<ReviewEvent>, ApiError> {
-    let review_event =
-        review_events::create_element_review_for_scholarly_object(&state.db, &id, request).await?;
-
-    Ok(Json(review_event))
 }

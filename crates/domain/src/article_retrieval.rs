@@ -9,6 +9,7 @@ pub struct ArticleRetrievalResult {
     pub work_group: ArticleVersionGroupSummary,
     pub version_kind: ArticleVersionKind,
     pub scholarly_object_id: String,
+    pub audit_subject_id: String,
     pub title: String,
     pub authors: Vec<String>,
     pub abstract_text: Option<String>,

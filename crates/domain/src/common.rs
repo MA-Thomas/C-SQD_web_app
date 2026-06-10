@@ -8,6 +8,9 @@ pub enum Principal {
     User {
         user_id: String,
     },
+    Organization {
+        organization_id: String,
+    },
     Platform,
     AiAssisted {
         tool_id: String,
