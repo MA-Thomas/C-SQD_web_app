@@ -1,4 +1,4 @@
-use csqd_domain::{
+use csqd_academic_adapter::{
     ArticleVersionGroupSummary, ArticleVersionKind, AuditWorkStatus, LibraryAddedReason,
     LibraryItemSummary, ScholarlyObjectSummary, ScholarlyObjectType,
 };

@@ -1,4 +1,4 @@
-use csqd_domain::{ArticleRetrievalResult, ArticleRetrievalSource, ArticleVersionKind};
+use csqd_academic_adapter::{ArticleRetrievalResult, ArticleRetrievalSource, ArticleVersionKind};
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 use std::{env, time::Duration};

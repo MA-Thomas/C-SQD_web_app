@@ -1,4 +1,4 @@
-use csqd_domain::{ArticleVersionGroupSummary, ArticleVersionKind};
+use csqd_academic_adapter::{ArticleVersionGroupSummary, ArticleVersionKind};
 use serde_json::json;
 use sqlx::{PgPool, Row};
 

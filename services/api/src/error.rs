@@ -12,6 +12,8 @@ pub enum ApiError {
     Database(sqlx::Error),
     Domain(String),
     NotFound { entity: &'static str, id: String },
+    Unauthorized(String),
+    Forbidden(String),
 }
 
 impl From<sqlx::Error> for ApiError {
@@ -26,6 +28,8 @@ impl From<RepositoryError> for ApiError {
             RepositoryError::Database(error) => Self::Database(error),
             RepositoryError::Domain(message) => Self::Domain(message),
             RepositoryError::NotFound { entity, id } => Self::NotFound { entity, id },
+            RepositoryError::Unauthorized(message) => Self::Unauthorized(message),
+            RepositoryError::Forbidden(message) => Self::Forbidden(message),
         }
     }
 }
@@ -44,6 +48,8 @@ impl IntoResponse for ApiError {
             Self::NotFound { entity, id } => {
                 (StatusCode::NOT_FOUND, format!("{entity} not found: {id}"))
             }
+            Self::Unauthorized(message) => (StatusCode::UNAUTHORIZED, message),
+            Self::Forbidden(message) => (StatusCode::FORBIDDEN, message),
         };
 
         (status, Json(json!({ "error": message }))).into_response()

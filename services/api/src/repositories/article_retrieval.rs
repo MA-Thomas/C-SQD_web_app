@@ -1,4 +1,4 @@
-use csqd_domain::{ArticleRetrievalResult, ArticleRetrievalSource, ArticleVersionKind};
+use csqd_academic_adapter::{ArticleRetrievalResult, ArticleRetrievalSource, ArticleVersionKind};
 use roxmltree::{Document, Node};
 use serde_json::json;
 use sqlx::{PgPool, Row};

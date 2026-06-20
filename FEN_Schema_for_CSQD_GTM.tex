@@ -408,8 +408,46 @@ enum FactPayload {
         content:         String,
         revision_ref:    Option<AuditSubjectId>,
     },
+    EpisodeParticipation {
+        episode:         AuditEpisodeId,
+        participant:     UserId,
+        action:          ParticipationAction,   // Start | Join
+        note:            Option<String>,
+    },
+    FeaturePetition {
+        element_review:  FactId,                // ref to ElementReview fact
+        petitioner:      UserId,
+        rationale:       String,
+    },
+    CWEPetition {
+        kind:            CWEPetitionKind,       // NewElement | Applicability
+        cwe_node:        Option<CWENodeId>,
+        proposed_label:  Option<String>,
+        petitioner:      UserId,
+        rationale:       String,
+    },
+    CurationDecision {
+        target:          CurationTarget,        // ElementReview | SynthesisReview
+        decision:        CurationOutcome,       // Feature | Unfeature
+        decided_by:      Principal,
+        rationale:       Option<String>,
+        petitions:       Vec<FactId>,           // refs to FeaturePetition facts
+    },
 }
 \end{lstlisting}
+
+\paragraph{Participation, petition, and curation variants.} These four
+variants extend the original set for the public-registry MVP. Each is an
+atomic, timestamped, provenance-bearing institutional act, which is precisely
+the \texttt{Fact} criterion. \texttt{EpisodeParticipation} records that a user
+started or joined a public \texttt{AuditEpisode}; unsolicited synthesis
+reviews require a prior participation fact. \texttt{FeaturePetition} and
+\texttt{CWEPetition} are requests directed at the curation and taxonomy
+layers; they do not modify the petitioned artifact. \texttt{CurationDecision}
+is the operator act that grants or revokes featured status. Featured display
+state is \emph{derived} from the latest active \texttt{CurationDecision} for a
+target rather than stored as mutable state on an immutable fact; petitions
+feed decisions and are preserved as provenance.
 
 \texttt{ERSolicitation} and \texttt{SolicitationEvent} are \texttt{Fact}
 variants because they are atomic, timestamped institutional acts. A solicitation
@@ -468,6 +506,17 @@ enum ResponseType {
     PartiallyAccepts,
     RevisesAndResponds,
 }
+
+enum ParticipationAction { Start, Join }
+
+enum CWEPetitionKind { NewElement, Applicability }
+
+enum CurationTarget {
+    ElementReview { fact_id: FactId },
+    SynthesisReview { review_id: SynthesisReviewId },
+}
+
+enum CurationOutcome { Feature, Unfeature }
 \end{lstlisting}
 
 % ─────────────────────────────────────────────
@@ -535,6 +584,9 @@ enum FactRole {
     Solicitation,
     SolicitationLifecycle,
     Response,
+    Participation,
+    Petition,
+    Curation,
     Administrative,
     Other,
 }
@@ -601,6 +653,7 @@ struct SynthesisReview {
     summary:      String,
     sections:     Vec<SynthesisSection>,
     featured:     bool,
+    unsolicited:  bool,  // produced outside any commissioned solicitation
 }
 
 enum NarrativeStatus {

@@ -4,24 +4,28 @@ use csqd_domain::{
 use serde_json::{json, Value};
 use sqlx::{postgres::PgRow, PgPool, Row};
 
-use super::{enum_json_name, RepositoryError};
+use super::RepositoryError;
 
-pub async fn list(db: &PgPool) -> Result<Vec<AuditSubject>, RepositoryError> {
-    let rows = sqlx::query(
-        r#"
-        SELECT
+const SUBJECT_COLUMNS: &str = r#"
             id::text AS id,
             domain_instantiation_id::text AS domain_instantiation_id,
             subject_type,
+            subject_type_detail,
             title,
             external_refs,
             registered_by,
-            registered_at::text AS registered_at
+            registered_at
+"#;
+
+pub async fn list(db: &PgPool) -> Result<Vec<AuditSubject>, RepositoryError> {
+    let rows = sqlx::query(&format!(
+        r#"
+        SELECT {SUBJECT_COLUMNS}
         FROM audit_subjects
         ORDER BY updated_at DESC, registered_at DESC
         LIMIT 50
-        "#,
-    )
+        "#
+    ))
     .fetch_all(db)
     .await?;
 
@@ -33,19 +37,19 @@ pub async fn create(
     request: CreateAuditSubjectRequest,
 ) -> Result<AuditSubject, RepositoryError> {
     validate_create_audit_subject_request(&request)?;
-    ensure_domain_instantiation_exists(db, &request.domain_instantiation_id).await?;
+    ensure_domain_instantiation_exists(db, request.domain_instantiation_id.as_str()).await?;
 
-    let subject_type = enum_json_name(&request.subject_type, "audit subject type")?;
     let external_refs = serde_json::to_value(&request.external_refs)
         .map_err(|error| RepositoryError::Domain(format!("invalid external refs: {error}")))?;
     let registered_by = serde_json::to_value(request.registered_by.unwrap_or(Principal::Platform))
         .map_err(|error| RepositoryError::Domain(format!("invalid principal: {error}")))?;
 
-    let row = sqlx::query(
+    let row = sqlx::query(&format!(
         r#"
         INSERT INTO audit_subjects (
             domain_instantiation_id,
             subject_type,
+            subject_type_detail,
             title,
             external_refs,
             registered_by
@@ -54,21 +58,16 @@ pub async fn create(
             $1::uuid,
             $2,
             $3,
-            $4::jsonb,
-            $5::jsonb
+            $4,
+            $5::jsonb,
+            $6::jsonb
         )
-        RETURNING
-            id::text AS id,
-            domain_instantiation_id::text AS domain_instantiation_id,
-            subject_type,
-            title,
-            external_refs,
-            registered_by,
-            registered_at::text AS registered_at
-        "#,
-    )
-    .bind(&request.domain_instantiation_id)
-    .bind(subject_type)
+        RETURNING {SUBJECT_COLUMNS}
+        "#
+    ))
+    .bind(request.domain_instantiation_id.as_str())
+    .bind(request.subject_type.db_kind())
+    .bind(request.subject_type.db_detail())
     .bind(request.title.as_deref().map(str::trim))
     .bind(external_refs)
     .bind(registered_by)
@@ -189,20 +188,13 @@ pub async fn ensure_academic_for_scholarly_object(
 }
 
 pub async fn find(db: &PgPool, subject_id: &str) -> Result<AuditSubject, RepositoryError> {
-    let row = sqlx::query(
+    let row = sqlx::query(&format!(
         r#"
-        SELECT
-            id::text AS id,
-            domain_instantiation_id::text AS domain_instantiation_id,
-            subject_type,
-            title,
-            external_refs,
-            registered_by,
-            registered_at::text AS registered_at
+        SELECT {SUBJECT_COLUMNS}
         FROM audit_subjects
         WHERE id::text = $1
-        "#,
-    )
+        "#
+    ))
     .bind(subject_id)
     .fetch_optional(db)
     .await?
@@ -217,7 +209,7 @@ pub async fn find(db: &PgPool, subject_id: &str) -> Result<AuditSubject, Reposit
 fn validate_create_audit_subject_request(
     request: &CreateAuditSubjectRequest,
 ) -> Result<(), RepositoryError> {
-    if request.domain_instantiation_id.trim().is_empty() {
+    if request.domain_instantiation_id.as_str().trim().is_empty() {
         return Err(RepositoryError::Domain(
             "audit subject requires a domain instantiation".to_string(),
         ));
@@ -294,14 +286,18 @@ fn academic_subject_type_for_object_type(object_type: &str) -> &'static str {
 
 fn row_to_audit_subject(row: PgRow) -> Result<AuditSubject, RepositoryError> {
     let subject_type: String = row.get("subject_type");
+    let subject_type_detail: Option<String> = row.get("subject_type_detail");
     let external_refs: Value = row.get("external_refs");
     let registered_by: Value = row.get("registered_by");
 
     Ok(AuditSubject {
         id: row.get("id"),
         domain_instantiation_id: row.get("domain_instantiation_id"),
-        subject_type: AuditSubjectType::try_from(subject_type.as_str())
-            .map_err(RepositoryError::Domain)?,
+        subject_type: AuditSubjectType::from_db(
+            subject_type.as_str(),
+            subject_type_detail.as_deref(),
+        )
+        .map_err(RepositoryError::Domain)?,
         title: row.get("title"),
         external_refs: serde_json::from_value::<Vec<ExternalRef>>(external_refs)
             .map_err(|error| RepositoryError::Domain(format!("invalid external refs: {error}")))?,

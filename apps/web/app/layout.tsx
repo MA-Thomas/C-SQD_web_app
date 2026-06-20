@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+import { AdvancedModeProvider } from "./lib/advanced-mode";
+import { SessionProvider } from "./lib/session";
+
 export const metadata: Metadata = {
   title: "C-SQD",
-  description: "Epistemic audit infrastructure",
+  description: "Public epistemic audit registry",
 };
 
 export default function RootLayout({
@@ -13,7 +16,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <SessionProvider>
+          <AdvancedModeProvider>{children}</AdvancedModeProvider>
+        </SessionProvider>
+      </body>
     </html>
   );
 }

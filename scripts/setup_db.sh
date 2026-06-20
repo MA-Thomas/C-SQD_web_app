@@ -6,7 +6,7 @@ DATABASE_URL="${DATABASE_URL:-postgresql://csqd:csqd@localhost:55432/csqd}"
 COMPOSE_FILE="$ROOT_DIR/infra/docker-compose.yml"
 MIGRATION_FILE="$ROOT_DIR/db/migrations/000001_initial_schema.sql"
 MIGRATIONS_DIR="$ROOT_DIR/db/migrations"
-SEED_FILE="$ROOT_DIR/db/seeds/000001_demo_data.sql"
+SEEDS_DIR="$ROOT_DIR/db/seeds"
 RESET_DB=false
 
 if [[ "${1:-}" == "--reset" ]]; then
@@ -124,16 +124,13 @@ for migration in "$MIGRATIONS_DIR"/*.sql; do
   fi
 done
 
-seed_exists="$(
-  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At -c \
-    "SELECT EXISTS (SELECT 1 FROM scholarly_objects WHERE doi = '10.0000/csqd.demo.001');"
-)"
-
-if [[ "$seed_exists" == "t" ]]; then
-  echo "Demo seed data already exists; skipping seed."
-else
-  echo "Applying demo seed data..."
-  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$SEED_FILE"
-fi
+# Seed files are idempotent (every statement uses ON CONFLICT), so apply all of
+# them in lexical order on every run. New db/seeds/*.sql files are picked up
+# automatically.
+for seed in "$SEEDS_DIR"/*.sql; do
+  [[ -e "$seed" ]] || continue
+  echo "Applying seed $(basename "$seed")..."
+  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$seed"
+done
 
 echo "Local database is ready at $DATABASE_URL"

@@ -1,4 +1,4 @@
-use csqd_domain::{
+use csqd_academic_adapter::{
     ArticleAccessSummary, ArticleDisplayStrategy, ArticleRightsStatus,
     ExternalArticleLocationSummary, ExternalArticleLocationType,
 };

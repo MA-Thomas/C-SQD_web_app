@@ -4,6 +4,8 @@ use std::{env, net::SocketAddr};
 pub struct Config {
     pub api_addr: SocketAddr,
     pub database_url: String,
+    /// Base URL of the public web app, used to build magic sign-in links.
+    pub web_base_url: String,
 }
 
 impl Config {
@@ -16,9 +18,13 @@ impl Config {
         let database_url = env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgres://csqd:csqd@localhost:55432/csqd".to_string());
 
+        let web_base_url =
+            env::var("CSQD_WEB_BASE_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
+
         Self {
             api_addr,
             database_url,
+            web_base_url,
         }
     }
 }

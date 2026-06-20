@@ -1,86 +1,121 @@
+"use client";
+
 import Link from "next/link";
 
-type ActiveItem =
+import { useSession } from "../lib/session";
+
+export type ActiveItem =
   | "console"
   | "commission"
+  | "discover"
   | "domains"
+  | "method"
+  | "public-audits"
+  | "element-reviews"
+  | "synthesis-reviews"
+  | "challenges"
+  | "sponsor-console"
+  | "reviewer-queue"
   | "intake"
   | "browse"
-  | "library";
+  | "library"
+  | "sign-in";
 
 type AppSidebarProps = {
-  activeItem: ActiveItem;
+  activeItem?: ActiveItem;
 };
 
-const navItems: Array<{
-  id: ActiveItem;
-  href: string;
-  label: string;
-}> = [
-  { id: "console", href: "/", label: "Audit Console" },
-  { id: "commission", href: "/commission", label: "Commission Audit" },
-  { id: "domains", href: "/domains", label: "Domains" },
-  { id: "library", href: "/library", label: "Library" },
+type NavItem = { id: ActiveItem; href: string; label: string };
+
+const registryNavItems: NavItem[] = [
+  { id: "discover", href: "/discover", label: "Discover" },
+  { id: "public-audits", href: "/public-audits", label: "Public Audits" },
+  { id: "method", href: "/method", label: "Method" },
 ];
 
-const domainNavItems: Array<{
-  id: ActiveItem;
-  href: string;
-  label: string;
-}> = [
-  { id: "browse", href: "/browse", label: "Browse" },
-  { id: "intake", href: "/intake", label: "Scholarly Intake" },
+const workspaceNavItems: NavItem[] = [
+  { id: "library", href: "/library", label: "Library / Watchlist" },
 ];
 
+const sponsorNavItems: NavItem[] = [
+  { id: "sponsor-console", href: "/sponsor-console", label: "Sponsor Console" },
+];
+
+const reviewerNavItems: NavItem[] = [
+  { id: "reviewer-queue", href: "/reviewer-queue", label: "Reviewer Queue" },
+];
+
+const operationsNavItems: NavItem[] = [
+  { id: "console", href: "/operations", label: "Audit Operations" },
+];
+
+/// Backstage chrome only. Sections render per the session's actual roles —
+/// an authenticated member without sponsor/reviewer/operator roles sees only
+/// their account workspace and the way back to the public registry.
 export function AppSidebar({ activeItem }: AppSidebarProps) {
+  const { user, loading, hasRole } = useSession();
+
   return (
-    <aside className="sidebar" aria-label="Primary">
+    <aside className="sidebar" aria-label="Backstage">
       <div className="brand">
         <span className="brand-mark">
           <img alt="" className="brand-logo" src="/csqd-logo.png" />
         </span>
         <div>
           <strong>C-SQD</strong>
-          <span>Epistemic audit infrastructure</span>
+          <span>Audit operations</span>
         </div>
       </div>
 
-      <section className="domain-switcher" aria-label="Active domain">
-        <span className="domain-switcher-label">Active domain</span>
-        <Link className="domain-switcher-current" href="/domains">
-          <strong>Academic Peer Review</strong>
-          <span>Scholarly works as audit subjects</span>
-        </Link>
-        <div className="domain-switcher-planned" aria-label="Planned domains">
-          <span>Clinical Trial Protocol Review</span>
-          <em>Planned</em>
-        </div>
-      </section>
-
       <nav className="nav-list">
-        <p className="nav-section-label">C-SQD</p>
-        {navItems.map((item) => (
-          <Link
-            aria-current={item.id === activeItem ? "page" : undefined}
-            className={`nav-item${item.id === activeItem ? " active" : ""}`}
-            href={item.href}
-            key={item.id}
-          >
-            {item.label}
-          </Link>
-        ))}
-        <p className="nav-section-label">Academic Publishing Intake</p>
-        {domainNavItems.map((item) => (
-          <Link
-            aria-current={item.id === activeItem ? "page" : undefined}
-            className={`nav-item${item.id === activeItem ? " active" : ""}`}
-            href={item.href}
-            key={item.id}
-          >
-            {item.label}
-          </Link>
-        ))}
+        <NavSection activeItem={activeItem} items={registryNavItems} label="Public registry" />
+        {user ? (
+          <NavSection activeItem={activeItem} items={workspaceNavItems} label="Account" />
+        ) : null}
+        {hasRole("sponsor") ? (
+          <NavSection activeItem={activeItem} items={sponsorNavItems} label="Sponsor" />
+        ) : null}
+        {hasRole("reviewer") ? (
+          <NavSection activeItem={activeItem} items={reviewerNavItems} label="Reviewer" />
+        ) : null}
+        {hasRole("operator") ? (
+          <NavSection activeItem={activeItem} items={operationsNavItems} label="Operations" />
+        ) : null}
+        {!loading && !user ? (
+          <>
+            <p className="nav-section-label">Account</p>
+            <Link className="nav-item" href="/sign-in">
+              Sign in
+            </Link>
+          </>
+        ) : null}
       </nav>
     </aside>
+  );
+}
+
+function NavSection({
+  activeItem,
+  items,
+  label,
+}: {
+  activeItem?: ActiveItem;
+  items: NavItem[];
+  label: string;
+}) {
+  return (
+    <>
+      <p className="nav-section-label">{label}</p>
+      {items.map((item) => (
+        <Link
+          aria-current={item.id === activeItem ? "page" : undefined}
+          className={`nav-item${item.id === activeItem ? " active" : ""}`}
+          href={item.href}
+          key={item.id}
+        >
+          {item.label}
+        </Link>
+      ))}
+    </>
   );
 }

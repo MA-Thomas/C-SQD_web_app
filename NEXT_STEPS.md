@@ -6,7 +6,7 @@ C-SQD is now general epistemic audit infrastructure for commissioned, decomposed
 
 The first objective is not to build a better journal. It is to test whether organizations will fund structured audits of claims, papers, models, datasets, reports, protocols, and related artifacts.
 
-Academic Publishing / Scholarly Intake remains useful infrastructure and should be preserved as the first intake adapter, especially for computational biology, biomedical machine learning, and adjacent technical domains.
+Academic Publishing / Search-Register remains useful infrastructure and should be preserved as the first metadata adapter, especially for computational biology, biomedical machine learning, and adjacent technical domains.
 
 ## Source Precedence
 
@@ -37,21 +37,24 @@ Academic Publishing concepts such as `ScholarlyObject` are intake/access adapter
 
 ## Current Product Slice
 
-The commissioned audit path is now the primary product slice:
+The public audit registry path is now the primary MVP slice:
 
-- `/` shows the Audit Console.
+- `/` shows a public registry home.
+- `/discover` searches and filters public scholarly works.
+- `/public-audits` emphasizes public SynthesisReviews and ElementReview depth.
+- `/method` explains AuditSubjects, ElementReviews, SynthesisReviews, CRWE, evaluation tuples, challenges, and public/private audit visibility.
+- `/scholarly-objects/:id` is the public audit subject page.
 - `/commission` creates or reuses an `AuditSubject`, captures sponsor/scope/funding, and commissions an `AuditEpisode`.
-- `/audit-episodes/:id` shows the episode workspace and records episode-scoped `ElementReview` facts.
 - `/intake` searches/retrieves scholarly metadata and registers Academic Publishing audit subjects.
-- `/browse` explores Academic Publishing problem areas from criteria and facts.
-- `/library` remains a cross-domain workspace for saved audit subjects.
-- `/domains` frames active and planned audit domains.
+- `/browse` explores CRWE criteria and related works.
+- `/library`, `/sponsor-console`, `/reviewer-queue`, `/operations`, and `/audit-episodes/:id` are backstage surfaces gated behind identity and role state.
 
 ## API Backbone
 
 - `POST /api/audit-subjects` registers an `AuditSubject`.
 - `POST /api/audit-subjects/:id/audit-episodes` creates an organizational sponsor, an `AuditEpisode`, an `AuditCommission` fact, and a commission `EpisodeMembership`.
-- `POST /api/audit-episodes/:id/facts/element-review` creates an episode-scoped `ElementReview` fact and membership.
+- `POST /api/audit-episodes/:id/facts/element-review` creates an episode-scoped `ElementReview` fact and membership. Public unsolicited review CTAs are currently auth-gated until real identity/session handling is connected.
+- `GET /api/public/audit-subjects/:id/summary` and `GET /api/public/audit-subjects/summaries?ids=...` return server-side public subject summaries (status label, evaluation tuple, CRWE coverage, counts, latest report, episodes); the batch variant collapses the Discover/home/Public Audits fan-out into one call.
 - Read APIs expose domain instantiations, subjects, episodes, facts, scholarly intake records, article access, browse results, and library items.
 
 ## What To Preserve
@@ -61,23 +64,42 @@ The commissioned audit path is now the primary product slice:
 - PostgreSQL migrations/seeds and local setup scripts.
 - DOI, arXiv, PubMed/PMC, and title retrieval.
 - Rights-aware article access and external-location logic.
-- Scholarly Intake as an Academic Publishing adapter.
-- Library as a cross-domain user workspace.
+- Search / Register as an Academic Publishing metadata adapter.
+- Library / Watchlist as a cross-domain account workspace.
 - Domain registry page and sidebar framing.
-- Audit console, commission flow, and episode workspace as the core operational surfaces.
+- Commission flow and backstage audit operations as role-gated operational surfaces.
 
 ## Next Implementation Order
 
-1. Add episode-scoped synthesis review creation and read surfaces.
-2. Compute and display evaluation tuples from facts and episode memberships.
-3. Add solicitation facts and solicitation lifecycle events for paid reviewer work.
-4. Improve episode timelines with provenance, status transitions, and membership roles.
-5. Add richer sponsor/admin dashboards for commissioned audit delivery.
-6. Broaden domain configuration only after real pilot needs require it.
+Status as of June 16, 2026: the FEN alignment + public-registry plan
+(`IMPLEMENTATION_PLAN.md`, phases B0–B6 and F0–F7) is substantially implemented
+and verified against seeded data. See that file's "Implementation Status" table
+for the per-phase breakdown.
+
+Done:
+
+1. ✅ Real authentication/session state and role permissions (magic-link, `require_role`).
+2. ✅ Challenge and petition APIs, counts, and public threads (relations, `submitter_response` contests, `Feature`/`CWE` petitions).
+3. ✅ Unsolicited public AuditEpisode start/join flows (`EpisodeParticipation`).
+4. ✅ Authenticated ElementReview submission for public subject pages.
+5. ✅ Sponsor, reviewer, and operations consoles behind role-gated backstage routes.
+
+Remaining / deferred:
+
+6. Broaden domain configuration only after real pilot needs require it (intentionally deferred).
+7. Optional optimization: make the batch public-summary endpoint
+   (`/api/public/audit-subjects/summaries?ids=...`) a single aggregating SQL
+   pass instead of a server-side loop. Not blocking — the frontend already
+   makes one call.
+8. ✅ `FEN_Schema_for_CSQD_GTM.tex` already documents the participation/petition/
+   curation `FactPayload` variants (field-for-field with `crates/domain/src/fact.rs`),
+   so schema source and code are in sync. Only residual: re-render
+   `FEN_for_CSQD_GTM.pdf` from the `.tex` if the rendered PDF predates these
+   variants (the PDF outranks the tex in source precedence).
 
 ## Visual Experience
 
-The visual language should feel like a serious diligence and audit console:
+The visual language should feel like a serious public audit registry with restrained backstage operations:
 
 - quiet, restrained, and operational
 - dense but organized tables, forms, and timelines

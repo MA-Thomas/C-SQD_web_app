@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 use crate::common::{Principal, Timestamp};
+use crate::ids::{CWENodeId, CommunityId, DomainInstantiationId};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DomainInstantiationSummary {
-    pub id: String,
+    pub id: DomainInstantiationId,
     pub domain_type: DomainType,
     pub name: String,
     pub created_at: Timestamp,
@@ -13,7 +14,7 @@ pub struct DomainInstantiationSummary {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DomainInstantiationDetail {
-    pub id: String,
+    pub id: DomainInstantiationId,
     pub domain_type: DomainType,
     pub name: String,
     pub config: DomainConfig,
@@ -22,14 +23,41 @@ pub struct DomainInstantiationDetail {
     pub governed_by: Principal,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DomainType {
     AcademicPublishing,
     ClinicalTrialReview,
     AiAuditing,
     PolicyReview,
-    Custom,
+    /// Carries the custom domain label per the FEN schema (`Custom(String)`).
+    Custom(String),
+}
+
+impl DomainType {
+    pub fn db_kind(&self) -> &'static str {
+        match self {
+            Self::AcademicPublishing => "academic_publishing",
+            Self::ClinicalTrialReview => "clinical_trial_review",
+            Self::AiAuditing => "ai_auditing",
+            Self::PolicyReview => "policy_review",
+            Self::Custom(_) => "custom",
+        }
+    }
+
+    pub fn db_detail(&self) -> Option<&str> {
+        match self {
+            Self::Custom(label) if !label.is_empty() => Some(label),
+            _ => None,
+        }
+    }
+
+    pub fn from_db(kind: &str, detail: Option<&str>) -> Result<Self, String> {
+        match kind {
+            "custom" => Ok(Self::Custom(detail.unwrap_or_default().to_string())),
+            other => Self::try_from(other),
+        }
+    }
 }
 
 impl TryFrom<&str> for DomainType {
@@ -41,7 +69,7 @@ impl TryFrom<&str> for DomainType {
             "clinical_trial_review" => Ok(Self::ClinicalTrialReview),
             "ai_auditing" => Ok(Self::AiAuditing),
             "policy_review" => Ok(Self::PolicyReview),
-            "custom" => Ok(Self::Custom),
+            "custom" => Ok(Self::Custom(String::new())),
             other => Err(format!("unknown domain type: {other}")),
         }
     }
@@ -78,22 +106,24 @@ pub struct EvalTupleConfig {
     pub l_weight_params: ScrutinyWeightParams,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StakesDefinition {
     ScientificSignificance,
     PublicHealthConsequentiality,
     DeploymentRiskProfile,
-    Custom,
+    /// Carries the custom operationalization label (`Custom(String)`).
+    Custom(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum UptakeDefinition {
     CitationImpact,
     DownstreamAdoption,
     DeploymentDecisions,
-    Custom,
+    /// Carries the custom operationalization label (`Custom(String)`).
+    Custom(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -104,44 +134,62 @@ pub struct ScrutinyWeightParams {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CWENode {
-    pub id: String,
-    pub domain_instantiation_id: String,
-    pub parent: Option<String>,
+    pub id: CWENodeId,
+    pub domain_instantiation_id: DomainInstantiationId,
+    pub parent: Option<CWENodeId>,
     pub label: String,
     pub description: String,
     pub source: CWESource,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CWESource {
     BaseTaxonomy,
-    CommunityExtension,
+    /// Community extensions carry the proposing community id (deferred post-MVP).
+    CommunityExtension {
+        community_id: CommunityId,
+    },
 }
 
-impl TryFrom<&str> for CWESource {
-    type Error = String;
+impl CWESource {
+    pub fn db_kind(&self) -> &'static str {
+        match self {
+            Self::BaseTaxonomy => "base_taxonomy",
+            Self::CommunityExtension { .. } => "community_extension",
+        }
+    }
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
+    pub fn community_id(&self) -> Option<&CommunityId> {
+        match self {
+            Self::CommunityExtension { community_id } => Some(community_id),
+            Self::BaseTaxonomy => None,
+        }
+    }
+
+    pub fn from_db(kind: &str, community_id: Option<&str>) -> Result<Self, String> {
+        match kind {
             "base_taxonomy" => Ok(Self::BaseTaxonomy),
-            "community_extension" => Ok(Self::CommunityExtension),
+            "community_extension" => Ok(Self::CommunityExtension {
+                community_id: CommunityId::new(community_id.unwrap_or_default()),
+            }),
             other => Err(format!("unknown CWE source: {other}")),
         }
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A CWE criterion id carries its domain context implicitly.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CWECriterionId {
-    pub domain: String,
-    pub node_id: String,
+    pub domain: DomainInstantiationId,
+    pub node_id: CWENodeId,
 }
 
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
-    use super::{DomainConfig, StakesDefinition, UptakeDefinition};
+    use super::{CWESource, DomainConfig, DomainType, StakesDefinition, UptakeDefinition};
 
     #[test]
     fn decodes_seeded_academic_domain_config_shape() {
@@ -172,5 +220,34 @@ mod tests {
             config.audit_subject_types,
             ["research_manuscript", "preprint"]
         );
+    }
+
+    #[test]
+    fn decodes_custom_stakes_with_label() {
+        let stakes: StakesDefinition =
+            serde_json::from_value(json!({ "custom": "licensing_decision_risk" })).unwrap();
+
+        assert!(
+            matches!(stakes, StakesDefinition::Custom(label) if label == "licensing_decision_risk")
+        );
+    }
+
+    #[test]
+    fn round_trips_community_extension_source() {
+        let source = CWESource::from_db("community_extension", Some("community-1")).unwrap();
+
+        assert_eq!(
+            source.community_id().map(|id| id.as_str()),
+            Some("community-1")
+        );
+        assert_eq!(source.db_kind(), "community_extension");
+    }
+
+    #[test]
+    fn custom_domain_type_round_trips_through_db_columns() {
+        let domain = DomainType::from_db("custom", Some("Internal Diligence")).unwrap();
+
+        assert_eq!(domain.db_kind(), "custom");
+        assert_eq!(domain.db_detail(), Some("Internal Diligence"));
     }
 }

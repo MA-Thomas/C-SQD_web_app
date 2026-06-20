@@ -1,8 +1,8 @@
 # C-SQD Web App
 
-C-SQD is being built as **general epistemic audit infrastructure** for commissioned, decomposed audits of important scientific and technical claims.
+C-SQD is being built as **general epistemic audit infrastructure** for public and commissioned audits of important scientific and technical claims.
 
-The current app still contains useful Academic Publishing / Scholarly Search infrastructure, but the active GTM direction is no longer "build a better journal." The first product wedge is sponsored epistemic audits: organizations commission audits of claims, papers, models, datasets, reports, and related artifacts; reviewers complete scoped ElementReviews; synthesis authors integrate those facts into audit-level interpretations.
+The MVP now presents first as a public audit registry and method. Visitors can discover scholarly works, inspect public audit activity, read SynthesisReviews, browse ElementReviews by CRWE criterion, and commission deeper work. Sponsor, reviewer, and operator workflows remain backstage behind identity and role state.
 
 ## Current Stack
 
@@ -61,13 +61,20 @@ http://localhost:3000
 
 ## Useful Routes
 
-- `/` Audit Console for commissioned audit episodes
-- `/commission` sponsor/scope form for commissioning an audit
-- `/audit-episodes/:id` episode workspace for facts and scoped element reviews
-- `/intake` Scholarly Intake / Academic Publishing metadata adapter
-- `/browse` Academic Publishing problem-area browse
+- `/` public registry home
+- `/discover` public scholarly work discovery
+- `/public-audits` public SynthesisReviews and ElementReview depth
+- `/method` C-SQD method explainer
+- `/commission` public path for commissioning a deeper audit
+- `/intake` Search / Register scholarly work metadata adapter
+- `/browse` CRWE criterion browse
+- `/scholarly-objects/:id` public audit subject page
+- `/audit-episodes/:id` authenticated episode workspace gate
+- `/sponsor-console` authenticated sponsor console gate
+- `/reviewer-queue` authenticated reviewer queue gate
+- `/operations` authenticated operations gate
+- `/library` authenticated library/watchlist gate
 - `/domains` C-SQD domain overview
-- `/library` saved audit subjects
 
 ## Key Documents
 

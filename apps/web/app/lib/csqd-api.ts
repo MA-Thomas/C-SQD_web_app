@@ -204,8 +204,8 @@ export type CommissionAuditEpisodeResult = {
 
 export type CreateEpisodeElementReviewRequest = {
   cwe_node_id: string;
-  submitted_by: string | null;
-  solicitation: string | null;
+  submitted_by?: string | null;
+  solicitation?: string | null;
   finding: string;
   severity: string | null;
   confidence: string | null;
@@ -242,11 +242,12 @@ export type CreateSynthesisReviewSectionRequest = {
 };
 
 export type CreateSynthesisReviewRequest = {
-  submitted_by: string | null;
+  submitted_by?: string | null;
   status: string;
   summary: string;
   sections: CreateSynthesisReviewSectionRequest[];
   featured: boolean;
+  unsolicited?: boolean;
 };
 
 export type SynthesisReviewSection = {
@@ -258,6 +259,7 @@ export type SynthesisReviewSection = {
 };
 
 export type SynthesisReview = {
+  unsolicited?: boolean;
   id: string;
   episode_id: string;
   submitted_by: string;
@@ -342,6 +344,10 @@ export async function getAuditEpisode(id: string): Promise<AuditEpisode | null> 
 
 export async function getFactsForEpisode(episodeId: string): Promise<Fact[]> {
   return fetchJson<Fact[]>(`/api/audit-episodes/${episodeId}/facts`, []);
+}
+
+export async function getFactsForSubject(subjectId: string): Promise<Fact[]> {
+  return fetchJson<Fact[]>(`/api/audit-subjects/${subjectId}/facts`, []);
 }
 
 export async function createEpisodeElementReview(
@@ -529,6 +535,7 @@ async function fetchJson<T>(endpoint: string, fallback: T): Promise<T> {
   try {
     const response = await fetch(`${apiBaseUrl}${endpoint}`, {
       cache: "no-store",
+      credentials: "include",
     });
 
     if (!response.ok) {
@@ -546,6 +553,7 @@ async function postJson<T>(endpoint: string, body: unknown): Promise<T | null> {
     const response = await fetch(`${apiBaseUrl}${endpoint}`, {
       body: JSON.stringify(body),
       cache: "no-store",
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
       },
@@ -656,4 +664,317 @@ export function formatLabel(value: string) {
     .split("_")
     .map((part) => part[0].toUpperCase() + part.slice(1))
     .join(" ");
+}
+
+// ── Public audit summaries (B3 backend) ─────────────────────────
+
+export type PublicTupleSummaryApi = {
+  problems: number;
+  ethical_concerns: number;
+  stakes: number;
+  scrutiny_depth: number;
+  uptake: number;
+};
+
+export type PublicSubjectSummaryApi = {
+  scholarly_object_id: string | null;
+  audit_subject_id: string | null;
+  status_label: string;
+  tuple: PublicTupleSummaryApi | null;
+  crwe_reviewed_node_ids: string[];
+  element_review_count: number;
+  synthesis_review_count: number;
+  challenge_count: number;
+  latest_report: SynthesisReview | null;
+  episodes: AuditEpisode[];
+};
+
+export async function getPublicSummaryForScholarlyObject(
+  id: string,
+): Promise<PublicSubjectSummaryApi | null> {
+  return apiGet<PublicSubjectSummaryApi>(
+    `/api/public/scholarly-objects/${id}/summary`,
+  );
+}
+
+export async function getPublicSummariesForScholarlyObjects(
+  ids: string[],
+): Promise<PublicSubjectSummaryApi[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const summaries: PublicSubjectSummaryApi[] = [];
+
+  for (let start = 0; start < ids.length; start += 100) {
+    const batch = ids.slice(start, start + 100);
+    const result = await apiGet<PublicSubjectSummaryApi[]>(
+      `/api/public/scholarly-objects/summaries?ids=${batch
+        .map(encodeURIComponent)
+        .join(",")}`,
+    );
+
+    summaries.push(...(result ?? []));
+  }
+
+  return summaries;
+}
+
+// ── Evaluation tuple recomputation ──────────────────────────────
+
+export type EvalTupleParams = {
+  tEval?: string;
+  tags?: string[];
+  minEndorsements?: number;
+};
+
+export async function getEvalTupleWithParams(
+  episodeId: string,
+  params: EvalTupleParams,
+): Promise<EvalTuple | null> {
+  const query = new URLSearchParams();
+
+  if (params.tEval) {
+    query.set("t_eval", params.tEval);
+  }
+
+  if (params.tags && params.tags.length > 0) {
+    query.set("tags", params.tags.join(","));
+  }
+
+  if (params.minEndorsements !== undefined) {
+    query.set("min_endorsements", String(params.minEndorsements));
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+
+  return apiGet<EvalTuple>(`/api/audit-episodes/${episodeId}/eval-tuple${suffix}`);
+}
+
+// ── Timeline ────────────────────────────────────────────────────
+
+export type TimelineEntry =
+  | { entry_type: "fact"; fact: Fact }
+  | { entry_type: "membership"; membership: Record<string, unknown> }
+  | { entry_type: "episode_relation"; relation: EpisodeRelation }
+  | { entry_type: "synthesis_review"; review: SynthesisReview }
+  | { entry_type: "synthesis_relation"; relation: SynthesisReviewRelation };
+
+export async function getEpisodeTimeline(
+  episodeId: string,
+): Promise<TimelineEntry[]> {
+  return (await apiGet<TimelineEntry[]>(
+    `/api/audit-episodes/${episodeId}/timeline`,
+  )) ?? [];
+}
+
+// ── Relations / challenges ──────────────────────────────────────
+
+export type EpisodeRelation = {
+  id: string;
+  source_episode_id: string;
+  target_episode_id: string;
+  relation_type: unknown;
+  asserted_by: unknown;
+  asserted_at: string;
+};
+
+export type SynthesisReviewRelation = {
+  id: string;
+  source: string;
+  target: string;
+  relation_type:
+    | "supersedes"
+    | "related_to"
+    | { contests: { scope: "partial" | "full"; rationale: string | null } };
+  asserted_by: unknown;
+  asserted_at: string;
+};
+
+export async function getSynthesisReviewRelations(
+  reviewId: string,
+): Promise<SynthesisReviewRelation[]> {
+  return (await apiGet<SynthesisReviewRelation[]>(
+    `/api/synthesis-reviews/${reviewId}/relations`,
+  )) ?? [];
+}
+
+export async function contestSynthesisReview(
+  reviewId: string,
+  target: string,
+  scope: "partial" | "full",
+  rationale: string,
+): Promise<SynthesisReviewRelation | null> {
+  return apiSend<SynthesisReviewRelation>(
+    `/api/synthesis-reviews/${reviewId}/relations`,
+    {
+      target,
+      relation_type: { contests: { scope, rationale } },
+    },
+  );
+}
+
+// ── Session / auth ──────────────────────────────────────────────
+
+export type SessionUser = {
+  user_id: string;
+  display_name: string;
+  email: string;
+  roles: Array<"member" | "sponsor" | "reviewer" | "operator">;
+};
+
+export async function requestMagicLink(email: string): Promise<{
+  email: string;
+  expires_at: string;
+  sign_in_url: string;
+} | null> {
+  return apiSend(`/api/auth/request-link`, { email });
+}
+
+export async function completeMagicLink(
+  token: string,
+): Promise<{ user: SessionUser } | null> {
+  return apiSend(`/api/auth/complete`, { token });
+}
+
+export async function getSession(): Promise<SessionUser | null> {
+  const result = await apiGet<{ user: SessionUser | null }>(`/api/auth/session`);
+
+  return result?.user ?? null;
+}
+
+export async function signOut(): Promise<void> {
+  await apiSend(`/api/auth/sign-out`, {});
+}
+
+// ── Participation, petitions, responses ─────────────────────────
+
+export async function startPublicEpisode(
+  subjectId: string,
+  label: string,
+  notes?: string,
+): Promise<{ episode: AuditEpisode; participation_fact: Fact } | null> {
+  return apiSend(`/api/audit-subjects/${subjectId}/public-episodes`, {
+    label,
+    notes: notes ?? null,
+  });
+}
+
+export async function joinPublicEpisode(
+  episodeId: string,
+  note?: string,
+): Promise<Fact | null> {
+  return apiSend(`/api/audit-episodes/${episodeId}/join`, {
+    note: note ?? null,
+  });
+}
+
+export async function submitFeaturePetition(
+  episodeId: string,
+  elementReviewFactId: string,
+  rationale: string,
+): Promise<Fact | null> {
+  return apiSend(`/api/audit-episodes/${episodeId}/facts/feature-petition`, {
+    element_review: elementReviewFactId,
+    rationale,
+  });
+}
+
+export async function submitCwePetition(
+  episodeId: string,
+  body: {
+    kind: "new_element" | "applicability";
+    cwe_node?: string;
+    proposed_label?: string;
+    rationale: string;
+  },
+): Promise<Fact | null> {
+  return apiSend(`/api/audit-episodes/${episodeId}/facts/cwe-petition`, {
+    kind: body.kind,
+    cwe_node: body.cwe_node ?? null,
+    proposed_label: body.proposed_label ?? null,
+    rationale: body.rationale,
+  });
+}
+
+export async function submitChallengeResponse(
+  episodeId: string,
+  respondingTo: string[],
+  responseType: "accepts" | "contests" | "partially_accepts" | "revises_and_responds",
+  content: string,
+): Promise<Fact | null> {
+  return apiSend(`/api/audit-episodes/${episodeId}/facts/submitter-response`, {
+    responding_to: respondingTo,
+    response_type: responseType,
+    content,
+  });
+}
+
+// ── Shared credentialed fetch helpers ───────────────────────────
+
+async function apiGet<T>(endpoint: string): Promise<T | null> {
+  try {
+    const response = await fetch(`${apiBaseUrl}${endpoint}`, {
+      cache: "no-store",
+      credentials: "include",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function apiSend<T>(endpoint: string, body: unknown): Promise<T | null> {
+  try {
+    const response = await fetch(`${apiBaseUrl}${endpoint}`, {
+      method: "POST",
+      cache: "no-store",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const detail = await response.json().catch(() => null);
+      const message =
+        detail && typeof detail === "object" && "error" in detail
+          ? String((detail as { error: unknown }).error)
+          : `request failed (${response.status})`;
+
+      throw new Error(message);
+    }
+
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error;
+    }
+
+    return null;
+  }
+}
+
+export async function submitElementReview(
+  episodeId: string,
+  request: CreateEpisodeElementReviewRequest,
+): Promise<Fact | null> {
+  return apiSend<Fact>(
+    `/api/audit-episodes/${episodeId}/facts/element-review`,
+    request,
+  );
+}
+
+export async function submitSynthesisReview(
+  episodeId: string,
+  request: CreateSynthesisReviewRequest & { unsolicited?: boolean },
+): Promise<SynthesisReview | null> {
+  return apiSend<SynthesisReview>(
+    `/api/audit-episodes/${episodeId}/synthesis-reviews`,
+    request,
+  );
 }

@@ -1,4 +1,4 @@
-use csqd_domain::{
+use csqd_academic_adapter::{
     ArticleVersionGroupSummary, ArticleVersionKind, ArticleVersionSummary, AuditWorkStatus,
     ExternalArticleLocationSummary, ExternalArticleLocationType, ProblemAreaRelevance,
     ProblemAreaWorkSummary, ScholarlyObjectDetail, ScholarlyObjectSummary, ScholarlyObjectType,

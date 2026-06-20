@@ -1,16 +1,17 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    common::{Money, Principal, Provenance, Timestamp},
-    domain_instantiation::CWECriterionId,
-    solicitation::{PaymentScheme, SolicitationEventType},
+use crate::common::{Authored, Money, Principal, Provenance, Temporal, Timestamp};
+use crate::domain_instantiation::CWECriterionId;
+use crate::ids::{
+    AuditEpisodeId, AuditSubjectId, CWENodeId, DomainInstantiationId, FactId, UserId,
 };
+use crate::solicitation::{PaymentScheme, SolicitationEventType};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Fact {
-    pub id: String,
-    pub subject_id: String,
-    pub domain_instantiation_id: String,
+    pub id: FactId,
+    pub subject_id: AuditSubjectId,
+    pub domain_instantiation_id: DomainInstantiationId,
     pub occurred_at: Timestamp,
     pub payload: FactPayload,
     pub status: FactStatus,
@@ -18,11 +19,27 @@ pub struct Fact {
     pub external_refs: Vec<crate::common::ExternalRef>,
 }
 
+impl Temporal for Fact {
+    fn temporal_anchor(&self) -> Timestamp {
+        self.occurred_at
+    }
+}
+
+impl Authored for Fact {
+    fn principal(&self) -> Principal {
+        self.provenance.principal.clone()
+    }
+
+    fn authored_at(&self) -> Timestamp {
+        self.occurred_at
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateEpisodeElementReviewRequest {
-    pub cwe_node_id: String,
-    pub submitted_by: Option<String>,
-    pub solicitation: Option<String>,
+    pub cwe_node_id: CWENodeId,
+    pub submitted_by: Option<UserId>,
+    pub solicitation: Option<FactId>,
     pub finding: Finding,
     pub severity: Option<FindingSeverity>,
     pub confidence: Option<ConfidenceLevel>,
@@ -35,15 +52,15 @@ pub struct CreateEpisodeElementReviewRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateEpisodeSolicitationRequest {
-    pub issued_to: Option<String>,
-    pub cwe_node_id: String,
-    pub commission_fact_id: Option<String>,
+    pub issued_to: Option<UserId>,
+    pub cwe_node_id: CWENodeId,
+    pub commission_fact_id: Option<FactId>,
     pub payment_scheme: PaymentScheme,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CreateEpisodeSolicitationEventRequest {
-    pub solicitation_fact_id: String,
+    pub solicitation_fact_id: FactId,
     pub event_type: SolicitationEventType,
     pub principal: Option<Principal>,
     pub note: Option<String>,
@@ -61,8 +78,8 @@ pub enum FactPayload {
     },
     ElementReview {
         cwe_criterion: CWECriterionId,
-        submitted_by: String,
-        solicitation: Option<String>,
+        submitted_by: UserId,
+        solicitation: Option<FactId>,
         finding: Finding,
         severity: Option<FindingSeverity>,
         confidence: Option<ConfidenceLevel>,
@@ -75,26 +92,94 @@ pub enum FactPayload {
     },
     #[serde(rename = "er_solicitation")]
     ERSolicitation {
-        issued_to: String,
+        issued_to: UserId,
         cwe_criterion: CWECriterionId,
-        commission: String,
+        commission: FactId,
         payment_scheme: PaymentScheme,
     },
     SolicitationEvent {
-        solicitation: String,
+        solicitation: FactId,
         event_type: SolicitationEventType,
         principal: Principal,
         note: Option<String>,
     },
     SubmitterResponse {
-        responding_to: Vec<String>,
+        responding_to: Vec<FactId>,
         response_type: ResponseType,
         content: String,
-        revision_ref: Option<String>,
+        revision_ref: Option<AuditSubjectId>,
+    },
+    /// A user starting or joining a public audit episode. Prerequisite for
+    /// unsolicited synthesis reviews per the UI/UX strategy memo.
+    EpisodeParticipation {
+        episode: AuditEpisodeId,
+        participant: UserId,
+        action: ParticipationAction,
+        note: Option<String>,
+    },
+    /// Petition that an existing ElementReview by another author be placed in
+    /// the featured set. Affects default UX prominence, not discoverability.
+    FeaturePetition {
+        element_review: FactId,
+        petitioner: UserId,
+        rationale: String,
+    },
+    /// Petition for a new CWE element, or for the applicability of an existing
+    /// element to this audit subject.
+    #[serde(rename = "cwe_petition")]
+    CWEPetition {
+        kind: CWEPetitionKind,
+        cwe_node: Option<CWENodeId>,
+        proposed_label: Option<String>,
+        petitioner: UserId,
+        rationale: String,
+    },
+    /// Operator curation act: grants or revokes featured status for an
+    /// ElementReview or SynthesisReview. Featured status is derived from the
+    /// latest active CurationDecision, keeping curation provenance-bearing
+    /// rather than mutable state on an immutable fact.
+    CurationDecision {
+        target: CurationTarget,
+        decision: CurationOutcome,
+        decided_by: Principal,
+        rationale: Option<String>,
+        petitions: Vec<FactId>,
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ParticipationAction {
+    Start,
+    Join,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CWEPetitionKind {
+    NewElement,
+    Applicability,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CurationTarget {
+    ElementReview {
+        fact_id: FactId,
+    },
+    SynthesisReview {
+        review_id: crate::ids::SynthesisReviewId,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CurationOutcome {
+    Feature,
+    Unfeature,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FactPayloadKind {
     AuditCommission,
@@ -103,6 +188,43 @@ pub enum FactPayloadKind {
     ErSolicitation,
     SolicitationEvent,
     SubmitterResponse,
+    EpisodeParticipation,
+    FeaturePetition,
+    #[serde(rename = "cwe_petition")]
+    CwePetition,
+    CurationDecision,
+}
+
+impl FactPayload {
+    pub fn kind(&self) -> FactPayloadKind {
+        match self {
+            Self::AuditCommission { .. } => FactPayloadKind::AuditCommission,
+            Self::ElementReview { .. } => FactPayloadKind::ElementReview,
+            Self::ERSolicitation { .. } => FactPayloadKind::ErSolicitation,
+            Self::SolicitationEvent { .. } => FactPayloadKind::SolicitationEvent,
+            Self::SubmitterResponse { .. } => FactPayloadKind::SubmitterResponse,
+            Self::EpisodeParticipation { .. } => FactPayloadKind::EpisodeParticipation,
+            Self::FeaturePetition { .. } => FactPayloadKind::FeaturePetition,
+            Self::CWEPetition { .. } => FactPayloadKind::CwePetition,
+            Self::CurationDecision { .. } => FactPayloadKind::CurationDecision,
+        }
+    }
+}
+
+impl FactPayloadKind {
+    pub fn as_db_str(&self) -> &'static str {
+        match self {
+            Self::AuditCommission => "audit_commission",
+            Self::ElementReview => "element_review",
+            Self::ErSolicitation => "er_solicitation",
+            Self::SolicitationEvent => "solicitation_event",
+            Self::SubmitterResponse => "submitter_response",
+            Self::EpisodeParticipation => "episode_participation",
+            Self::FeaturePetition => "feature_petition",
+            Self::CwePetition => "cwe_petition",
+            Self::CurationDecision => "curation_decision",
+        }
+    }
 }
 
 impl TryFrom<&str> for FactPayloadKind {
@@ -115,6 +237,10 @@ impl TryFrom<&str> for FactPayloadKind {
             "er_solicitation" => Ok(Self::ErSolicitation),
             "solicitation_event" => Ok(Self::SolicitationEvent),
             "submitter_response" => Ok(Self::SubmitterResponse),
+            "episode_participation" => Ok(Self::EpisodeParticipation),
+            "feature_petition" => Ok(Self::FeaturePetition),
+            "cwe_petition" => Ok(Self::CwePetition),
+            "curation_decision" => Ok(Self::CurationDecision),
             other => Err(format!("unknown fact payload kind: {other}")),
         }
     }
@@ -127,7 +253,7 @@ pub enum FactStatus {
     Superseded {
         superseded_by: Principal,
         superseded_at: Timestamp,
-        replaced_by: Option<String>,
+        replaced_by: Option<FactId>,
     },
     Retracted {
         retracted_by: Principal,
@@ -136,7 +262,7 @@ pub enum FactStatus {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Finding {
     NonEthicalProblem,
@@ -145,7 +271,7 @@ pub enum Finding {
     Inconclusive,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FindingSeverity {
     Minor,
@@ -154,7 +280,7 @@ pub enum FindingSeverity {
     Critical,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConfidenceLevel {
     Low,
@@ -163,15 +289,23 @@ pub enum ConfidenceLevel {
     High,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ResponseType {
+    Accepts,
+    Contests,
+    PartiallyAccepts,
+    RevisesAndResponds,
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
 
-    use crate::{
-        common::Money,
-        domain_instantiation::CWECriterionId,
-        solicitation::{PaymentCondition, PaymentScheme},
-    };
+    use crate::common::Money;
+    use crate::domain_instantiation::CWECriterionId;
+    use crate::ids::{CWENodeId, DomainInstantiationId, FactId, UserId};
+    use crate::solicitation::{PaymentCondition, PaymentScheme};
 
     use super::{ConfidenceLevel, FactPayload, FactPayloadKind};
 
@@ -192,12 +326,12 @@ mod tests {
     #[test]
     fn encodes_er_solicitation_payload_with_expected_tag() {
         let payload = FactPayload::ERSolicitation {
-            issued_to: "reviewer-1".to_string(),
+            issued_to: UserId::new("reviewer-1"),
             cwe_criterion: CWECriterionId {
-                domain: "domain-1".to_string(),
-                node_id: "criterion-1".to_string(),
+                domain: DomainInstantiationId::new("domain-1"),
+                node_id: CWENodeId::new("criterion-1"),
             },
-            commission: "fact-1".to_string(),
+            commission: FactId::new("fact-1"),
             payment_scheme: PaymentScheme {
                 amount: Money {
                     amount: 100.0,
@@ -233,13 +367,23 @@ mod tests {
 
         assert!(matches!(payload, FactPayload::ElementReview { .. }));
     }
-}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ResponseType {
-    Accepts,
-    Contests,
-    PartiallyAccepts,
-    RevisesAndResponds,
+    #[test]
+    fn payload_kind_round_trips_through_db_strings() {
+        let payload: FactPayload = serde_json::from_value(json!({
+            "episode_participation": {
+                "episode": "episode-1",
+                "participant": "user-1",
+                "action": "join",
+                "note": null
+            }
+        }))
+        .unwrap();
+        let kind = payload.kind();
+
+        assert_eq!(
+            FactPayloadKind::try_from(kind.as_db_str()).unwrap(),
+            FactPayloadKind::EpisodeParticipation
+        );
+    }
 }

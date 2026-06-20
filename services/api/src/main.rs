@@ -23,13 +23,14 @@ async fn main() {
     let db = db::connect(&config)
         .await
         .expect("database connection should be available");
-    let state = AppState::new(db);
+    let api_addr = config.api_addr;
+    let state = AppState::new(db, config);
 
-    let listener = tokio::net::TcpListener::bind(config.api_addr)
+    let listener = tokio::net::TcpListener::bind(api_addr)
         .await
         .expect("API listener should bind");
 
-    tracing::info!("C-SQD API listening on http://{}", config.api_addr);
+    tracing::info!("C-SQD API listening on http://{api_addr}");
 
     axum::serve(listener, routes::router(state))
         .await

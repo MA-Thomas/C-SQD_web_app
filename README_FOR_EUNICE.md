@@ -1,8 +1,8 @@
 # README For Eunice
 
-This repo contains the C-SQD web app: a Next.js frontend, Rust API, and local PostgreSQL database for commissioned epistemic audit infrastructure.
+This repo contains the C-SQD web app: a Next.js frontend, Rust API, and local PostgreSQL database for public and commissioned epistemic audit infrastructure.
 
-The current app still has an Academic Publishing / Scholarly Search adapter, but the current GTM direction is broader: organizations commission decomposed audits of claims, papers, models, datasets, reports, and other artifacts.
+The current MVP presents C-SQD first as a public audit registry and method for Academic Peer Review. Sponsor, reviewer, and operations workflows still exist as backstage surfaces behind identity and role state.
 
 ## 1. Clone The Repo
 
@@ -91,13 +91,20 @@ http://localhost:3000
 
 Useful pages:
 
-- `/` Audit Console for commissioned audit episodes
-- `/commission` commission a scoped audit
-- `/audit-episodes/:id` episode workspace for facts and element reviews
-- `/intake` Scholarly Intake / Academic Publishing metadata adapter
-- `/browse` Academic Publishing problem-area browse
+- `/` public registry home
+- `/discover` public scholarly work discovery
+- `/public-audits` public SynthesisReviews and ElementReview depth
+- `/method` C-SQD method explainer
+- `/commission` commission a deeper audit
+- `/intake` Search / Register scholarly work metadata adapter
+- `/browse` CRWE criterion browse
+- `/scholarly-objects/:id` public audit subject page
+- `/audit-episodes/:id` authenticated episode workspace gate
+- `/sponsor-console` authenticated sponsor console gate
+- `/reviewer-queue` authenticated reviewer queue gate
+- `/operations` authenticated operations gate
+- `/library` authenticated library/watchlist gate
 - `/domains` C-SQD domain overview
-- `/library` saved audit subjects
 
 API health check:
 

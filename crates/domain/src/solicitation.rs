@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::common::{Money, Principal, Timestamp};
+use crate::ids::FactId;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PaymentScheme {
@@ -22,15 +23,15 @@ pub enum PaymentCondition {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SolicitationEvent {
-    pub id: String,
-    pub solicitation_id: String,
+    pub id: FactId,
+    pub solicitation_id: FactId,
     pub event_type: SolicitationEventType,
     pub occurred_at: Timestamp,
     pub principal: Principal,
     pub note: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SolicitationEventType {
     Issued,
