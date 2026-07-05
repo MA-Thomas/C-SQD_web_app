@@ -1,0 +1,809 @@
+--- Page 1 ---
+RESEA RCH ARTICL E
+Deep mendelian randomization: Investigating
+the causal knowledge of genomic deep
+learning models
+Stephen Malina
+ID
+1,2¤
+*, Daniel Cizin
+ID
+1,3
+, David A. Knowles
+ID
+1,4,5,6
+1 Department of Computer Science, Columbia University , New York, New York, United States of America,
+2 Dyno Therape utics, Watertown, Massach usetts, United States of America, 3 Tri-Insti tutional Ph.D. Program
+in Comput ational Biology and Medicine, Weill Cornell Medicine, New York, New York, United States of
+America, 4 New York Genom e Center, New York, New York, United States of America, 5 Department of
+System s Biology, Columbia Univers ity, New York, New York, United States of America, 6 Data Science
+Institute, Columb ia Univers ity, New York, New York, United States of America
+¤ Current address: Dyno Therapeutic s, Watertown, MA, United States of America
+* stephenm alina@gma il.com, stephen.mal ina@dynotx .com
+Abstract
+Multi-task deep learning (DL) models can accurately predict diverse genomic marks from
+sequence, but whether these models learn the causal relationships between genomic
+marks is unknown. Here, we describe Deep Mendelian Randomization (DeepMR), a method
+for estimating causal relationships between genomic marks learned by genomic DL models.
+By combining Mendelian randomization with in silico mutagenesis, DeepMR obtains local
+(locus specific) and global estimates of (an assumed) linear causal relationship between
+marks. In a simulation designed to test recovery of pairwise causal relations between tran-
+scription factors (TFs), DeepMR gives accurate and unbiased estimates of the ‘true’ global
+causal effect, but its coverage decays in the presence of sequence-depende nt confounding .
+We then apply DeepMR to examine the global relationships learned by a state-of-the-art DL
+model, BPNet, between TFs involved in reprogramming . DeepMR’s causal effect estimates
+validate previously hypothesized relationships between TFs and suggest new relationships
+for future investigation.
+Author summary
+Chromatin marks such as transcription factor (TF) binding, accessibility, and histone
+modifications play a critical role in controlling cell behavior and identity. In recent years,
+multi-task deep learning (DL) models have achieved remarkable success at predicting
+these and other chromatin marks. However, it is unclear to what extent these models
+learn meaningful mechanistic, even causal, relationships between these variables. Our
+work aims to fill this gap by combining in silico mutagenesis, deep learning uncertainty
+estimation and causal inference (specifically Mendelian randomization, MR), into a
+framework we call DeepMR. We describe DeepMR, apply it to a simulation intended to
+test its ability to recover causal relationships between features from a learned model, and
+PLOS COMP UTATIONAL  BIOLOGY
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 1 / 14
+a1111111111
+a1111111111
+a1111111111
+a1111111111
+a1111111111
+OPEN ACCESS
+Citation: Malina S, Cizin D, Knowles DA (2022)
+Deep mendelian randomization : Investigating the
+causal knowledge of genomic deep learning
+models. PLoS Comput Biol 18(10): e1009880.
+https://do i.org/10.1371/j ournal.pc bi.1009880
+Editor: Luca Pinello , Massachu setts General
+Hospital, UNITED STATES
+Received: February 1, 2022
+Accepted: September 19, 2022
+Published: October 20, 2022
+Copyright: © 2022 Malina et al. This is an open
+access article distributed under the terms of the
+Creative Commons Attribution License, which
+permits unrestricte d use, distribu tion, and
+reproduction in any medium, provided the original
+author and source are credited.
+Data Availabilit y Statement: The source and
+instructions for downloadi ng the data used to
+produce the results and analyses in this experime nt
+can be found at: https:// github.com/an1 lam/
+deepmr/bl ob/master/REP RODUCIBILI TY.md.
+Funding: The author(s) received no specific
+funding for this work.
+Competing interests : I have read the journal’s
+policy and the authors of this manuscript have the
+following competing interests: SM is employed by
+and holds equity in Dyno Therapeutics.
+
+
+--- Page 2 ---
+then use it to examine the relationships learned by a state-of-the-art DL model, BPNet.
+Our results suggest that DeepMR can estimate causal relationships under its stated
+assumptions and provide further evidence for previously hypothesized relationships
+between TFs identified by BPNet.
+Introduction
+Deep learning (DL) has achieved success predicting genomic marks such as transcription fac-
+tor (TF) binding [1, 2], chromatin accessibility [2, 3], histone modifications [4], RNA binding
+protein (RBP) binding [1, 5–7] and splicing [8, 9] from DNA (or RNA) sequence. These mod-
+els, often convolutional neural networks [10], typically achieve high predictive accuracy and
+recognize sequence features that match those found by orthogonal experiments such as SELEX
+[11]. In particular, multi-task models such as DeepSEA [2] and BPNet [12] can accurately pre-
+dict multiple genomic marks simultaneously. Following [13], we define a “mark” as a position
+in the genome where the number of reads from an epigenomic assay is significantly above
+background. Here we ask: do such multi-task models, through learning to predict multiple
+marks jointly, gain an implicit understanding of mechanistic, causal relationships between
+marks?
+We attempt to answer this question by developing Deep Mendelian Randomization
+(DeepMR). DeepMR combines in silico mutagenesis with Mendelian randomization (MR)
+[14], an instrumental variable approach for causal inference, to estimate learned causal effects
+in genomic DL models. DeepMR obtains local (sequence level) and global (genome level) esti-
+mates of (an assumed) linear causal relationship between pairs of marks learned by a multi-
+task genomic prediction model. DeepMR draws on four threads of work spanning machine
+learning and statistical genetics.
+DL for functional genomics
+A major objective in functional genomics is mapping sequence-to-function relationships
+between genotype and molecular phenotypes, typically leveraging large-scale observational
+data from high-throughput assays such as ChIP-seq [15–18], DNase-seq [19], and ATAC-seq
+[20]. Understanding this mapping enables 1) better understanding of epigenomic regulation,
+2) variant interpretation, and 3) more accurate prediction of downstream traits. However,
+achieving these goals requires decoding complex relationships between high-dimensional
+genomic sequence inputs and interrelated outputs from large, noisy datasets. Encouraged by
+DL models’ ability to overcome similar challenges in the fields of computer vision and natural
+language processing, genomics researchers have trained DL models on functional genomics
+datasets with substantial success.
+Early work showed that DL could predict sequence-to-function relationships accurately
+and demonstrated their promise for identifying trait-associated variants. DeepBind [1], one of
+the earliest DL sequence-to-function classifiers, outperformed then state-of-the-art models at
+predicting TF binding and RBP binding from sequence. DeepBind and other classification
+models—e.g. DeepSEA [2] and Basset [3]—also identified trait-associated variants with higher
+accuracy than previous methods. More recent work has leveraged DL models to improve our
+understanding of epigenomic regulatory logic. In particular, [12] trained a regression model,
+BPNet, to predict the binding of four TFs and used it to dissect the motif-based regulatory
+grammar that governs their binding. Together, these papers illustrate the promise of DL mod-
+els for not only predicting function from sequence but also improving our understanding of
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 2 / 14
+
+
+--- Page 3 ---
+epigenomic regulation and ability to anticipate disease risk. In our work, we seek evidence that
+genomic DL models learn meaningful high-level relationships between output marks.
+Model interpretation
+Local interpretation methods characterize how specific input (sequence) features influence
+predictions or intermediate layer activations (e.g., saliency maps [21], guided back-propaga-
+tion [22], DeepLIFT [23], and DeepSHAP [24]). Even DeepLIFT, which was designed with
+genomic DL in mind, focuses on interpreting individual model predictions for a single output
+rather than discovering relationships between outputs and is therefore complementary to our
+work.
+Closer to our work, [25]’s Global Importance Analysis (GIA) assesses the global effect size
+of different patterns on model predictions. While resembling DeepMR in terms of its focus on
+global effects, GIA allows users to test narrower hypotheses about specific features such as
+motifs and uses synthetic instead of observed sequences. As such, GIA is also complementary
+to DeepMR, potentially providing a method for uncovering specific patterns that explain
+higher level relationships discovered by DeepMR.
+Saturation in silico mutagenesis characterizes how a model’s predictions for a specific input
+change as a result of all possible point mutations to the input. Saturation mutagenesis has been
+used to assess the learned representations of genomic DL models such as DeepBind [1], cDeep-
+Bind [6], DeepSEA [2], and Basset [3]. Here, we use saturation mutagenesis (with uncertainty
+estimates generated using Deep Ensembles [26]) to generate a set of estimated variant effect
+sizes which we then provide as input to MR.
+Uncertainty estimates and coverage of DL predictions
+Many methods for obtaining uncertainty estimates from DL models exist [27]. Our work is
+not focused on testing different uncertainty estimation methods so we chose Deep Ensembles
+[26], which, despite their simplicity, consistently perform well in empirical comparisons [26,
+28]. Briefly, a Deep Ensemble is a collection of DL models trained from different random ini-
+tializations, which leads to different learned weights, resulting in slightly different predictions
+for each data point. Deep Ensembles provide uncertainty estimates in the form of variance
+between the different submodels’ predictions for a given data point. Despite this, [29] found
+that uncertainty estimates from Deep Ensembles were often miscalibrated but could be res-
+cued using isotonic regression (a solution we adopt here).
+Mendelian randomization
+MR is an instrumental variable [30] technique for estimating (typically linear) causal effects in
+the presence of potential unobserved confounders. Instrumental variable approaches enable
+causal inference in the presence of unobserved confounding by taking advantage of instru-
+ments, auxiliary variables associated with the purported cause but independent of any con-
+founding. MR was originally developed for inferring causal effects from population-scale
+observational data (i.e., genome-wide association studies, GWAS). MR takes advantage of
+genetic variation inducing population-level phenotypic variation that is independent of post-
+natal confounders to infer unbiased causal effects. In an early demonstration of MR, [14] used
+MR to estimate the effect of C-Reactive Protein on insulin resistance. In contrast to prior stud-
+ies, their results suggest that C-Reactive Protein levels may not have a meaningful effect on
+insulin resistance. While previous studies sought to control for confounding directly, [14] use
+a Single Nucleotide Polymorphism (SNP) in the CRP gene as the genetic variant (instrument)
+for their MR analysis, which they have higher confidence lacks any association with post-natal
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 3 / 14
+
+
+--- Page 4 ---
+confounders. This is one of several examples in which MR helped infer a more accurate esti-
+mate of an underlying causal effect.
+Here we explore MR’s application to estimating causal effects implied by model-generated
+“data” with in silico mutations taking the place of true genetic variants. Putative causes and
+effects are genomic marks such as TF binding or chromatin accessibility. Applied to variant
+effects predicted by accurate machine learning models, MR allows us to infer the strength of
+relationships between phenotypes despite these relationships being confounded by the influ-
+ence of other, potentially unobserved marks. While MR is traditionally applied to observed
+rather than estimated effects, our work attempts to show that effects estimated by DL models
+can satisfy the assumptions (described below) required for valid MR estimates.
+MR only produces valid causal effect estimates under specific assumptions (Fig 1 under
+Estimate) [14]. Let Z be a variable we intend to use as an instrument (a genetic variant for
+example), X a purported cause (exposure), and Y a purported effect (outcome), and suppose
+that there may be unobserved confounding between X and Y, denoted by U. Then, MR gives
+an unbiased estimate of the causal effect of X on Y if:
+1. Z is independent of U (Unconfoundedness),
+2. Z is not independent of X, and
+3. Z only influences Y through X (Exclusion Restriction).
+Early MR studies assumed that all MR assumptions were perfectly satisfied and therefore
+that a single instrument was sufficient for inferring a causal effect. In this setting, exposure-to-
+outcome causal effects can be inferred via either the Wald ratio [31] or two-stage least squares
+regression [30, 32]. The Wald ratio is computed as the instrument-to-outcome regression coef-
+ficient divided by the instrument-to-exposu re coefficient. In two-stage least squares, we still
+perform an instrument-to-exp osure regression but then regress the outcome onto the pre-
+dicted rather than observed exposure values. The resulting coefficient is the causal effect esti-
+mate. With a single instrument, two-stage least squares produces identical results to the Wald
+ratio but has the advantage of being compatible with multiple instruments.
+Recently developed MR methods such as Robust Adjusted Profile Score [33], MR-Egger
+[34], and the modal-based estimator [35] leverage multiple instruments to relax some of these
+assumptions without compromising the validity of results.
+DeepMR can work with any MR method that takes multiple instruments’ effect sizes and
+standard errors as inputs and can produce effect size estimates and confidence intervals for
+Fig 1. Graphical representatio n of DeepMR’s high-level steps. DeepMR combines in silico mutagene sis and
+Mendelia n randomization (see Algorithm overview) . Predict corresponds to steps 1 through 4. Estimate correspond s
+to step 5. Aggregate corresponds to step 6.
+https://d oi.org/10.1371/j ournal.pc bi.1009880. g001
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 4 / 14
+
+
+--- Page 5 ---
+those estimates. In this work, we estimate causal effects using 1) a simple baseline where we
+take the average of the Wald ratios for each instrument and 2) a robust variant of MR-Egger
+with the goal of being robust to invalid instruments. MR-Egger seeks robustness to violations
+of Exclusion Restriction, otherwise known as horizontal pleiotropy in statistical genetics [36].
+MR-Egger is based on an analogy between MR with multiple instruments and meta-analysis.
+It treats each instrument as a ‘study’ enabling violations of exclusion restriction (Assumption
+3) to be viewed as a form of small study bias. As long as the strength of the instrument-expo-
+sure relationship is independent of the direct effect of the instrument on the outcome, MR-Eg-
+ger gives accurate estimates of causal effects in the presence of instruments that violate
+exclusion restriction.
+Methods
+Algorithm overview
+DeepMR estimates causal effects between variables predicted by a multi-task model. It takes a
+trained, calibrated (regression or classification) model that outputs predictive means and stan-
+dard errors and a set of one-hot encoded sequences as input. It outputs local, sequence-specific
+causal effects and global, exposure/outcome-spe cific causal effects. It accomplishes this (see
+Fig 1 for a visual depiction) via the following steps for each exposure/outcome pair:
+1. Randomly sample sequences to predict exposure and outcome values for “reference
+sequences”.
+2. Perform saturation in-silico mutagenesis for each reference sequence to generate (sequence
+length × alphabet size − 1) mutated sequences per reference sequence.
+3. For each set of pairs of mutant and reference sequences, generate predictive means and
+standard errors for exposure and outcome features.
+4. Generate (sequence length × alphabet size − 1) effect sizes by subtracting each reference
+sequence’s predictive mean from the corresponding mutated sequences’ predictive means.
+Additionally, compute the standard errors of these differences.
+5. Filter instruments by effect size based on a z-score threshold (Assumption 2) to only
+include those that are strongly associated with the exposure.
+6. Estimate a per-sequence region causal effect by running MR on the remaining effect sizes
+and their standard errors.
+7. Estimate global causal effects using a random effects meta-analysis across sequence regions
+(loci).
+Exposure and outcome effect size & standard error estimation. Step 4 requires variant
+effect estimates for each mutation for both the exposure X and outcome Y. Let f
+X
+(Z, θ
+(i)
+) and
+f
+Y
+(Z, θ
+(i)
+) be the model for X and Y respectively with input sequence Z and parameters θ
+(i)
+rep-
+resenting the ith component of the deep ensemble. Appealing to the interpretation of a deep
+ensemble as an approximation to a posterior predictive distribution [37], the posterior expec-
+tation for X is E X j Z½ � �
+1
+N
+P
+N
+i¼1
+f
+X
+ðZ ; y
+ðiÞ
+Þ. Calculating this Monte Carlo (MC) estimate for
+both the mutant sequence m and reference r we can obtain an unbiased estimate of the variant
+effect
+^
+b
+ZX
+¼ EðX j Z ¼ mÞ   E X j Z ¼ r½ �. We proceed analogously for the outcome Y.
+A naive estimate of the standard errors (s.e.) would use va r½
+^
+b
+ZX
+� ¼ va r½X j Z ¼ m� þ
+va r½X j Z ¼ r � with the variances estimated by MC. However, this would give inflated s.e. since
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 5 / 14
+
+
+--- Page 6 ---
+it ignores statistical dependence resulting from θ. We therefore instead use
+var½
+^
+b
+ZX
+� ¼ var½ðX j Z ¼ mÞ   ðX j Z ¼ r Þ�
+¼
+1
+N
+va r½X j Z ¼ m� þ var X j Z ¼ r½ �   2cov X j Z ¼ m; X j Z ¼ r½ �
+¼
+1
+N
+X
+N
+i¼1
+½f
+X
+ðm; y
+ðiÞ
+Þ   E½X j Z ¼ m��
+2
+þ
+1
+N
+X
+N
+i¼1
+½f
+X
+ðr ; y
+ðiÞ
+Þ   E½X j Z ¼ r ��
+2
+ 
+2
+1
+N
+X
+N
+i¼1
+f
+X
+m; y
+ðiÞ
+  �
+f
+X
+r ; y
+ðiÞ
+  �� �
+  E X j Z ¼ m½ �E X j Z ¼ r½ �
+ !
+:
+We again proceed analogously for the outcome Y.
+Per sequence region causal effect estimation. For the per-sequence region causal effect
+estimation, we treat the subset of
+^
+b
+ZX
+;
+^
+b
+ZY
+pairs and their accompanying s.e. values that passed
+the step 5 filter (i.e. the mutation is associated with X) as input to the chosen MR method.
+From this, MR provides us with one causal effect estimate and associated s.e. per sequence
+region.
+To estimate a global causal effect, we apply a random effects meta-analysis to the per-
+sequence region causal effects and their s.e. values. Briefly, a random effects meta-analysis
+assumes that the true effect for each study (sequence region) is drawn from an underlying
+global distribution of effect sizes, which is typically assumed to be Gaussian whose mean and
+variance are to be estimated. Per-sequence region effect are observed with mean equal to the
+the true effect and Gaussian noise with variance determined by the s.e. from MR. To perform
+the random effects meta-analysis, we use the meta R package [38].
+Simulation
+Our simulation is inspired by [39] but tailored to test DeepMR’s ability to estimate the strength
+of the causal relationship between exposure and outcome TFs when binding to simulated
+L = 100bp DNA sequences. The exposure TF’s binding affinity, c
+e
+, is determined primarily by
+the probability of the TF (represented as a position weight matrix, PWM) binding anywhere
+on the sequence (see S1 Text), p
+e
+,
+c
+e
+¼ ap
+e
+þ Zp
+c
+þ tz þ 1; ð1Þ
+where p
+c
+is the binding probability of an optional confounder TF, and z � Bernoulli(0.5) is an
+optional sequence independent confounder. By contrast, the outcome TF’s binding affinity c
+o
+is a multiplicative function of both the strength of its own motif match and the strength of the
+exposure’s, i.e.
+c
+o
+¼ agp
+o
+p
+e
+þ np
+c
+þ tz þ 1:
+Here the effect size γ represents the influence of the exposure’s binding on the outcome’s bind-
+ing in raw counts space. γ is not the true causal effect because the true CE is defined in
+Anscombe-transformed rather than raw counts space. γ is sampled (once per simulation run)
+from an equal proportion mixture of two normals with means 10 and 1 (and variance 0.5), in
+order to test DeepMRś ability to differentiate between two clusters of CEs, one much lower
+than the other. We sample α from N(100, 3) (once per simulation run) and fix η = 20, ν = 30
+and τ = 25.
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 6 / 14
+
+
+--- Page 7 ---
+The simulation model corresponds to a causal effect of the exposure TF on the outcome TF:
+with no exposure TF binding there can be no outcome TF binding. When present, both types
+of confounding influence exposure and outcome counts multiplicatively.
+Finally to represent experimental noise, counts are Poisson distributed with mean equal to
+the affinity values. We did not use a negative binomial since we expect the random sequence
+generation process will naturally induce overdispersion. Finally, we Anscombe transform the
+raw counts [39].
+Length 100 sequences are sampled uniformly at random. For each TF, with 50% probability
+we insert a subsequence sampled from its PWM at a random position. To assign a binding
+probability we convolve the TF’s PWM over the sequence and apply the soft-or function (see
+S1 Text).
+We considered four different scenarios: 1) no unobserved confounding, 2) sequence-based
+unobserved confounding, 3) non-sequence-based unobserved confounding, and 4) both types
+of confounding in tandem. Sequence-dependent unobserved confounding adds an additional
+TF (and corresponding) motif which influences the binding strength of both exposure and
+outcome TFs.
+We train ensembles of convolutional neural network (CNN) models on the data produced
+in each scenario and use them, combined with held-out test sets, as inputs for DeepMR.
+True causal effect computation. To assess the quality of our method, we need to compare
+its estimates to the ground truth. DeepMR estimates the effect of a unit change in the exposure
+on the outcome by using single point mutations that meaningfully affect the exposure as
+instruments. Our simulation can provide us with the true affinity for any given mutated
+sequence, which we leverage to compute true sequence-region level causal effects. For a given
+sequence which contains the exposure motif, the true causal effect is found by regressing the
+effect of all point mutations to bases within the exposure motif on the outcome on the corre-
+sponding effects on the exposure. This is similar to the two-stage least squares MR method
+[32] where all mutations within the the exposure motif are assumed to be valid instruments.
+Simulation & model parameters. In all simulation runs, we used PWMs representing
+motifs for the GATA (exposure), TAL1 (outcome), and SOX2 (confounder) transcription fac-
+tors, all drawn from ENCODE’s motif database [40] and sampled using the simdna library
+(https://github.com/kundajel ab/simdna).
+To model this data, we trained 3-layer CNN with 15 filters per convolutional layer and a fil-
+ter width of 7 for maximum 100 epochs with early-stopping. The three convolutional layers
+were followed by 2 hidden layers of width 30. Models were trained using Adam with a learning
+rate of 10
+−3
+and otherwise standard parameters combined with an MSE loss to predict the
+Anscombe-transformed counts for the exposure and outcome jointly.
+Code for all experiments can be found at https://github.com/an1 lam/deepmr.
+Results
+We first assess DeepMR on simulated data where we know the ground-truth relationship
+between the modeled TFs. We then apply DeepMR to determining the causal relationships
+between four TFs involved in pluripotency.
+Simulation
+DeepMR accurately estimates global CEs in all cases. We evaluated DeepMR’s local and
+global CE estimates in the one unconfounded and three confounded scenarios (see Methods).
+In each scenario, we performed causal effect estimation (including learning the sequence-to-
+binding CNN ensemble) for 50 simulations using 10000 training sequences and 1000 test
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 7 / 14
+
+
+--- Page 8 ---
+sequences for CE estimation. In each scenario, we compare results obtained using MR-Egger as
+the MR method to those obtained using a simple MR baseline of taking the average and stan-
+dard deviations of the Wald ratios to produce each local CE and interval estimate respectively.
+Our CNN models achieved R
+2
+validation accuracy averaging around 0.8 for (transformed)
+exposure counts and 0.7 for (transformed) outcome counts. For the causal inference we
+assessed two metrics: accuracy of global CEs and coverage of local CE 95% confidence inter-
+vals. We judged accuracy of global CEs in terms of the correlation between the global causal
+effect estimates and the average of the true global causal effects and the frequency at which the
+CE estimate ±2τ capture said average across 50 simulations. DeepMR accurately estimates true
+global CEs in all cases (Fig 2, Table 1 for R
+2
+accuracy values). In the unconfounded and non-
+sequence confounding cases, we see near-perfect agreement between estimated and true global
+CEs. In the sequence-dependent confounding case, DeepMR more often underestimates true
+CEs, although usually by less than one s.e., suggesting that the influence of the unlabeled SOX
+motif score on the exposure and outcome label values biases DeepMR’s global CE estimates
+towards 0.
+Fig 2. In simulations, DeepMR estimates causal effects between TFs even in the presence of unobser ved confoun ding. Top row: true vs. estimated
+global causal effects (CEs) across 50 rounds for unconfound ed, random confounde d, and sequenc e-dependent confounded cases respectively. Blue bars
+denote ±2σ where σ denotes the standard error of the mean and orange bars denote ±2τ where τ denotes the between-re gion standard deviation. Bottom
+row: local CE coverage (how often the true CE is in the 95% confiden ce interval) across the three experime nts (same order) with the red line denoting
+average coverage.
+https:// doi.org/10.1371 /journal.pcbi.1 009880.g002
+Table 1. DeepMR estimates causal effects (CE) accurately with high coverage. Accuracy is R
+2
+. Local correspond s to CEs for individual regions, global for the meta-analy -
+sis mean. For global CE accuracy and coverage the first value comes from using MR-Eg ger and the second from the baseline MR procedur e.
+Global CE Accuracy Global CE Coverag e Local CE CI Coverage
+Unconfounded 0.97/0.98 1.00/1.00 0.87
+Random 0.98/0.97 1.00/0.96 0.81
+Sequen ce 0.97/0.98 0.98/0.86 0.87
+Both 0.78/0.96 0.98/0.92 0.81
+https://do i.org/10.1371/j ournal.pc bi.1009880. t001
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 8 / 14
+
+
+--- Page 9 ---
+DeepMR’s coverage decays in the presence of sequence-dependent confounding. We
+judged coverage of global CEs by measuring the fraction of ±2τ intervals that capture the true
+global CE. We judged coverage of local CEs by examining the distribution of 95% confidence
+interval coverage across 50 simulations in the four scenarios. DeepMR performs better in the
+unconfounded and random confounding scenarios. While average coverage (see Table 1) is
+relatively constant across scenarios, in Fig 2 we observe a longer tail of low coverage values in
+the random (see Table A and Table B in S2 Text for the impact of confounder strength on
+these metrics) and sequence-dependent confounding scenarios. Furthermore, global CE cov-
+erage in the sequence-dependent and scenario is much lower. Together, these results suggest
+that DeepMR can somewhat underestimate variance in confounded scenarios and produces
+more calibrated local CE estimates in cases where there is minimal or no sequence-dependent
+confounding.
+DeepMR produces accurate estimates using both MR-Egger and the baseline. Overall,
+DeepMR’s estimates are accurate using both MR-Egger and the baseline estimation method.
+In fact, the baseline method generates more accurate estimates in the presence of both con-
+founding types, likely because MR-Egger underestimates the CEs in this setting. However,
+there is seemingly a trade-off where MR-Egger provides better coverage in the presence of
+sequence-dependent confounding, whereas the baseline’s coverage is substantially reduced in
+this setting.
+Estimating causal effects between four TFs involved in reprogramming
+Given the promising results on simulated data, we applied DeepMR to detecting CEs between
+four TFs involved in induced pluripotent stem cell (iPSC) reprogramming: Oct4, Sox2, Nanog,
+and Klf4. We used the ChIP-nexus data and model (BPNet) previously described in [12] but
+trained a 5-component ensemble. We closely followed the data processing and model training
+process used in the original paper, described in full at the BPNet repository (https://github.
+com/kundajelab/bpnet). We calibrated the resulting Deep Ensemble with isotonic regression
+using validation data. We computed local CE estimates for all TF pairs on 2000 randomly sam-
+pled sequences in the validation set. These estimates were used to compute global estimates for
+each TF pair via meta-analysis.
+DeepMR validates previously hypothesized and suggests new relationships between
+TFs. Based on an orthogonal approach (TF cooperativity analysis), [12] postulate a positive
+directional effect of a composite Oct4-Sox2 binding motif on the binding of Nanog and Klf4.
+As a test of DeepMR’s ability to discover such relationships while making fewer assumptions
+about their functional form, we sought to replicate this finding. While the BPNet approach
+does not produce quantitative overall estimates of directional effects, it enabled them to make
+two hypotheses about directionality (see [12]’s Extended Data Fig 6). These were 1) Sox2 and
+Oct4 act on Nanog and 2) that Oct4 and Sox2 act on each other via a composite motif. To rep-
+licate these findings, we computed the global CEs for all 12 pairs of TFs. We largely recapitulate
+[12] (Fig 3), finding that Sox2 and Oct4 both have a strong positive estimated CEs on each oth-
+er’s binding and on the binding of Nanog. In the latter case, the 2τ range does include 0, sug-
+gesting high variability across loci. In general, we observe high variability across sequence
+regions, reflected by the generally large ±2τ ranges. This also matches [12]’s observation that
+effects vary across sequence space and in particular with different motif spacings (see S1 Fig
+for a heatmap showing the effect of motif spacing on global CE estimates).
+DeepMR suggests additional hypotheses that could be validated by in future experimental
+work. As one example, DeepMR predicts that Sox2 acts on Klf4 more strongly than the
+reverse.
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 9 / 14
+
+
+--- Page 10 ---
+Discussion
+DeepMR estimates the magnitude of causal relationships between outputs of multi-task geno-
+mic DL models in order to hypothesize specific models of gene regulation. DeepMR can
+recover CEs in the presence of unobserved confounding in simulation and validates purported
+and identifies new putative relationships between four important TFs involved in reprogram-
+ming. While DeepMR shows promise, it does have several known limitations.
+Resource requirements
+Since DeepMR relies on in silico mutagenesis across each submodel in the Deep Ensemble,
+generating the data for estimating global CEs is computationally intensive, taking approxi-
+mately one day to run for the BPNet hold-out set in our experiments. One could incorporate
+speed-ups such as those of [41] or leverage attribution tools such as saliency maps, DeepLIFT
+[23] or DeepSHAP [24] that can efficiently approximate in silico mutagenesis.
+Model calibration
+MR Egger requires properly calibrated effect size and standard error estimates for each instru-
+ment. Our ensemble-based approach to uncertainty estimation tends to produce somewhat
+Fig 3. Global CE estimates . Global CEs for all pairs of TFs predicted by BPNet with ±2τ (orange) and ±2σ (blue)
+ranges around the mean estimate.
+https://d oi.org/10.1371/j ournal.pc bi.1009880. g003
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 10 / 14
+
+
+--- Page 11 ---
+over-confident estimates as measured by the metrics proposed by [29]. We apply and recom-
+mend isotonic regression [42] to remedy this.
+Violation of MR assumptions
+For MR to return unbiased causal effect estimates, the underlying data-generating process and
+our model’s proxy for it must both adhere to the three MR assumptions and there must be an
+at least approximately linear relationship between exposure and outcome. In the statistical
+genetics setting, these assumptions can be justified in part by claims about the relationship
+between genotype, which is determined pre-natally, and potential confounders and pheno-
+types, which tend to manifest post-natally, assuming population structure is accounted for. We
+cannot fall back on these justifications for sequence-to-function relationships. Instead, we
+must re-examine each of these assumptions to determine whether they can be expected to
+hold. Assumption 2 is easily satisfied because by filtering instruments based on their relation-
+ship to the exposure (see Algorithm overview), whereas the unconfoundedness (Assumption
+1), exclusion restriction (Assumption 3), and linearity assumptions have the potential to be
+violated.
+Under classical MR assumptions, estimates will only be unbiased if all instruments are inde-
+pendent of unobserved confounders. Potential unobserved confounders fall into two catego-
+ries: sequence-dependent and sequence-independent. Classical MR (i.e. inverse-variance
+weighting) should control for sequence-independent confounding. Potential sequence-depen-
+dent confounders include other TFs, chromatin features or an uncorrected assay bias such as
+GC-bias. Such confounders additionally violate the exclusion restriction assumption by pro-
+viding a causal pathway from instrument (mutation) to outcome not mediated by the exposure
+TF. However, our use of MR Egger provides some additional robustness to such violations so
+long as the InSIDE assumption holds. Indeed, our simulation experiments (Simulation)
+showed remarkable robustness to the effects of both types of confounding.
+MR correctly estimates causal effects when all relationships —instrument to exposure and
+exposure to outcome—are linear, which may not be the case. For example, given strong TF
+binding cooperativity, knocking out one TF’s binding will knock out the other’s entirely, vio-
+lating linearity. Fortunately, we only require the weaker condition of local linearity. Each of
+our effect sizes is derived from a single mutation, so DeepMR behaves correctly so long as the
+relationships stay linear within a local neighborhood. Going beyond the assumption of local
+linearity is something we hope to address in future work.
+In summary, DeepMR relies on specific assumptions about model quality and the true
+causal relationships. The former can be expected to increase as genomic datasets grow. The lat-
+ter suggests relaxing some of these assumptions via more advanced MR methods or developing
+tools to detect when assumptions are violated.
+In the future, we will aim to combine DeepMR with a causal network inference method
+such as our recent bimmer model [43] to explicitly account for the influence of other assayed
+TFs on each pair. DeepMR would also benefit from accompanying tools for diagnosing when
+model-generated data deviates from or violates MR assumptions.
+Supporting information
+S1 Text. Computing binding probabilities.
+(PDF)
+S2 Text. Effect of confounder strength on simulation metrics.
+(PDF)
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 11 / 14
+
+
+--- Page 12 ---
+S1 Fig. Effect of motif spacing on BPNet global CEs. Heatmap of Global CEs broken down
+by TF pairs and motif spacing buckets. Each row represents the global effects of one TF on
+another, computed using a subset of sequences in which both TF’s motifs appeared within the
+relevant distance range of each other. The figure shows the effect of motif spacing on global
+CE estimates for the four BPNet TFs. To compute effects for each TF and spacing bin, we used
+motif instance annotations from [12] to select sequence regions with motif instance pairs. For
+each sequence region, we computed distances between the two motif instances. Finally, we
+binned the sequence regions by motif instance distance and ran DeepMR on the sequence
+regions within each bin for each pair of TFs to obtain global CEs. The horizontal color banding
+in the heatmap illustrates that, while motif spacing has some effect on global CEs, the inter-
+spacing differences tend to be much smaller than the inter-TF differences.
+(TIF)
+Acknowledgmen ts
+We thank Brielin Brown, Megan Schertzer, Laura Pereira, Udai Nagpal, Collin Wang, and
+Nasrine Metic for discussion of the idea, experiments, and analysis. We thank Milan Cvitkovic
+and Pablo Cordero for feedback on the manuscript.
+Author Contributions
+Conceptualization: Stephen Malina, Daniel Cizin, David A. Knowles.
+Data curation: Stephen Malina.
+Formal analysis: Stephen Malina, David A. Knowles.
+Methodology: Stephen Malina, Daniel Cizin, David A. Knowles.
+Project administration: David A. Knowles.
+Software: Stephen Malina, Daniel Cizin.
+Supervision: David A. Knowles.
+Validation: Stephen Malina, David A. Knowles.
+Visualization: Stephen Malina, Daniel Cizin.
+Writing – original draft: Stephen Malina, David A. Knowles.
+Writing – review & editing: Stephen Malina, Daniel Cizin, David A. Knowles.
+References
+1. Alipanahi B, Delong A, Weirauch MT, Frey BJ. Predicting the sequence specific ities of DNA-and RNA-
+binding proteins by deep learning. Nature biotechnology . 2015; 33(8):831– 838. https:/ /doi.org/10.10 38/
+nbt.3300 PMID: 26213851
+2. Zhou J, Troyanskay a OG. Predict ing effects of noncoding variants with deep learning–b ased sequence
+model. Nature methods. 2015; 12(10):931 –934. https://do i.org/10.1038 /nmeth.354 7 PMID: 26301843
+3. Kelley DR, Snoek J, Rinn JL. Basset: learning the regulatory code of the accessible genome with deep
+convolutio nal neural networks. Genom e research. 2016; 26(7):990– 999. https://doi.or g/10.110 1/gr.
+200535.115 PMID: 27197224
+4. Yin Q, Wu M, Liu Q, Lv H, Jiang R. DeepHist one: a deep learning approach to predicti ng histone modifi-
+cations. BMC genomics. 2019; 20(2):193. https://doi.or g/10.118 6/s12864-019- 5489-4 PMID: 309671 26
+5. Pan X, Shen HB. RNA-prote in binding motifs mining with a new hybrid deep learning based cross-
+domain knowledge integration approach. BMC bioinfo rmatics. 2017; 18(1):136. https:// doi.org/10.11 86/
+s12859-017 -1561-8 PMID: 28245811
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 12 / 14
+
+
+--- Page 13 ---
+6. Gandhi S, Lee LJ, Delong A, Duvenaud D, Frey B. cDeepbind: A context sensitive deep learning model
+of RNA-prote in binding. bioRxiv . 2018; p. 345140.
+7. Zheng J, Zhang X, Zhao X, Tong X, Hong X, Xie J, et al. Deep-R BPPred: Predict ing RNA binding pro-
+teins in the proteome scale based on deep learning. Scientific reports. 2018; 8(1):1–9. https://d oi.org/
+10.1038/ s41598-018- 33654-x PMID: 30323214
+8. Jaganath an K, Kyriazopou lou Panag iotopoulou S, McRae JF, Darband i SF, Knowles DA, Li YI, et al.
+Predicting Splicing from Primary Sequenc e with Deep Learning. Cell. 2019; 176(3):535 –548.e2 4.
+https://doi.or g/10.101 6/j.cell.20 18.12.015 PMID: 306617 51
+9. Cheng J, C ¸ elik MH, Kundaje A, Gagneur J. MTSplice predicts effects of genetic variants on tissue-spe-
+cific splicing. Genom e Biol. 2021; 22(1):94. https://do i.org/10.1186 /s13059- 021-02273- 7 PMID:
+33789710
+10. LeCun Y, Bengio Y, et al. Convolution al networks for images, speech, and time series. The handbo ok
+of brain theory and neural networks . 1995; 3361(10):1 995.
+11. Tuerk C, Gold L. Systema tic evolution of ligands by exponen tial enrichme nt: RNA ligands to bacterio-
+phage T4 DNA polymerase . science. 1990; 249(4968 ):505–510. https://doi.or g/10.112 6/science.
+2200121 PMID: 2200121
+12. Avsec Z
+ˇ
+, Weiler t M, Shrikuma r A, Krueger S, Alexand ari A, Dalal K, et al. Base-re solution models of
+transcrip tion-factor binding reveal soft motif syntax. Nature Genetics. 2021; 53(3):354– 366. https:// doi.
+org/10.1038/ s41588-021- 00782-6 PMID: 336032 33
+13. Trynka G, Sandor C, Han B, Xu H, Stranger BE, Liu XS, et al. Chromatin marks identify critical cell
+types for fine mapping complex trait variants. Nature genetics. 2013; 45(2):124– 130. https://doi. org/10.
+1038/ng. 2504 PMID: 23263488
+14. Lawlor DA, Harbord RM, Sterne JA, Timpson N, Davey Smith G. Mendelian random ization: using
+genes as instrumen ts for making causal inferences in epidemiology . Statistics in medicine. 2008; 27
+(8):1133–1 163. https:// doi.org/10.10 02/sim.3034 PMID: 17886233
+15. Johnson DS, Mortazavi A, Myers RM, Wold B. Genom e-wide mapping of in vivo protein-DN A interac-
+tions. Science. 2007; 316(5830) :1497–1502. https:// doi.org/10.11 26/science .1141319 PMID:
+17540862
+16. Barski A, Cuddapah S, Cui K, Roh TY, Schones DE, Wang Z, et al. High-re solution profiling of histone
+methylation s in the human genome. Cell. 2007; 129(4):823 –837. https:// doi.org/10.10 16/j.cell.2 007.05.
+009 PMID: 175124 14
+17. Robertson G, Hirst M, Bainbridg e M, Bilenky M, Zhao Y, Zeng T, et al. Genom e-wide profiles of STAT1
+DNA association using chromatin immunopr ecipitation and massivel y parallel sequencin g. Nature
+methods. 2007; 4(8):651–6 57. https://doi.or g/10.103 8/nmeth10 68 PMID: 17558387
+18. Mikkelse n TS, Ku M, Jaffe DB, Issac B, Lieberman E, Giannoukos G, et al. Genom e-wide maps of chro-
+matin state in pluripotent and lineage-comm itted cells. Nature. 2007; 448(7153) :553–560. https:/ /doi.
+org/10.1038/ nature06008 PMID: 1760347 1
+19. Song L, Crawford GE. DNase- seq: a high-resolu tion technique for mapping active gene regulatory ele-
+ments across the genome from mamma lian cells. Cold Spring Harbor Protoco ls. 2010; 2010(2):pd b–
+prot5384. https:// doi.org/10.11 01/pdb.p rot5384 PMID: 20150147
+20. Buenrostro JD, Wu B, Chang HY, Greenlea f WJ. ATAC-seq : a method for assaying chromatin accessi-
+bility genome- wide. Current protocols in molecular biology. 2015; 109(1):21– 29. https://doi.or g/10.
+1002/04711 42727.mb21 29s109 PMID: 255591 05
+21. Simonyan K, Vedaldi A, Zisserman A. Deep inside convolutio nal networks : Visualising image classifica-
+tion models and saliency maps. arXiv preprint arXiv:131 26034. 2013;.
+22. Springenb erg JT, Dosovitskiy A, Brox T, Riedmiller M. Striving for simplicity : The all convolutio nal net.
+arXiv preprint arXiv:141268 06. 2014;.
+23. Shrikuma r A, Greens ide P, Kundaje A. Learning important feature s through propagating activation dif-
+ferences. In: Procee dings of the 34th International Conferen ce on Machine Learning- Volume 70.
+JMLR. org; 2017. p. 3145–3153.
+24. Lundberg SM, Lee SI. A Unified Approac h to Interpreting Model Predictions. In: Guyon I, Luxburg UV,
+Bengio S, Wallach H, Fergus R, Vishwanath an S, et al., editors. Advances in Neural Informatio n Pro-
+cessing Systems 30. Curran Associates , Inc.; 2017. p. 4765–47 74. Available from: http://pape rs.nips.
+cc/paper/70 62-a-unifie d-approach- to-interpre ting-mod el-prediction s.pdf.
+25. Koo PK, Majdand zic A, Ploenzke M, Anand P, Paul SB. Global importan ce analysis: An interpreta bility
+method to quantify importanc e of genomic features in deep neural networks . PLoS computation al biol-
+ogy. 2021; 17(5):e100 8925. https://doi. org/10.1371/j ournal.pc bi.1008925 PMID: 339839 21
+26. Lakshminar ayanan B, Pritzel A, Blundell C. Simple and scalable predictive uncertai nty estimat ion using
+deep ensembles . arXiv preprint arXiv:161201 474. 2016;.
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 13 / 14
+
+
+--- Page 14 ---
+27. Abdar M, Pourpanah F, Hussain S, Rezaza degan D, Liu L, Ghavamzad eh M, et al. A review of uncer-
+tainty quantificat ion in deep learning: Techniques , application s and challenges . Informatio n Fusion.
+2021;. https:// doi.org/10.10 16/j.inffu s.2021.05 .008
+28. Hirschfeld L, Swanson K, Yang K, Barzilay R, Coley CW. Uncertainty quantifi cation using neural net-
+works for molecular property prediction . Journal of Chemica l Informatio n and Modelin g. 2020; 60
+(8):3770–3 780. https:// doi.org/10.10 21/acs.jc im.0c00502 PMID: 32702986
+29. Kuleshov V, Fenner N, Ermon S. Accurate uncertainties for deep learning using calibrated regres sion.
+arXiv preprint arXiv:180700 263. 2018;.
+30. Burgess S, Small DS, Thompson SG. A review of instrumen tal variabl e estimators for Mendeli an ran-
+domization . Statistical methods in medical research . 2017; 26(5):2333 –2355. https:// doi.org/10.11 77/
+09622802155 97579 PMID: 26282889
+31. Wald A. The fitting of straight lines if both variables are subject to error. The annals of mathem atical sta-
+tistics. 1940; 11(3):284– 300. https://doi.or g/10.121 4/aoms/1177 731868
+32. Angrist JD, Imbens GW. Two-stage least squares estimation of average causal effects in models with
+variable treatment intensity. Journal of the American statist ical Association . 1995; 90(430):4 31–442.
+https://doi.or g/10.108 0/01621459.1 995.10476535
+33. Zhao Q, Wang J, Hemani G, Bowden J, Small DS. Statistical inferenc e in two-sample summa ry-data
+Mendeli an randomizat ion using robust adjusted profile score. arXiv preprint arXiv:180109 652. 2018;.
+34. Bowden J, Davey Smith G, Burgess S. Mendelian random ization with invalid instrumen ts: effect estima-
+tion and bias detection through Egger regressi on. International journal of epidemi ology. 2015; 44
+(2):512–52 5. https://do i.org/10.1093 /ije/dyv080 PMID: 260502 53
+35. Burgess S, Zuber V, Gkatzioni s A, Foley CN. Modal-bas ed estimation via heterogenei ty-penal ized
+weighting : model averagi ng for consistent and efficient estimation in Mendeli an randomiz ation when a
+plurality of candida te instrumen ts are valid. International journal of epidemi ology. 2018; 47(4):124 2–
+1254. https://d oi.org/10.109 3/ije/dyy080 PMID: 298466 13
+36. Hemani G, Bowden J, Davey Smith G. Evaluating the potential role of pleiotropy in Mendeli an randomi-
+zation studies. Human molecular genetics. 2018; 27(R2):R19 5–R208. https://doi.or g/10.109 3/hmg/
+ddy163 PMID: 29771313
+37. Wilson AG, Izmailov P. Bayesian deep learning and a probabilistic perspective of generalizatio n.
+Advances in neural informati on processing systems. 2020; 33:4697 –4708.
+38. Schwarzer G, et al. meta: An R package for meta-ana lysis. R news. 2007; 7(3):40–45 .
+39. Finkelstein M, Shrikumar A, Kundaje A. Look at the Loss: Towards Robust Detecti on of False Positive
+Feature Interactio ns Learned by Neural Networ ks on Genom ic Data. In: Proceed ings of the 37th Inter-
+national Conferen ce on Machine Learning (ICML 2020). The 2020 ICML Workshop on Comput ational
+Biology; 2020.
+40. Kheradpou r P, Kellis M. Systematic discove ry and characteriz ation of regulatory motifs in ENCOD E TF
+binding experime nts. Nucleic acids resear ch. 2014; 42(5):2976 –2987. https://doi.or g/10.109 3/nar/
+gkt1249 PMID: 24335146
+41. Nair S, Shriku mar A, Kundaje A. fastISM: Perform ant in-silico saturatio n mutagene sis for convolutio nal
+neural networks. bioRxiv . 2020;.
+42. Barlow RE, Brunk HD. The isotonic regression problem and its dual. Journal of the American Statistical
+Association . 1972; 67(337):14 0–147. https://doi.or g/10.108 0/01621459. 1972.1048121 6
+43. Brown BC, Knowles DA. Phenome-sc ale causal network discovery with bidirectional mediated Mende-
+lian randomiz ation. bioRxiv. 2020;.
+PLOS COMP UTATIONAL  BIOLOGY
+Investigat ing the causal knowledge of genomic deep learning models
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009880 October 20, 2022 14 / 14

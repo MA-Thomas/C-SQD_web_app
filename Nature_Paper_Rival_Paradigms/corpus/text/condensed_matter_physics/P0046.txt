@@ -1,0 +1,2008 @@
+--- page 1 ---
+Visualising energy landscapes through manifold learning
+Ben W. B. Shires 1,∗ and Chris J. Pickard 1, 2,†
+1Department of Materials Science & Metallurgy, University of Cambridge,
+27 Charles Babbage Road, Cambridge CB3 0FS, United Kingdom
+2Advanced Institute for Materials Research, Tohoku University 2-1-1 Katahira, Aoba, Sendai, 980-8577, Japan
+(Dated: November 16, 2021)
+Energy landscapes provide a conceptual framework for structure prediction, and a detailed under-
+standing of their topological features is necessary to develop eﬃcient methods for their exploration.
+The ability to visualise these surfaces is essential, but the high dimensionality of the correspond-
+ing conﬁguration spaces makes this diﬃcult. Here we present Stochastic Hyperspace Embedding
+and Projection (SHEAP), a method for energy landscape visualisation inspired by state-of-the-
+art algorithms for dimensionality reduction through manifold learning, such as t-SNE and UMAP.
+The performance of SHEAP is demonstrated through its application to the energy landscapes of
+Lennard-Jones clusters, solid-state carbon, and the quaternary system C+H+N+O. It produces
+meaningful and interpretable low-dimensional representations of these landscapes, reproducing well
+known topological features such as funnels, and providing fresh insight into their layouts. In partic-
+ular, an intrinsic low dimensionality in the distribution of local minima across conﬁguration space
+is revealed.
+I. INTRODUCTION
+Potential (and free) energy surfaces (PESs) provide
+a conceptual and mathematical framework for describ-
+ing the structures, kinetics and thermodynamics of sys-
+tems of interacting atoms [1–4]. The exploration of these
+surfaces forms the basis for the ﬁeld of (computational)
+structure prediction, where the central task is the loca-
+tion of low-lying minima [5]. In order to develop eﬃcient
+methods for their exploration, the ability to visualise
+these landscapes is crucial, enhancing our understand-
+ing of their complex topologies and providing insight into
+how we can improve techniques for structure prediction
+and global optimisation. However, the potential energy
+of a system of atoms varies with the relative positions of
+all of its nuclei, meaning that for all but the simplest of
+systems the true surface cannot be depicted in the three
+spatial dimensions that we can easily visualise.
+There are many successful approaches to structure
+prediction, from minima/basin-hopping [6–8], particle
+swarm [9, 10], and evolutionary algorithms [11, 12], to
+ab initio random structure searching (AIRSS) [13, 14].
+These methods generate a diverse range of structures for
+any given system, and AIRSS, in particular, emphasises a
+broad sampling of the energy landscape. This approach
+has been successful in identifying novel and interesting
+phases of crystalline systems, particularly at high pres-
+sures [15–17]. Such a random search for local minima
+produces meaningful samples of conﬁguration space, re-
+lating directly to the underlying distribution of the basins
+of attraction. However, these samples are generated in
+huge quantities (around 100,000 for modern application),
+and the resulting data-sets can be hard to fully compre-
+hend, making it diﬃcult to determine how a given search
+∗ bs511@cam.ac.uk
+† cjp20@cam.ac.uk
+might be improved. A means to extract and depict infor-
+mation contained in these large data-sets of local minima,
+such that insight into the landscape being searched can
+be obtained, would be valuable.
+The desire to visualise high-dimensional objects is not
+restricted to energy landscapes. A similar challenge is
+encountered for loss functions deﬁning other optimisa-
+tion tasks, such as statistical regression schemes [18],
+and machine learning algorithms for classiﬁcation, clus-
+tering, and neural networks [19–22]. For any such cost
+function surface, it would be revealing if an approximate
+low-dimensional representation could be produced which
+preserves as faithfully as possible the key features of
+the landscape, such as the location of stationary points.
+For the PESs sampled by methods for structure predic-
+tion, the important features include the relative layout of
+the local minima, the connectivity of the corresponding
+basins of attraction, the relative volumes of the basins,
+and the presence of “super-basins”, or funnels [2, 3, 23–
+27]. Here we propose a method for energy landscape
+visualisation which captures these features.
+PES visualisation can be viewed as a data science task
+in which we would like to project a high-dimensional
+source data-set (consisting of vectors describing struc-
+tures in the conﬁguration space of interest) into one, two
+or three Euclidean dimensions. We base our approach on
+state-of-the-art algorithms for dimensionality reduction
+for visualisation, such as t-Distributed Stochastic Neigh-
+bour Embedding (t-SNE) [28] and Uniform Manifold Ap-
+proximation and Projection (UMAP) [29, 30], drawing
+inspiration from their increasing application to data-sets
+arising in physics [31–33], materials science [34, 35], and
+cell biology [36–39]. We call this approach SHEAP -
+Stochastic Hyperspace Embedding And Projection.
+There are a number of existing tools which allow the
+depiction of certain features of high-dimensional PESs
+in lower dimensions, including (metric) disconnectivity
+graphs [27, 40–43], and sketch-maps [44–46]. These ap-
+arXiv:2111.07843v1  [physics.comp-ph]  15 Nov 2021
+
+--- page 2 ---
+2
+proaches do not focus on faithfully preserving the spatial
+layout of minima on the true PES, but rather on under-
+standing the system dynamics.
+Disconnectivity graphs display the connectivity of lo-
+cal minima in terms of minimum energy pathways be-
+tween them, illustrating which structures are likely to
+be accessible and interchangeable at a given temperature
+[27, 40, 41]. They do not indicate the proximity of min-
+ima in the conﬁguration space according to some deﬁned
+distance metric, which basins are actually adjacent on
+the PES, or give a clear indication of the relative basin
+volumes [42].
+Metric disconnectivity graphs retain some structural
+information about the minima by arranging them along
+one or two metric axes [42, 43]. However, since they
+use one of the two or three plot dimensions to represent
+the energies of the structures depicted, there is one fewer
+dimension which can be used to represent the relative
+positions of the minima on the surface. Furthermore,
+techniques such as t-SNE and UMAP have been demon-
+strated to outperform the dimensionality reduction meth-
+ods considered for metric disconnectivity graphs in the
+context of visualisation [28, 29].
+Sketch-map follows a similar framework to the state-of-
+the-art methods that we build on here to produce SHEAP
+(see Section II). The algorithmic choices made within
+this framework deal with issues speciﬁc to the high-
+dimensional data produced in molecular dynamics tra-
+jectories, such as poor sampling at the transition states,
+and the high-dimensional nature of thermal ﬂuctuations.
+Sketch-map ensures that data-points from the same basin
+are close, and separates clusters of structures from dif-
+ferent basins [44, 46]. However, it puts less emphasis on
+accurately reproducing the distances between the struc-
+tures from diﬀerent basins. Thus, the approach is less
+suited to dealing with other forms of structural data,
+such as the minima produced from a structure search,
+for which there are no thermal ﬂuctuations (although
+sketch-map has been applied to this type of data with
+success [47]).
+In the next section we introduce dimensionality reduc-
+tion in the context of visualisation, focusing on manifold
+learning approaches. This is followed by an outline of our
+method, SHEAP, designed for PES visualisation. We ex-
+plore the performance of SHEAP by applying it ﬁrst to
+model systems of atoms interacting through a Lennard-
+Jones (LJ) pair potential, then to structures of solid-state
+carbon, as well as the quaternary system C+H+N+O.
+We show that SHEAP yields meaningful low-dimensional
+representations of these landscapes, for example repro-
+ducing well known topological features such as funnels,
+using only the structural information contained in min-
+ima data obtained from random structure searches. Fur-
+thermore, and importantly, we reveal an intrinsic low di-
+mensionality to the distribution of minima across these
+surfaces.
+FIG. 1. Illustrates data dimensionality reduction by manifold
+learning. (A) shows a 3-dimensional data-set that is close to
+lying on a 2-dimensional surface which is embedded withinR3.
+(B) shows the projection of the source data onto this embed-
+ded manifold, which is folded into a swiss roll in the original
+3D space. (C) shows the distribution of the data across the
+embedded manifold, providing a 2D visual representation of
+the source data.
+II. DIMENSIONALITY REDUCTION BY
+MANIFOLD LEARNING
+Dimensionality reduction refers to the mapping of a
+high-dimensional data-set into a space of lower dimen-
+sionality [48]. Here we refer to a source data-set X =
+{x1, x2,..., xN}⊂ RD and a low-dimensional represen-
+tation Y ={y1, y2,..., yN}⊂ Rs, where N is the num-
+ber of data points, and D and s are the dimensionalities
+of the corresponding spaces. If the dimensionality of the
+map is low enough ( s≤ 3), the so-called “map points”
+can be visualised in a scatter plot. The aim is to pre-
+serve latent features of the source data in the reduced
+representation.
+Manifold learning is a nonlinear approach to dimen-
+sionality reduction which assumes that the source data
+lies on, or close to, some low-dimensional manifold
+embedded within the original high-dimensional space
+[49, 50]. The idea is to produce a low-dimensional rep-
+resentation of the source data by deducing its projected
+layout across the manifold - this principle is illustrated in
+Fig. 1. This has advantages over linear methods such as
+principal component analysis (PCA) [51] in that it allows
+the manifold onto which the data is projected to adopt
+a folded geometry within the original space, making no
+assumptions about this geometry. The faithfulness of
+the projection depends on how close the source data is
+to actually lying on some embedded manifold of the de-
+sired dimension, how good the cover of the source data
+across this manifold is, and how well the given algorithm
+
+--- page 3 ---
+3
+is able to capture the key features of the manifold from
+the spread of the source data.
+There are many manifold learning algorithms, gener-
+ally diﬀering in the geometrical properties of the under-
+lying manifold that they seek to preserve. Some aim to
+maintain distances or similarities across the entire data-
+set, e. g. Isomap [52] or kernel PCA [53]. Others priori-
+tise the preservation of local proximities, e. g. Sammon
+mapping [54], Locally Linear Embedding (LLE) [55], or
+Laplacian Eigenmaps [56]. For source data that is non-
+linear, it is usually more important to keep the low-
+dimensional representations of similar points close to-
+gether, rather than trying to accurately reproduce a given
+metric at all length-scales [28]. The t-SNE [28], LargeVis
+[57], and UMAP [29] algorithms also follow this principle,
+but are able to patch together the local representations
+in such a way that global features are captured more
+faithfully than with other local methods [28, 29]. These
+approaches proceed by constructing a weighted graph de-
+scribing the structure of the source data, then projecting
+this into a space of fewer dimensions through the optimi-
+sation of a non-convex cost function. SHEAP is formu-
+lated within the same framework, the outline of which is
+provided next, followed by a discussion of the motivation
+for the development of SHEAP.
+A. Manifold learning through weighted graph
+matching
+A weighted graph is constructed, consisting of sim-
+ilarities pij between each pair of data-points i and j,
+corresponding to a measure of how close they are in
+the original space RD according to some distance met-
+ric d : X× X → R. It is usually beneﬁcial to the
+speed and scalability of a given algorithm to only com-
+pute weights to the points in the region local to each
+data-point (e. g. thek nearest neighbours), with all other
+weights being set to zero - this is exploited in LargeVis
+[57], UMAP [29], and accelerated (approximate) imple-
+mentations of t-SNE [58, 59]. An initial distribution of
+N data-points is then produced in a space Rs of many
+fewer dimensions (typically 2 or 3). This may be gen-
+erated at random, possibly according to some bias(es)
+and/or constraint(s), or through the application of some
+more primitive algorithm for dimensionality reduction,
+such as PCA or random projection (see Appendix C).
+Another graph of weights qij is then constructed for the
+nodes deﬁned by these map points, Y , possibly taking
+a diﬀerent functional form to those deﬁned between the
+high-dimensional points. The low-dimensional represen-
+tation of the data is then computed by adjusting the
+layout of the map points such that the faithfulness with
+which the weights qij model each pij is optimised. This
+is achieved by minimising some cost function C(Y ;X)
+designed to penalise any mismatch. For a non-convex
+cost function, local optimisation schemes are necessary.
+Since there is usually some element of randomness in the
+initialisation of the map points and/or the optimisation
+of the cost function, diﬀerent local minima can be ob-
+tained. Hence, these methods are considered stochastic.
+Note that the resulting projection is not associated with
+any physically meaningful set of axes (unlike PCA, for
+example) - it is only the relative positioning and cluster-
+ing of the mapped data that is signiﬁcant.
+Because there are numerous stages at which there is
+scope for diﬀerent possible and justiﬁable algorithmic
+choices, many algorithms are possible. These choices in-
+clude: how the weighted graphs describing the connec-
+tivity in the high and low dimensions are constructed,
+what cost function is optimised, how the map points are
+initialised, and what optimisation scheme is used.
+B. Motivation for SHEAP
+t-SNE has become perhaps the most widely used man-
+ifold learning algorithm for visualisation. However, in
+many test cases the more recent methods LargeVis (2016)
+and UMAP (2018) appear to oﬀer improvements in terms
+of the quality of the visualisation, run-time speed, and
+scalability [29, 57]. Approximate implementations, such
+as Barnes-Hut-SNE [58] and Fast Fourier Transform ac-
+celerated Interpolation-based t-SNE (FIt-SNE) [59] dra-
+matically accelerate the computation of t-SNE, though
+these too appear inferior to UMAP for many test data
+sets [29].
+Here we focus on the relative visualisation qualities
+of these algorithms, leaving speed and scaling to future
+work. As demonstrated in Ref. [29], UMAP produces a
+local structure that is comparable to the projections of t-
+SNE (and LargeVis), but appears able to provide a more
+faithful global representation. This is likely a result of
+a better cost function - UMAP’s choice provides a more
+sophisticated treatment of the repulsive contribution to
+the interaction between map points during optimisation
+by introducing greater dependency on the layout of the
+source data. This is addressed further in Section III, and
+discussed in detail in Appendix A.
+However, UMAP does not truly optimise the cost
+function it deﬁnes. Rather, the algorithm relies on its
+speciﬁc choice for the optimisation procedure, an ap-
+proximate implementation of stochastic gradient descent
+(SGD) which uses probabilistic edge sampling and nega-
+tive sampling [29, 57], to de-exaggerate the repulsive part
+of the cost function gradient. This is somewhat unsat-
+isfactory, and limits the ﬂexibility of the algorithm. For
+example, UMAP’s reliance on SGD makes it incompat-
+ible with our approach to incorporating basin volumes
+into the maps - this involves representing the structures
+in the map as hard spheres/circles, rather than single
+points (see Section III B), and is straightforward to in-
+corporate within t-SNE. Thus, we develop SHEAP, a hy-
+brid of UMAP and t-SNE which captures some of the
+advancements made by UMAP, whilst still producing an
+algorithm that: (1) truly optimises a well deﬁned and
+
+--- page 4 ---
+4
+theoretically justiﬁed cost function, and (2) is compati-
+ble with the hard sphere scheme we introduce in Section
+III B.
+III. STOCHASTIC HYPERSP ACE EMBEDDING
+AND PROJECTION (SHEAP)
+In SHEAP, the weighted graph in the high-dimensional
+space is constructed according to the same scheme as in
+t-SNE. Following Ref. [28], the weightpij between source
+data-points i and j is deﬁned as
+pij = pj|i +pi|j
+2N , (1)
+where
+pj|i = exp
+(
+−d(xi, xj)2/2σ2
+i
+)
+∑
+k̸=i exp (−d(xi, xk)2/2σ2
+i ) . (2)
+Here,d(xi, xj) is some metric for computing the distance
+between xi and xj in the high-dimensional space. t-SNE
+uses the ℓ2-norm: d(xi, xj) =||xi− xj||2. The value of
+σi is chosen such that the so called perplexity of Pi takes
+some desired value, where Pi is the conditional probabil-
+ity of all other data-points given xi. The perplexity of
+Pi, Perp(Pi), is computed as
+Perp(Pi) = 2H(Pi) , (3)
+where
+H(Pi) =−
+∑
+j
+pj|i log2pj|i . (4)
+The perplexity Perp( Pi) can be interpreted as a
+smooth measure of the eﬀective number of neighbours of
+i, and is set to the same value for all data-points. It can
+be thought of as deﬁning how far each point “looks out”
+to describe its local environment. A smaller perplexity
+favours a faithful representation of the local connectiv-
+ity of the data, whilst a larger value favours the global
+distribution. A “good” choice for this parameter results
+from a compromise between these two competing goals.
+A potential drawback arises in that the perplexity is a
+global parameter; there may be no single value that is
+suitable for all source data points and their local regions.
+It may be the case that a range of perplexities must be
+explored in order to gain the greatest insight from these
+projections. Which single perplexity value leads to the
+the most complete picture can then be assessed.
+Given a user input perplexity, each σi is computed us-
+ing a straightforward binary search. Because the distri-
+butions of any two data-points i andj will likely require
+diﬀerentσ’s in order to correspond to the same perplex-
+ity, the conditional probabilities pj|i andpi|j will in gen-
+eral be diﬀerent. To obtain a symmetric measure for
+the weight pij between the pair of data-points, the joint
+probability of pj|i and pi|j is computed, as in Eqn. (1).
+In the low-dimensional space, the weight betweeni and
+j is computed according to a Student t-distribution, sim-
+ilarly to in t-SNE, but using a diﬀerent normalisation:
+qij =
+(
+1 +||yi− yj||2
+2
+)−1
+N(N− 1) . (5)
+As outlined in Ref. [28], the use of a heavier-tailed distri-
+bution for the low-dimensional weights allows moderate
+distances in the high-dimensional space to be faithfully
+represented by much larger distances in the projection,
+encouraging (larger) gaps to form in the low-dimensional
+map between the natural clusters present in the source
+data, alleviating the so called crowding problem.
+The key diﬀerence of the SHEAP algorithm from t-
+SNE is the choice of the cost function:
+C =
+∑
+i,j
+pij log
+(pij
+qij
+)
++ (1−pij) log
+(1−pij
+1−qij
+)
+. (6)
+This is the fuzzy set cross-entropy between the two sets
+of weights, as in UMAP, rather than KL divergence
+(Eqn. A2), used in t-SNE. Recall that we attributed the
+improved global structure in UMAP’s projections over
+t-SNE’s to this choice of the cost function, due to a bet-
+ter treatment of the repulsive contribution to the inter-
+action between the map points (see Appendix A). In t-
+SNE, this repulsion arises due to the constraint that all
+of the weights qij sum to 1, providing a uniform repul-
+sion between the map points. In UMAP, the repulsive
+contribution arises directly from the second, additional
+term in the cost function, and is much more dependent
+on the structure of the source data. This also allows
+us to discard the computationally costly normalisation
+appearing in the weights qij in t-SNE, which must be
+recomputed at every step during optimisation. The con-
+stant normalisation factor that replaces this here is cho-
+sen such that weights qij are consistent with the weights
+pij in limit that all data-points lie on top of one an-
+other in both the source data and the projection, giving
+pij =qij = 1
+N (N−1) for all i and j.
+Given the above choices, the cost function gradient in
+SHEAP is given by:
+∂C
+∂yi
+= 4N(N− 1)
+∑
+j
+(
+pij−qij
+(1−pij)
+(1−qij)
+)
+qij(yi− yj).
+(7)
+Optimisation of the low-dimensional layout is achieved
+using the two-point steepest descent (TPSD) scheme of
+Barzilai and Borwein [60], and the option of early exag-
+geration is also implemented, as in t-SNE [28, 61]. We
+can replace the use of early exaggeration with an initial
+use of SGD, though this does not appear to improve per-
+formance.
+The layout of map points is initialised with an al-
+gorithm for random projection - see Appendix C. This
+tremendously accelerates the cost function optimisation,
+relative to initialising with a random (conﬁned) distribu-
+tion of points.
+
+--- page 5 ---
+5
+Here we produce low-dimensional depictions of energy
+landscapes by applying this algorithm to sets of struc-
+tures in the relevant conﬁguration space. Primarily, we
+consider data-sets containing only local minima, obtained
+through random structure searching (RSS) [14, 15] to
+promote broad sampling of the space. In Section IV we
+demonstrate that this is suﬃcient for capturing the PES
+features of interest in the context of structure prediction.
+In Section IV B we also explore the projection of unre-
+laxed structures obtained through random sampling.
+A. Representing structural data
+The conﬁguration of a system of atoms can be repre-
+sented in terms of a structure descriptor - a vector of
+real valued functions of the atomic coordinates which de-
+scribes their relative arrangement [62]. To allow com-
+parisons between structures, a good descriptor is invari-
+ant with respect to permutations of equivalent atoms, as
+well as global translations, rotations and reﬂections, and
+uniquely determines the structure up to these symme-
+tries.
+Two descriptors are considered here. The ﬁrst is a
+sorted list of the pairwise distances between atoms. It is
+known that this is not a complete descriptor [62]. How-
+ever, for the simple systems of LJ particles considered (for
+which the energy depends only on pairwise distances), we
+ﬁnd this to capture a suﬃcient proportion of the struc-
+tural information/variation.
+The second descriptor considered is the smooth overlap
+of atomic positions (SOAP) [62]. SOAP encodes relative
+nuclear geometry in the neighbourhood of a given atom
+using an atomic density ﬁeld, represented by 3D atom-
+centred Gaussian functions expanded in a basis of spheri-
+cal harmonics and radial basis functions. A global SOAP
+descriptor for a given structure can be computed by tak-
+ing the average SOAP ﬁngerprint between all atomic
+environments [63]. When multiple species are present,
+one can either compute a single average incorporating all
+species, or average separately for each species and then
+concatenate the species-speciﬁc averaged vectors [64] -
+here we adopt the former approach. Recent work by
+Cheng et al. [64] has found success in pairing SOAP de-
+scriptors with kernel PCA to produce low-dimensional
+maps for a wide variety of structural data-sets.
+The distance metric d used here is the ℓ2-norm, as in
+t-SNE [28]. This implicitly assumes that the source data
+is locally linear on the underlying manifold [28]. The
+SHEAP map produced from a given set of structures is
+expected to depend on both the chosen descriptor and
+distance metric. Here we explore the the former through
+a comparison of SHEAP maps produced from sorted lists
+of distances and from SOAP, for a single LJ system. An
+investigation into other distance metrics will be the sub-
+ject of future work.
+B. Basin volumes conserved using hard spheres
+A shortcoming of using only the spread of local minima
+to depict a PES is that this gives no sense of how large
+each of the basins of attraction are. To address this, we
+extend the methodology outlined in Sections II A and III
+by representing each local minimum in the map as a hard
+n-sphere (n = s− 1), rather than a point, with volume
+(area in 2D) proportional to the (approximate) volume
+of its basin.
+The number of times that structure i is located in a
+search is labelledci. We consider structures to be equiva-
+lent if the distance between their descriptor vectors falls
+below an appropriate similarity threshold. For a suit-
+ably large search, these counts should give representative
+estimates for the relative volumes of the corresponding
+basins. We represent each structure in the map by a
+sphere of radius
+Ri = (ci)
+1
+sR0 , (8)
+such that the volume Vi ∝ Rs
+i is proportional to the
+countci. The quantity R0 is the minimum sphere radius
+appearing in the map, taken by any structure that has
+been found just once - the choice of this parameter is
+important, and is discussed in detail in Appendix B1.
+The hard spheres are incorporated into the framework
+outlined in Section II A through the addition of an extra
+term to the cost function. This hard sphere potential is
+deﬁned as:
+UHS = 1
+2γHS
+∑
+i
+∑
+j̸=i
+α2
+ij , (9)
+where γHS is the hard core strength, and
+αij =
+{
+Ri+Rj−||yi−yj||
+2 if||yi− yj||<R i +Rj
+0 otherwise. (10)
+For a suﬃciently large value ofγHS, the repulsion between
+any overlapping spheres (when present) will be the dom-
+inant contribution to the gradient, meaning the layout
+will be forced to contain no overlaps.
+The inclusion of the hard sphere potential from the
+start of the optimisation is problematic. The spheres be-
+come jammed as they try to move across one-another,
+particularly for densely packed spheres, resulting in con-
+vergence being drastically slow or not attainable at all.
+This can be avoided by allowing the spheres to ac-
+cess additional dimensions during the optimisation, using
+the geometry optimisation of structures from hyperspace
+(GOSH) method [65]. Alternatively, an eﬃcient solu-
+tion is to initially run the optimisation without the hard
+sphere contribution, switching it on only when the algo-
+rithm is close to convergence. With this, convergence
+is more easily attained if the hard spheres are intro-
+duced at a fraction of their ﬁnal value, and expanded
+over the course of a few hundred optimisation steps. In
+
+--- page 6 ---
+6
+this scheme, the hard spheres have minimal impact on
+the optimisation, essentially just distorting the optimal
+layout once it has already been reached.
+Again we point out that this approach is incompati-
+ble with the SGD optimisation scheme relied on by the
+UMAP algorithm - large overlaps between spheres are
+produced due to the omission of certain contributions to
+the gradient, resulting in instability in the optimisation.
+A similar problem is encountered with the use of hard
+spheres at the same time as early exaggeration, though
+this issue can straightforwardly be circumvented by en-
+suring that the hard sphere interaction is not switched
+on until after the exaggeration period has ended.
+C. Energy represented with colour
+Energy is depicted across our plots through the
+colouration of the circles/spheres representing each struc-
+ture. In Sections IV we also demonstrate that insight can
+be gained by illustrating the variation of other quantities
+across the projected conﬁguration space.
+IV. RESUL TS
+The results of applying SHEAP to various systems are
+now presented. First, we consider the PESs deﬁned by
+LJ clusters, with pairwise interactions governed by:
+vLJ(r) = 4ϵLJ
+(σ12
+LJ
+r12− σ6
+LJ
+r6
+)
+, (11)
+where ϵLJ is the depth of the potential energy well for
+a given particle pair, and σLJ is the ﬁnite distance at
+which the inter-particle potential is equal to zero. We
+set ϵLJ = 1 and σLJ = 2 throughout. Clusters of 13, 38
+and 55 atoms are considered.
+For each data-set of LJ clusters, structures are repre-
+sented as a sorted list of all pairwise distances between
+atoms, unless explicitly stated otherwise. In Appendix E
+we also explore the use of a sorted list of inverse pairwise
+distances for LJ 13.
+Following the study of these model systems, data-
+sets of realistic solid state systems, modelled by ﬁrst-
+principles density-functional theory (DFT) calculations,
+are addressed.
+The examples considered illustrate the applicability of
+dimensionality reduction by manifold learning to minima
+data obtained from RSS, and demonstrate the insight
+that can be gained from the resulting maps. A key ﬁnding
+is the intrinsic low-dimensionality in the distributions of
+minima across the corresponding PESs.
+Computational details
+SHEAP is implemented in an OpenMP paral-
+lelised Fortran package, available under the GPL2
+FIG. 2. Labelled 2D SHEAP map produced from a set of
+1,108 distinct minima on the LJ 13 PES, located with RSS,
+described by sorted lists of all pairwise distances. The pro-
+jection was made using a perplexity of 30, with a minimum
+sphere radiusR0 = 0.005. The circles representing each struc-
+ture are coloured according to energy per atom in Lennard-
+Jones units; see colour bar at top of ﬁgure. Basin volumes are
+represented by the area of each circle. Labels (a)-(g) denote
+clusters of structures of similar energy and conﬁguration; rep-
+resentative structures from each are shown. Structures in (h)
+are less obviously clustered, and tend to be comprised of less
+ordered packings of atoms.
+licence at https://bitbucket.org/bshires/sheap/
+src/master/. Also implemented in this package are the
+t-SNE algorithm, as well as a simpliﬁed version of UMAP
+- the qualitative performance of SHEAP on standard
+data-sets is compared against these in Appendix D. The
+maps presented in this work are plotted with Ovito, the
+Open Visualization Tool [66]. The structural data pre-
+sented in each map is generated using the AIRSS struc-
+ture prediction package [13, 14]. SOAP vectors are com-
+puted using the implementation in ASAP [64].
+SHEAP is stochastic, so the ﬁnal map diﬀers for in-
+dependent projections of the same source data-set, even
+for identical parameters. However, we ﬁnd that for an
+appropriately chosen parameter set, distinct runs consis-
+tently provide qualitatively equivalent results in all cases
+- for each data-set we present the map for a single random
+seed.
+A. LJ 13
+LJ13 has a relatively simple energy landscape. It is
+described as having a “single funnel” topology, meaning
+there is a general decrease in the energy of local minima
+with increasing structural similarity to the global mini-
+mum. This ground state structure is a ﬁlled 12-vertex
+icosahedron, and all local minima are within three rear-
+rangements of it [67].
+
+--- page 7 ---
+7
+FIG. 3. 2D SHEAP map produced from 50 ,000 unrelaxed,
+randomly sampled structures on the LJ 13 PES, described by
+sorted lists of all pairwise distances. The projection was
+made using a perplexity of 30, with a minimum sphere ra-
+dius R0 = 0 .01. The circles representing each structure
+are coloured according to energy per atom in Lennard-Jones
+units; see colour bar at top of ﬁgure.
+1. Relaxed vs. unrelaxed structures
+Fig. 2 shows a 2D SHEAP map produced from local
+minima on the LJ 13 PES. The search, which comprised
+of 50,000 samples, used a conﬁnement sphere of radius
+5.0σLJ for the initial random structures, with an imposed
+minimum separation of 2.0 σLJ. Structures were relaxed
+to nearby local minima using TPSD [60], resulting in a
+data-set of 1,108 distinct minima.
+The funnelled structure of the landscape is apparent,
+with minima energies correlating well with their distance
+from the global minimum (a) in the map. In addition,
+SHEAP has clustered together structures of similar en-
+ergies and arrangements. For example, the structures
+labelled (b) all result from one external atom of the icosa-
+hedron being moved from its ground state position to a
+diﬀerent surface site. Structures in the cluster labelled
+(c) result from two external atoms from the icosahedron
+being moved to diﬀerent surface sites.
+The success observed in the application of SHEAP to
+the data-set of minima is in stark contrast to the map
+presented in Fig. 3, which displays the 2D SHEAP pro-
+jection of the 50,000 unrelaxed structures. Fig. 3 contains
+no obvious clustering. The structures are arranged in a
+featureless, elongated “blob”, roughly ordered according
+to energy. Similar results are observed when projecting
+into 3D.
+The disparity between Figs. 2 and 3 is striking. It sug-
+gests that the PES itself is truly high dimensional, and
+one cannot produce a meaningful representation of the
+landscape from a projection of points drawn randomly
+from it. In the language of Sec. II, the randomly sam-
+pled points do not appear to lie on or close to any low-
+dimensional manifold. The distribution of minima on this
+surface, on the other hand, does appear to have some
+inherent low dimensionality, according to the choice of
+structure descriptor and distance metric.
+2. Projecting relaxed and unrelaxed structures together
+The question then is, where do these unrelaxed struc-
+tures lie relative to the minima? One might intuitively
+predict that they should fall into the gaps between the
+minima, but this is not what is observed using SHEAP.
+Fig. 4 shows a 2D SHEAP map constructed from a
+data-set comprised of local minima and unrelaxed struc-
+tures on the LJ 13 PES. The data-set contains the same
+relaxed structures that are presented in Fig. 2, as well
+as a series of unrelaxed random structures generated ac-
+cording to diﬀerent constraints. These are: (1) a spec-
+iﬁed number of symmetry operations, from 2 up to 5,
+with a ﬁxed conﬁnement sphere radius of 5 .0 σLJ, and
+(2) no symmetry constraints, with varying conﬁnement
+sphere radius, from 3.0 σLJ up to 5.0 σLJ in increments
+of 0.5 σLJ. There are 1 ,000 structures included for each
+set of constraints. Note that the distribution of minima
+is distorted by the addition of the unrelaxed structures.
+We attribute this to a reduced sensitivity in the relations
+between the minima, due to having to represent similar-
+ities to structures not on the manifold occupied by the
+minima. A lower perplexity was found to alleviate this
+somewhat.
+The majority of unrelaxed structures lie well away from
+the minima in a single, elongated cluster. As with Fig. 3,
+these unrelaxed structures are arranged roughly accord-
+ing to energy. Here, we also see that denser packings
+(smaller conﬁnement sphere radius) tend to lie towards
+the low-energy end of the cluster, closest to the minima,
+whilst the higher-symmetry packings tend to lie towards
+the edges. Interestingly, a few of the unrelaxed struc-
+tures actually cluster with the minima, despite being of
+signiﬁcantly higher energies. Each of these structures is
+found to possess 5 symmetry operations, and all contain
+at least 11 atoms that are close to the ideal icosahedral
+close-packing. This result demonstrates one aspect of the
+AIRSS philosophy - that sensible random structure gen-
+eration does much of the work in eﬃciently locating local
+minima.
+3. Projecting a steepest descent pathway
+In order to reveal the connection between the pre-
+relaxed structures and the central layout of local min-
+ima in Fig. 4, a SHEAP map was produced for a source
+data-set consisting of the same set of minima, plus se-
+lected structures visited along the pathway of steepest
+descent from an unrelaxed structure generated without
+symmetry constraint, down to the global minimum. The
+resulting projection is provided in Fig 5.
+We observe that this pathway traverses the space in
+the map between the unrelaxed structures and the min-
+ima, and passes by many local minima on its way to the
+icosahedral ground-state. The presence of the descent
+pathway leads to slight distortions in the distribution of
+minima in the map, relative to Fig. 2, likely due to over-
+
+--- page 8 ---
+8
+FIG. 4. 2D SHEAP map constructed from a data-set of minima and unrelaxed structures on the LJ 13 PES, described by sorted
+lists of all pairwise distances. The projection was made using a perplexity of 8. Circles in the main ﬁgure are coloured according
+to energy per atom in Lennard-Jones units, given by the colour bar at top of ﬁgure. Minima (all in the bottom-left cluster)
+are faded, with basin volumes represented by the area of each circle, using a minimum sphere radius R0 = 0.005. Circles
+representing unrelaxed structures have been enlarged to highlight them. The ﬁgure inset provides diﬀerent colourations of the
+top cluster, which contains only unrelaxed structues. Colouring is according to (a) energy per atom in Lennard-Jones units, (b)
+the conﬁnement radius in Lennard-Jones units, and (c) the number of imposed symmetry operations - see corresponding colour
+bars to right of inset. The few unrelaxed structures that cluster with the minima (all possessing 5 symmetry operations) have
+been labelled with their energy per atom in Lennard-Jones units, alongside 2 perpendicular perspectives of their conﬁguration.
+sampling of the regions on the PES visited during the
+relaxation.
+These SHEAP maps for LJ 13 provide an interesting
+perspective on the structure of its energy landscape.
+They suggest that the surface consists of clusters of min-
+ima which all sit very close to one another, with the
+unrelaxed structures predominantly residing outside the
+region occupied by these minima. Furthermore, they im-
+ply the existence some inherent low dimensionality in the
+distribution of these minima across the surface.
+B. LJ 38
+In previous work, LJ 38 has been described as hav-
+ing an archetypal double funnel energy landscape; this
+is depicted clearly in disconnectivity graphs, such as in
+Ref. [68]. The 38 atom system stands out in the context
+of LJ clusters due to its octahedral global minimum -
+most other cluster sizes exhibit ground-states based on
+icosahedra [69]. Whilst the octahedron is the lowest en-
+ergy arrangement for LJ 38, there is an icosahedral meta-
+stable conﬁguration that is only very slightly higher in
+energy. These two minima reside at the bottom of the
+two separate “funnels” in the landscape, with the funnel
+corresponding to the icosahedral structure being much
+broader than that corresponding to the global minimum,
+i. e. containing many more minima [70]. For this reason,
+LJ38 is well known to be a relatively diﬃcult test for
+structure searching algorithms.
+1. Two-dimensional map of minima data
+Fig. 6 (A) shows a 2D SHEAP map produced from
+minima on the LJ38 PES. The search consisted of 100,800
+samples, and used the same parameters and relaxation
+scheme as for the 13 atom system, resulting in a data-set
+of 89,464 distinct minima.
+LJ38 has many more degrees of freedom than LJ 13,
+leading to a far more complex landscape topology, with
+many more local minima. This is reﬂected in the
+searches, with almost 90 times more distinct minima be-
+ing located for the larger cluster from little over twice as
+many samples, and a much lower disparity between the
+largest and smallest basin volumes. The map for LJ38 ex-
+
+--- page 9 ---
+9
+FIG. 5. 2D SHEAP map produced from a data-set consisting
+of local minima on the LJ13 PES, plus selected structures vis-
+ited along the pathway of steepest descent from an unrelaxed
+structure generated without symmetry constraint, down to
+the global minimum. Structures are described by sorted lists
+of all pairwise distances. The projection used a perplexity
+of 30. Circles are coloured according to energy per atom in
+Lennard-Jones units, given by the colour bar at top of ﬁgure.
+For the minima, basin volumes are represented by the area of
+each circle, with a minimum hard sphere radius R0 = 0.005.
+Circles representing structures visited during the relaxation
+have been enlarged to highlight them.
+hibits greater connectivity than that for LJ 13, with the
+former showing much less clear-cut clustering of struc-
+tures, and a more continuous variation in the energy. We
+attribute this to the vastly greater number of minima
+compared to LJ 13, with the variation between minima
+being much more incremental for the larger system. For
+example, starting with the global minimum and mov-
+ing one atom from its ground state position to a surface
+site leads to a relatively much greater deviation from the
+ground state structure for LJ 13 than for LJ 38.
+The standout features in Fig. 6 (A) are the large
+“brain-like” cluster of minima (mostly low-symmetry,
+amorphous structures), and the strands of minima lead-
+ing away from this with progressively decreasing energies.
+With regards to the latter, there is an obvious connec-
+tion to be drawn to the supposed funnels. We ﬁnd that
+the octahedral global minimum and the icosahedral low-
+est meta-stable minimum reside at the ends of two of
+these diﬀerent strands, labelled (a) and (d), respectively.
+Preceding them are closely related structures, e. g. those
+labelled (g), which all result from a single external atom
+of the icosahedral structure being relocated to a diﬀerent
+surface site. Satisfyingly, the existence of these “fun-
+nels” has arisen purely from an analysis of the minima,
+through the structural information captured in the de-
+scriptor vectors. In the construction of the correspond-
+ing disconnectivity graph, funnelling is inferred through
+an examination of transition state data, and an evalua-
+tion of minima connectivity in the context of minimum
+energy pathways via these transition states. Although,
+note that one can construct approximate disconnectivity
+graphs based solely on the structural relationships be-
+tween minima (using ﬁngerprint distances), circumvent-
+ing the expensive transition state calculations by com-
+puting estimates for the energy barriers in the system
+[71].
+The following question arises: what are the remaining
+branches of structures appearing in the SHEAP map?
+In Fig. 6, the most apparent of these additional strands
+of structures are labelled (b) and (c), alongside illustra-
+tions of the lowest energy structure residing in each. We
+propose these to be previously unreported funnels in the
+LJ38 PES, both of which could potentially be considered
+sub-funnels of a super-funnel also containing (a) - they
+appear to be part of the same branch, eventually sepa-
+rating oﬀ to comprise independent funnels.
+2. Other colour schemes
+To better interpret the layout of structures across the
+map, two further schemes for colouring the circles are
+considered, in addition to the energy per atom. These
+are the convex hull volume of the structure per atom,
+and the number of contacts in each structure per atom,
+provided in Figs. 6 (B) and (C), respectively.
+The convex hull volume shows a very similar distribu-
+tion to the energy, both in the main cluster of structures
+(albeit with slightly less variation), and in the funnels.
+We attribute this to the LJ energy being entirely depen-
+dent on the pairwise distances between atoms; there are
+no 3-body or higher terms. Hence, the energy is expected
+to be closely correlated to the packing density within the
+structures, which in turn should correlate well with the
+map position.
+In order to produce Fig. 6 (C), a contact is deﬁned as
+any pairwise separation that is less than 2 .3 σLJ, 2.5%
+above the minimum separation in the LJ pair potential.
+We observe that the funnels in the map correspond to
+regions of very high numbers of contacts per atom, and
+the number of contacts steadily reduces with increasing
+separation from these funnels, roughly from bottom to
+top of the main cluster.
+3. Projecting into the third dimension
+So far SHEAP maps have only been presented for two
+map dimensions. However, we ﬁnd that often there is a
+non-negligible improvement in the quality of visualisation
+by accessing an extra dimension and projecting into 3D.
+To illustrate this, in Fig. 7 we present three perpendicular
+perspectives of a 3D SHEAP map produced for the same
+data-set of LJ 38 minima. Note that the axis system is
+arbitrary.
+
+--- page 10 ---
+10
+FIG. 6. (A) shows a 2D SHEAP map for 89 ,464 minima on the LJ 38 PES, generated with RSS, described by sorted lists of all
+pairwise distances. The projection was made using a perplexity of 30, with a minimum sphere radius R0 = 0.008. The circles
+representing each structure are coloured according to energy per atom in Lennard-Jones units; see colour bar at top of ﬁgure.
+Basin volumes are represented by the area of each circle. (a)-(d) label proposed funnels in the LJ 38 PES; structures shown
+alongside correspond to the lowest energy minima residing in each. (a) contains the octahedral global minimum; (b) and (c)
+could be considered sub-funnels of this. (d) contains the icosahedral lowest meta-stable structure. (e) labels a small island of
+structures occupying the space between (a)-(c) and (d). (f) and (g) label low-energy minima residing in funnel (d), and are
+closely related to icosahedral structure. (h), (i) and (j) label representative structures from the large, “brain-like” cluster of
+minima which contains the majority of structures - these are predominantly of low-symmetry. (B) and (C) depict the same
+SHEAP map as in (A), but coloured according to diﬀerent physical parameters. Circles in (B) are coloured according the
+convex hull volume of each cluster. Circles in (C) are coloured according to number of contacts per atom in each cluster (see
+main text for details). Corresponding colour bars are provided below these sub-ﬁgures.
+
+--- page 11 ---
+11
+FIG. 7. Three perpendicular perspectives of a 3D SHEAP
+map produced from the same set of LJ 38 minima that are
+presented in Fig. 6. The projection was made using a per-
+plexity of 30, with a minimum sphere radiusR0 = 0.008. The
+spheres representing each structure are coloured according to
+energy per atom in Lennard-Jones units; see colour bar at
+top of ﬁgure. Basin volumes are represented by the volume
+of each sphere. Each viewpoint looks down one of the axes
+displayed at the bottom right of the ﬁgure; the axes have no
+other physical meaning.
+The 3D map is qualitatively very similar to that in
+2D; the 2D map looks almost identical to a projection
+of the 3D distribution onto the x-y plane. However, one
+can see from the other two perspectives that this is not
+the full picture, and there are features protruding out of
+this plane that are not represented faithfully in 2D. Most
+notably, the separation between the icosahedral funnel
+(d) and the 3 other large (sub-) funnels (a)-(c) is more
+pronounced with the extra dimension. The classiﬁcation
+of (a)-(c) as sub-funnels of a single, larger “super-funnel”
+is also more obvious in this projection.
+4. Using a diﬀerent descriptor: SOAP
+The distance based descriptor employed so far is ap-
+propriate for LJ systems, since their energy is determined
+entirely by pairwise separations. However, the picture
+of an energy landscape obtained with SHEAP should be
+qualitatively robust to the choice of descriptor, as long as
+the relevant structural information is captured. To test
+this, we compare the above results for LJ 38, which use
+sorted lists of distances, with the use of SOAP vectors
+[62].
+Unlike the sorted list of distances (for which the only
+parameter is the cut-oﬀ distance), the SOAP vector for a
+given structure is dependant on many parameter choices:
+rcut speciﬁes the distance beyond which neighbour atoms
+are not taken into account, nmax speciﬁes the number of
+radial basis functions to be used for each local descrip-
+tor, lmax speciﬁes the maximum degree of the spherical
+harmonics, and σ speciﬁes the standard deviation of the
+Gaussians. This level of freedom can be beneﬁcial, al-
+lowing the descriptor to be tailored to better suit a given
+system, but it demands more input on the part of the
+user. The choice of radial basis functions is also impor-
+tant, but is not addressed in detail here. By default,
+ASAP uses spherical Gaussian type orbitals [72], rather
+than the original polynomial radial basis set [62], allow-
+ing much faster analytic computation [73].
+Fig. 8 shows 2D SHEAP maps for a subset of the LJ 38
+data-set studied in Section IV B, described by SOAP vec-
+tors using a range of parameters. A reduced data-set
+(10,000 structures) is used to lessen the computational
+cost.
+ASAP permits up to 15 radial and 9 spherical harmonic
+SOAP basis functions. Fig. 8 (A) illustrates the eﬀect of
+varyingσ andrcut for these values ofnmax andlmax. Note
+that no structure in the data-set contained a separation
+greater then 10.0. There are no maps for rcut = 2.5 (as
+with other nmax and lmax considered), since this cut-oﬀ
+is too low relative to the number of radial basis func-
+tions, preventing normalisation of the latter. Whilst the
+exact structure of the map varies with each set of pa-
+rameters, there is a broad range (inside the bold, dashed,
+red perimeter) for which the key features are consistent
+with the maps produced using sorted lists of distances.
+Within this range of parameters, the large cluster of low-
+symmetry structures that is present in Figs. 6 and 7 is
+clear, the largest funnel, (d) in Fig. 6, is clearly revealed,
+and at least two other funnels are also discernible. For
+σ values too large, the deﬁnition of the map diminishes,
+and the funnels are absorbed into the main cluster. For
+σ values too small, the smooth variation in energy across
+the cluster of low-symmetry structures is lost.
+Figs. 8 (B) and (C) depict results using fewer basis
+functions: nmax,l max = 12, 6 and 8, 4, respectively. Com-
+paring these to Fig. 8 (A), we see that the band of suitable
+σ shifts to lower values with lower nmax and lmax. We
+also observe that the scope of acceptable parameters is
+of similar size for Figs. 8 (A) and (B), but is signiﬁcantly
+restricted in (C), for which only the mid-range rcut is
+able to produce the expected map features for any σ.
+In general, the funnels labelled (a) and (b) in Fig. 6
+are not as well separated in the maps of Fig. 8. We at-
+tribute this to the smaller sample size used for these pro-
+jections - 2D and 3D maps produced using SOAP from
+the full data-set, Fig. 9 (which use rcut = 10.0, nmax =
+15, lmax = 9, σ = 0.3), provide clear separation of these
+funnels.
+We conclude that, with the right choice of SOAP pa-
+rameters, the picture of the LJ 38 energy landscape ob-
+tained through SHEAP is qualitatively equivalent for the
+two descriptors. Furthermore, we ﬁnd that the range of
+safe/suitable SOAP parameters is relatively broad, and
+easy to identify for this system, via a scan of possible
+values, visualised through SHEAP.
+
+--- page 12 ---
+12
+FIG. 8. 2D SHEAP maps for 10 ,000 minima (prior to similarity check) on the LJ 38 PES, described using SOAP with various
+parameters. (A), (B), and (C) show results for nmax,l max = 15, 9, 12, 6, and 8, 4, respectively. rcut is consistent across each
+row, values given on the far left. σ is consistent across each column, values given at the bottom. Projections were made using
+a perplexity of 15, with R0 computed by Eqn. B1. The circles representing each structure are coloured according to energy per
+atom in Lennard-Jones units; see colour bar at top of ﬁgure. Basin volumes are represented by the area of each circle. Maps
+in the bold, dashed, red perimeters represent “suitable” SOAP parameter choices, producing the same key features as Fig. 6.
+Maps in the faded, dashed, red perimeters also show these features, but less clearly.
+C. LJ 55
+LJ55 is referred to as a “structure seeker”, meaning it
+has a very distinct global minimum that is easily located
+in a structure search, with no competing morphologies
+separated by high barriers [74]. Here we present a repre-
+sentation of this landscape obtained with SHEAP, high-
+lighting its contrast to that of LJ 38.
+Fig. 10 shows 2D and 3D SHEAP maps produced from
+minima on the LJ 55 PES. The search consisted of 50,000
+samples and used the same parameters and relaxation
+scheme as the above LJ systems, giving 49 ,813 distinct
+minima.
+
+--- page 13 ---
+13
+FIG. 9. 2D and 3D SHEAP maps for produced from the same set of LJ 38 minima that are presented in Fig. 6, described using
+SOAP with parametersrcut = 10.0,nmax,l max = 15, 9, andσ = 0.3. The projections were made using a perplexity of 30, with a
+minimum sphere radius R0 = 0.006 for the 2D map, and R0 = 0.01 for 3D. The circles/spheres representing each structure are
+coloured according to energy per atom in Lennard-Jones units; see colour bar at top of ﬁgure. Basin volumes are represented
+by the area/volume of each sphere/circle. Each viewpoint of 3D map looks down one of the axes displayed, as labelled; the axes
+have no other physical meaning. (a)-(d) in the 2D map label proposed funnels in the LJ 38 PES, analogous to those labelled in
+Fig. 6, with the same low-energy minima residing at the ends.
+There is clearly a funnelled structure to the arrange-
+ment of minima, terminating with the icosahedron and
+closely related conﬁgurations, such as those labelled (b),
+which all have the structure of the I h groundstate but
+with one external atom moved to a diﬀerent surface site.
+However, the maps also suggest that describing the land-
+scape as a single funnel would be an oversimpliﬁcation.
+There is a second strand of structures which branches
+oﬀ from the funnel to the global minimum, leading to a
+relatively low-energy D 5h conﬁguration. This structure
+is related to the I h conﬁguration via a twist about the
+5-fold axis [2]. It stands out in the corresponding dis-
+connectivity graph due to its relatively low energy and
+high barrier for transition to the global minimum [67];
+this picture is complemented by the detail in the struc-
+tural similarity and sub-funnel arrangement provided by
+SHEAP.
+Another band of (sub-)funnels is present, well sepa-
+rated from those leading to the I h and D5h structures in
+the 3D map (in a similar manner to the separation of (d)
+from (a), (b) and (c) in Fig. 6). However, these are all of
+relatively high energy (unlike (d) in Fig. 6), and so are
+not competetive with the global minimum.
+Despite some similarities, it is apparent from the
+SHEAP maps why LJ 55 is a more straightforward prob-
+lem than LJ 38 in terms of global optimisation. With
+LJ55, the competing funnel(s)/strand(s) are shallow com-
+pared to that of the global minimum, and there are no
+similarly low-energy structures outside of the main funnel
+- the D5h structure exceeds the global minimum by∼ 0.1ϵ
+per atom. With LJ 38, competing funnels are deep and
+terminate with structures similar in energy to the global
+minimum (only∼ 0.01ϵ per atom higher). Furthermore,
+for LJ38 the most voluminous funnel is not the one con-
+taining the global minimum, and the maps also possesses
+a region of low-energy structures within the amorphous
+bulk of conﬁgurations, which is not the case for LJ 55.
+
+--- page 14 ---
+14
+FIG. 10. 2D and 3D SHEAP maps for 49 ,813 minima on the LJ 55 PES, generated with RSS, described by sorted lists of all
+pairwise distances. Projections were made using a perplexity of 30, with a minimum sphere radius 0.01. The circles representing
+each structure are coloured according to energy per atom in Lennard-Jones units; see colour bar at top of ﬁgure. Basin volumes
+are represented by the area of each circle. (a)-(f) label selected structures in the landscape: (a) I h, global minimum; (b) C s,
+all have one surface atom relocated relative to global minimum, (c) D 5h, lowest energy structure in funnel branching oﬀ from
+that to global minimum; (d) C 1, one atom relocated relative to D 5h; (e) C 5v and (f) C 5, high symmetry structures outside the
+main (sub-)funnels to I h and D5h. Each viewpoint of 3D map looks down one of the axes displayed, as labelled; the axes have
+no other physical meaning.
+D. Carbon
+To demonstrate the applicability of SHEAP to realistic
+periodic systems, we consider a data-set of solid-state car-
+bon structures, taken from the Materials Cloud Archive
+[75]. The set contains 11 ,370 structures obtained with
+AIRSS performed at 10 GPa for a range of cell sizes (up
+to 24 atoms), with 2 to 4 symmetry operations imposed
+on the pre-relaxed structures. All structures are based on
+sp/sp2/sp3 hybridised carbon, but they exhibit a wide
+range of topologies. The interactions in this system con-
+tain signiﬁcant 3-body contributions [77], meaning the
+sorted list of pairwise distances is not a suitable struc-
+ture descriptor. Hence, we use SOAP, which is capable
+of describing these relationships completely [62].
+As demonstrated with LJ 38, the SOAP descriptor has
+a number of parameters which eﬀect the appearance of a
+SHEAP map. With that model system, we were able to
+obtain suitable values relatively easily via a scan of the
+parameter space. However, it would of course be prefer-
+able to have a systematic way to obtain good parameter
+choices for any given system. For systems of real atoms,
+we ﬁnd a satisfying solution is the heuristic approach of
+Cheng et al. [64], providing a set of so called “universal”
+parameters. These come in 3 ﬂavours; “smart”, which
+computes a suitable set of parameters by considering the
+typical and minimum bond lengths of each of the species
+involved, “minimal”, which is similar to smart, but uses
+fewer basis functions, and “longrange”, which again is
+similar to smart, but aims to capture more of the long-
+range structure. For the “smart” and “longrange” cases,
+two sets of SOAP parameters are computed, at slightly
+diﬀerent length scales. A single structure descriptor is
+constructed by concatenating the global SOAP vectors
+for each set. Here, we provide a SHEAP map for the
+above carbon data set produced using the “smart” pa-
+rameters - see Fig. 11.
+Most structures lie within a single, elongated arrange-
+ment. Several have distinctly large basins; most of these
+are low-energy and lie towards the edge of the distribu-
+tion. Many of these correspond to well known carbon
+arrangements, including diamond (a) and graphite (g),
+which reside at opposite ends of the map, as well as lons-
+daleite (b), and the chiral framework structure (d) of
+Ref. [76]. These and other standout clusters have been
+labelled to provide a representative picture of the distri-
+bution of structures.
+Comparing the SHEAP map for carbon to those for
+the LJ systems highlights key diﬀerences in their energy
+landscapes. With the LJ systems, neighbouring minima
+
+--- page 15 ---
+15
+FIG. 11. 2D SHEAP map for 11 ,370 structures of solid-state carbon, obtained with AIRSS at 10 GPa for a range of cell sizes
+- data-set taken from Materials Cloud Archive [75]. Structures in the source-data represented as concatenated global SOAP
+vectors using universal “smart” parameters: rcut,n max,l max,σ = {2.4, 8, 4, 0.3}, {2.0, 8, 4, 0.25}. The projection was made
+using a perplexity of 30, with R0 = 0.0147, as computed by Eqn. B1. The circles representing each structure are coloured
+according to their energy per atom in eV; see colour bar at top of ﬁgure. Basin volumes are represented by the area of each
+circle. (a)-(n) label selected structures, including: (a) diamond, (b) lonsdaleite, (d) the chiral framework structure of [76], (g)
+graphite, (h) graphene layers with non-graphite packing. Inset shows the same map, coloured according to volume per atom in
+˚A
+3
+; see colour bar at top of inset.
+tend to be close in energy. With carbon, there is a large
+degree of “mixing” between high- and low-energy struc-
+tures; basins of high-energy minima are often surrounded
+by those of much lower energy, and vice versa. Further-
+more, the variation in the energy of minima across the
+carbon map shows less clear long-range trends than for
+the LJ clusters. Whilst the LJ landscapes possess clear
+funnels of minima, such features do not appear to be
+prevalent in the carbon PES. Through this comparison,
+it is easy to see why LJ landscapes lend themselves very
+well to structure prediction algorithms such as simulated
+annealing [78] and basin-hopping [6, 7], which utilise the
+presence of funnels to locate progressively lower energy
+minima, whilst the study of carbon has required more
+heuristic approaches, such as in Ref. [79].
+As illustrated in the inset of Fig. 11, in contrast to
+the energy variation, the volume per atom of each car-
+bon structure follows a clear global trend across the map.
+This demonstrates the additional complexity in the en-
+ergy landscape resulting from 3-body interactions, lead-
+ing to less correlation between the energy and density
+than is seen for a simple pairwise interaction.
+E. C+H+N+O
+As a ﬁnal demonstration of SHEAP, we present results
+obtained for a data-set of structures containing multi-
+ple species. The set considered consists of 50 ,000 solid-
+state structures containing carbon, hydrogen, nitrogen
+and oxygen (the four most common elements in organic
+chemistry and biology) at varying stoichiometries, which
+reduced to 21,239 distinct structures following a similar-
+ity check. These conﬁgurations, taken from a larger set
+on the Materials Cloud Archive [75], were generated with
+AIRSS performed at 1 GPa. Structures in the source
+data-set are represented as concatenated global SOAP
+vectors, using the “smart” universal parameters, includ-
+ing the crossover terms between diﬀerent species. Pre-
+sented in Fig. 12 are 2D and 3D SHEAP maps for this
+system.
+The 2D map contains four distinct corners, each cor-
+responding to arrangements of one of the four elements,
+as labelled. One can easily identify clusters of basins
+corresponding to low-energy conﬁgurations of binary
+molecules, most notably H 2O, CO 2, and NH 3. Intu-
+itively, each of these molecular structures resides clos-
+est to the corner corresponding to the element it con-
+tains with the highest stoichiometry. The edges of the
+
+--- page 16 ---
+16
+FIG. 12. 2D and 3D SHEAP maps for 21 ,239 structures containing carbon, hydrogen, nitrogen and oxygen at varying
+stoichiometries, obtained with AIRSS performed at 1 GPa, taken from the Materials Cloud Archive [75]. Structures in
+the source-data represented as concatenated global SOAP vectors using “smart” universal parameters: rcut,n max,l max,σ =
+{2.7, 8, 4, 0.33}, {2.0, 8, 4, 0.25}. Projections were made using a perplexity of 30, withR0 computed by Eqn. B1. Circles/spheres
+representing each structure are coloured according to their formation energy per atom in eV; see colour bar at top of ﬁgure.
+Basin volumes are represented by the area/volume of each sphere/circle. Each viewpoint of the 3D map looks down one of
+the axes displayed, as labelled; the axes have no other physical meaning. Clusters/regions containing polymorphs of various
+molecular species are labelled in the 2D map.
+map represent structures containing predominantly the
+elements of the adjacent corners, also in agreement with
+intuition. The same is true for the structures occupying
+the regions between opposite corners (H, N and C, O).
+The lowest energy structures containing each element in
+equal stoichiometry correspond to polymers of isocyanic
+acid (O=C=NH), which reside close to the centre of the
+map, as labelled. A few other standout clusters/basins
+have been labelled, according to the molecule(s) whose
+polymorphs are are mapped there, to provide a represen-
+tative picture of the distribution of structures and stoi-
+chiometries.
+The 3D map also contains a distinct corner for each
+of the 4 elements. However, the extra dimension facili-
+tates the emergence of an edge between every pair, and
+provides clearer separation of diﬀerent stoichiometries,
+particularly for structures residing towards the centre of
+the 2D map. The result resembles an irregular tetra-
+hedron, with slight outwards curvature of the faces and
+edges. This is reminiscent of a quaternary convex hull
+plot [80]; it is striking that the similarities to this con-
+struction have emerged naturally from our projection of
+the energy landscape.
+Both maps depict a higher density of structures at
+the edges (and between opposite corners in 2D), where
+the binary (and unary) conﬁgurations reside. This
+demonstrates that SHEAP is able to highlight any non-
+uniformity or biasing in the sampling of a conﬁguration
+space.
+F. Cost vs. dimensionality
+In Sections IV B, IV C and IV E we demonstrated that
+the visualisation quality produced by SHEAP can be im-
+proved by projecting into three dimensions, rather than
+two. How do we know that there are no important fea-
+tures in a given minima distribution that would be re-
+vealed if we were able to view a projection into higher
+dimensions? We address this by considering the opti-
+mal cost (in the absence of the hard sphere interaction)
+achieved by projections into a range of map dimension-
+alities.
+This analysis was conducted for data-sets of 10,000 lo-
+cal minima of each of the systems studied above, as well
+as data-sets consisting of 10,000 points drawn uniformly
+at random inside the unit hypercubes of 2 to 6 dimen-
+sions. For the structural data, 10 independent SHEAP
+projections were carried out, without switching on the
+hard sphere interaction, for 1 to 6 map dimensions, s.
+
+--- page 17 ---
+17
+FIG. 13. Lowest cost obtained through SHEAP projections
+(without hard-sphere interactions) of data-sets of 10,000 local
+minima for ﬁve systems, plotted against the number of map
+dimensions. Also shown are (lowest) cost vs. map dimension
+plots for 10,000 points drawn uniformly at random inside the
+unit hypercubes of 2-6 dimensions, on a single set of axes.
+Each SHEAP projection used a perplexity of 30.
+For the points inside hypercubes, SHEAP projections
+were conducted for up to 8 dimensions. The lowest cost
+obtained at each map dimension, for each data-set, is
+plotted against s in Fig. 13.
+Note that the cost is restricted from approaching zero
+as s−→D (and beyond) by the use of diﬀerent func-
+tional forms for the weights in the high and low dimen-
+sions; there is an inherent cost associated with the use of
+diﬀerent distributions, even when s≥D.
+For all data-sets of structural minima, we observe a
+dramatic reduction in the (lowest) relative cost in going
+from 1D to 2D. We also see a non-negligible reduction
+from increasing the map dimensionality from two to three
+(except in the case of carbon), which is most pronounced
+for C+H+N+O. However, it appears that in each case
+there is nothing of signiﬁcance to be gained in going be-
+yond 3D.
+We compare to the plots for uniformly drawn random
+points within hypercubes of varying dimensionality. Ac-
+cording to SHEAP, in order to faithfully represent the
+distribution of points in the hypercube of dimensionality
+D (which must contain long-range D-dimensional fea-
+tures), at least s =D map dimensions are required. For
+each cube, using fewer than D dimensions in the map
+leads to a penalty in the optimal cost that is obtained,
+which increases with decreasing map dimensionality.
+These results suggest that the distribution of minima
+on the landscapes we have considered are inherently low
+dimensional (according to the given combination of struc-
+ture descriptor and distance metric), providing validation
+for our approach to producing visual representations of
+high-dimensional PESs.
+V. DISCUSSION
+The striking observation of local minima being ap-
+proximately distributed across low-dimensional mani-
+folds within conﬁguration space could have profound con-
+sequences for structure prediction. The ability to sample
+directly from this manifold would be a highly eﬃcient
+means of searching for stable structures. Unfortunately,
+SHEAP (as with all algorithms in the same family) does
+not yield a transformation matrix between the original
+and reduced spaces, and the latter is not deﬁned with
+respect to a meaningful set of axes. Thus, there is no
+clear way to generate new structures on the manifold
+learned by SHEAP. However, our ﬁndings are promis-
+ing for the use of other machine learning methods such
+variational auto-encoders [81] (VAEs) and generative ad-
+versarial networks [82] (GANs) in structure prediction for
+generating candidate structures (see Ref. [83]), and sug-
+gest that learning from previously located minima would
+be an eﬀective strategy. This could be achieved by pair-
+ing with a non-learning based approach such as AIRSS.
+SHEAP could be deployed to illuminate diﬀerences in the
+sampling of a given surface by diﬀerent approaches, or by
+diﬀerent parameter choices within a given approach.
+Other pioneering work in developing a greater under-
+standing of energy landscapes through visualisation is
+Ref. [3], which also analyses similarities between local
+minima to reveal topological features. Oganov and Valle
+employ a ﬁngerprint structure descriptor based on pair-
+wise separations of atoms [84], and compute the similar-
+ities between ﬁngerprints with a cosine distance metric.
+
+--- page 18 ---
+18
+They use this similarity measure to construct plots of
+energy vs. distance to the global minimum for local min-
+ima on a given landscape, as well as mappings of the
+minima distributions which aim to produce “distances
+between points in the graph that are maximally close
+to the distances between the corresponding ﬁngerprints”
+(see multi-dimensional scaling [85]). Their analysis re-
+veals funnels in the landscapes of crystalline systems of
+few atoms per unit cell. Whilst Ref. [3] does not focus
+on the quality of the mapping between their description
+of a given PES and the low-dimensional space it is visu-
+alised in, and only deals with relatively small sample sizes
+(a few thousand structures), the tools developed there
+have been demonstrated to facilitate improved structure
+searching [86]. Dimensionality reduction by SHEAP fur-
+thers the potential of such an approach.
+In this work we have represented real crystalline sys-
+tems using SOAP. However, it is important to note that
+the development of good structure descriptors is an active
+ﬁeld, and there are numerous justiﬁable choices we could
+have made for the descriptor-metric pairing. Of course,
+the entire form of a map is dependent on the choice of
+descriptor and distance metric, and a map’s features can-
+not be interpreted without knowledge of the descriptor-
+metric pair used. With SOAP, a global reprentation of
+a given structure is constructed by averaging the local
+ﬁngerprints of each atomic environment. As with any
+instance of averaging, this step introduces a loss of struc-
+tural information, which becomes severe for large unit
+cells. A potential solution is to build on the work of
+Ref. [87]. Rather than comparing averaged SOAP de-
+scriptors via a Euclidean distance metric, one could use
+the Hungarian algorithm to best match the atomic envi-
+ronments in a pair of structures, summing over the in-
+dividual distances between matching environments. Any
+such, more sophistocated approach would need to be as-
+sessed with regard to the balance between increased ﬁ-
+delity of the map versus the computational cost of the
+algorithm.
+VI. CONCLUSION
+In conclusion, SHEAP enables us to produce mean-
+ingful and interpretable low-dimensional representations
+of a range of PESs, requiring only the structural infor-
+mation contained in minima data obtained from random
+structure searches as input, providing fresh insight into
+their topologies. The maps presented contain distribu-
+tions and clusters of structures that we have been able
+to rationalise, and reveal long range topological features,
+including funnels (or the lack thereof).
+By evaluating the costs at higher map dimensionali-
+ties, we have assessed the validity of SHEAP projections
+into the low number of dimensions that we can compre-
+hend. In doing so, we have revealed an intrinsic low-
+dimensionality to the distributions of minima, as repre-
+sented by the descriptors/metrics considered, across both
+model PESs, and those corresponding to realistic, solid-
+state systems. We observe that with all systems studied,
+no more than three map dimensions are required to rep-
+resent all of the structural variation captured in our de-
+scriptions of the local minima, with two map dimensions
+also enabling useful projections.
+We have demonstrated that SHEAP has the potential
+to be a useful tool in the ﬁeld of structure prediction
+(and beyond), providing a convenient and concise way
+to visually represent and compare the large quantities of
+data that are generated in structure searches. The in-
+sight gained from these projections could provide inspi-
+ration for approaches to improving/optimising sampling
+of a given landscape for a desired purpose.
+ACKNOWLEDGMENTS
+We thank Daan Frenkel, Joseph Nelson, and Bonan
+Zhu for useful discussions. BS acknowledges the EPSRC
+CDT in Computational Methods for Materials Science
+for funding under grant number EP/L015552/1. CJP
+has been supported by the Royal Society through a Royal
+Society Wolfson Research Merit award. This work was
+performed using resources provided by the Cambridge
+Service for Data Driven Discovery (CSD3), operated by
+the University of Cambridge Research Computing Ser-
+vice (www.csd3.cam.ac.uk).
+Appendix A: UMAP vs. t-SNE
+For algorithms that follow the framework outlined in
+Section II A, the optimisation procedure is usually dic-
+tated by a cost-function gradient that can be separated
+into a sum of attractive and repulsive pairwise interac-
+tions between map points;
+dC
+dY =
+∑
+i
+∑
+j>i
+Fatt.(yi, yj)−Frep.(yi, yj). (A1)
+The t-SNE algorithm exploits this with its use of early ex-
+aggeration to accelerate the optimisation [28]; this tech-
+nique works by the temporary enhancement of the at-
+tractive contribution to the gradient, achieved through
+multiplying these terms by some positive scalar α > 1
+for the ﬁrst few hundred iterations of optimisation, pro-
+moting the formation of clusters in the projected data.
+In t-SNE, the cost function measuring the faithfulness
+with which the probabilities qij model their correspond-
+ing pij is the Kullback-Leibler (KL) divergence of the
+former distribution from the latter [28]:
+Ct-SNE =
+∑
+i,j
+pij log
+(pij
+qij
+)
+. (A2)
+The attractive contribution to the gradient in t-SNE is a
+direct result of the form of the cost function, and is what
+
+--- page 19 ---
+19
+drives the algorithm to accurately reproduce the local
+connectivity of the source data in the projected map.
+The repulsive contribution is a result of the constraint
+that the low-dimensional weights qij sum to 1. This can
+be incorporated either through the treatment of the opti-
+misation with an additional Lagrangian multiplier term,
+or directly in the deﬁnition of the weights. Without this
+constraint, the KL-divergence would be minimised by all
+points in the map collapsing onto one another.
+UMAP chooses to minimise the fuzzy set cross-entropy
+between the two distributions [29]:
+CUMAP =
+∑
+i,j
+pij log
+(pij
+qij
+)
++ (1−pij) log
+(1−pij
+1−qij
+)
+.
+(A3)
+The ﬁrst term is identical to the KL-divergence used by
+t-SNE, and produces the attractive contribution to the
+gradient. In UMAP, this acts only between map points
+that are considered to be nearest neighbours in the source
+data, meaning pij = 0 for all pairs of points i and j for
+which neither is considered one of the kth nearest neigh-
+bours (k is a user-speciﬁed hyperparameter) of the other,
+according to the deﬁned distance metric. The second, ad-
+ditional term introduces a repulsion between every pair
+of map points that is greater the further apart the cor-
+responding points are in the source data. This choice
+of cost function is the key reason that UMAP is able to
+provide improved performance over t-SNE.
+Firstly, in t-SNE the repulsive term in the gradient
+appears only because of the constraint that the low-
+dimensional weights qij sum to one, which requires the
+re-normalisation of all of these weights at each iteration
+of the optimisation procedure. In UMAP, the cost func-
+tion introduces a repulsive contribution to the gradient
+without the need for this constraint, meaning the costly
+normalisation step can be avoided.
+Secondly, the repulsive term contribution to the gra-
+dient in UMAP is more dependent on the actual data
+than that in t-SNE. Thus, UMAP tends to do a better
+job than t-SNE in producing a faithful representation of
+the global structure of the source data.
+Finally, the removal of the need to normalise the
+weightsqij means that the cost function is amenable to
+optimisation via SGD, which replaces the true gradient
+with an estimate that requires only a stochastically cho-
+sen subset of the components to be evaluated. UMAP im-
+plements an eﬃcient approximate SGD algorithm which
+makes use of probabilistic edge sampling and negative
+sampling [29]. The improvements in speed and scalling
+achieved by UMAP over t-SNE are largely a result of the
+use of SGD, rather than some other full gradient descent
+method.
+However, a fairly subtle caveat arises with UMAP’s
+implementation of SGD. The repulsive part of the in-
+teraction between map points is treated with negative
+sampling [88]. Whilst this vastly reduces the number of
+repulsive interactions that need to be evaluated, it also
+has the eﬀect of de-exaggerating the repulsion between
+the map points, relative to their interaction as described
+by the true cost function. We ﬁnd that this is crucial
+to UMAP producing a meaningful projection. Because
+of this, UMAP’s optimisation scheme does not actually
+minimise the deﬁned cost function, and the algorithm
+only “converges” because the step size is forced to go to
+zero. Thus, whilst UMAP is very eﬃcient, and produces
+low-dimensional projections that appear to improve on
+those by the t-SNE algorithm, it is rather unsatisfactory
+in that the cost function deﬁned within the algorithm is
+not truly minimised in the construction of the ﬁnal map.
+Appendix B: Choosing R 0
+The choice of the minimum sphere/circle radius R0 is
+critical. If, in the absence of the hard spheres, the sepa-
+ration between a given pair of map points is smaller than
+the sum of their hard sphere radii, then the introduction
+of the hard sphere interaction will force these structures
+apart. Thus, if R0 is large enough for this to be the
+case for a single pair of structures, the introduction of
+hard spheres results in a distortion of the layout of the
+map. On the other hand, if R0 is too small relative to the
+spread of data in the map, some (or all) of the spheres
+may be barely visible. Hence, a good choice for R0 com-
+promises between ensuring that all of the structures in
+the map are clearly visible, whilst minimising the distor-
+tion of the layout of structures.
+By default, the value of R0 is computed in the same
+iteration at which the hard sphere interaction is switched
+on, as a fraction of the average separation of the map
+points from their centre of mass:
+R0 = 2s
+10
+(
+N∑N
+i=1ci
+)1/s
+⟨||yi− yCoM||⟩HS , (B1)
+where
+⟨||yi− yCoM||⟩HS = 1
+N
+N∑
+i=1
+||yi− yCoM||HS , (B2)
+and the pre-multiplying factor was selected by empirical
+investigation, and may be altered in future. Alterna-
+tively, the value ofR0 can be input by the user, allowing
+interactive feedback.
+Appendix C: Random projection
+Random projection relies on the Johnson-
+Lindenstrauss lemma [91], which states that any
+set of N points in a high-dimensional Euclidean space
+can be embedded into a k ≥ Olog(N/ϵ2) dimensional
+Euclidean subspace without distorting the distances
+between any pair of points by more than a factor of
+1±ϵ, for any 0 < ϵ <1. It can be proven that if the
+
+--- page 20 ---
+20
+FIG. 14. Projections of the COIL-20 [89] and MNIST [90] data-sets made by our implementations of the t-SNE, UMAP, and
+SHEAP algorithms. The legend at the top of the ﬁgure labels distinct objects in the COIL-20 data-set; the legend at the
+bottom labels distinct digits in the MNIST data-set.
+k-dimensional subspace is constructed by the generation
+of k random but mutually orthogonal and normalised
+vectors in the high-dimensional space, then the this
+will be achieved with high probability. Furthermore,
+it is found that in practice, even if embedding into a
+low-dimensional space of dimension s <<O log(N/ϵ2),
+one can often still obtain something useful from a
+random projection. In our implementation of random
+projection, a source data-point x existing in the original
+D-dimensional space is projected onto an s-dimensional
+subspace by transformation via a s×D matrix R whose
+s rows are orthonormal vectors in the original space, to
+produce the projected data-point:
+yRP =Rx. (C1)
+In addition, because our descriptor vectors contain only
+positive entries (they are pairwise distances), we know
+that all of the data-points exist in the positive orthant
+of the D-dimensional hyperspace, meaning only a 1 /2d
+fraction of the total space is accessible. Hence, we actu-
+ally choose the row vectors comprising R to contain only
+positive entries.
+Appendix D: Qualitative comparison of SHEAP to
+t-SNE and UMAP
+The visualisation quality of SHEAP is compared
+against our implementations of t-SNE and UMAP on
+two standard image data-sets: COIL-20 [89], and MNIST
+[90]. In general, the improvements oﬀered by UMAP over
+t-SNE are maintained with SHEAP.
+The COIL-20 [89] data-set contains 1, 440 images, pro-
+duced by individually placing 20 objects on a motorised
+turn-table (against a black background) and photograph-
+ing them at 5◦ intervals, up to a complete rotation. Each
+image is grey-scale, containing 128 × 128 pixels, and is
+treated as a 16,384-dimensional vector. This data-set is
+expected to contain well deﬁned clusters, corresponding
+to the sets of images of each object. Furthermore, the
+sub-manifold on which each cluster lies should have a
+relatively intuitive form - objects containing no symme-
+try about the axis of rotation are expected correspond
+to a closed loop of points, with consecutive images of
+a given object neighbouring one another. In Fig. 14,
+both UMAP and SHEAP do a better job than t-SNE at
+
+--- page 21 ---
+21
+FIG. 15. Labelled 2D SHEAP map produced from local min-
+ima on the LJ 13 PES (the same set as depicted in Fig. 2),
+described by sorted lists of inverse pairwise distances. The
+projection was made using a perplexity of 30, with a minimum
+sphere radius R0 = 0.01. The circles representing each struc-
+ture are coloured according to energy per atom in Lennard-
+Jones units; see colour bar at top of ﬁgure. Basin volumes
+are represented by the area of each circle. Groups of struc-
+tures are labelled according to their clustering in Fig. 2; the
+dashed line encloses structures collectively labelled (h). Also
+shown is a plot of the lowest cost (without hard sphere inter-
+actions) obtained by projections of a subset of this data-set
+into a range of map dimensionalities.
+forming the clusters corresponding to each object, and
+keep more of the loops intact. The biggest diﬀerence be-
+tween the UMAP and SHEAP projections is that SHEAP
+produces larger/more frequent distortions of these closed
+loops - we argue that these distortions make intuitive
+sense, occurring when there exist symmetries in the ob-
+jects being imaged.
+The MNIST [90] (training) data-set contains 60 ,000
+grey-scale 28 × 28 images of handwritten digits (0 to
+9), each treated as a 784-dimensional vector. A given
+data-point is expected to be neighboured by other writ-
+ings of the same digit, and the data-set should contain
+well-deﬁned clusters corresponding to the distinct digits.
+These are expected to be arranged such that similar digits
+reside close together, and dissimilar ones are well sepa-
+rated (a handwritten 3 is often hard to distinguish from
+an 8, but never mistaken for a 4). In Fig. 14, all three
+algorithms do a good job of clustering the images cor-
+responding to each digit. However, UMAP and SHEAP
+capture more of the global relationships between the clus-
+ters, providing much clearer separations between them,
+and grouping together clusters of similar digits (3,5,8,
+and 4,7,9) in similar layouts. A noticeable diﬀerence be-
+tween UMAP and SHEAP’s projections is that the latter
+seems to contain thinner, denser bands of points in clus-
+ters that are particularly elongated. Nonetheless, the two
+plots are qualitatively very similar.
+Appendix E: LJ 13 described with inverse distances
+Fig. 15 shows a 2D SHEAP map for the same set of
+LJ13 minima as considered in Section IV A. The diﬀer-
+ence here is that, rather than describing structures with
+sorted lists of all distances between pairs of atoms, we
+use sorted lists of all inverse distances. We observe simi-
+lar clustering of structures as in Fig. 2; groups of struc-
+tures in Fig. 15 are labelled according to the correspond-
+ing cluster in Fig. 2. However, the map obtained from
+inverse distances does not result in a consistent global
+layout of the minima, failing to reproduce the expected
+single funnel distribution across all minima. We specula-
+tively attribute this to the emphasis the descriptor places
+on the shortest distances in the structures, resulting in a
+poorer representation of global information.
+Also in Fig. 15 is a plot of the lowest cost (in the ab-
+sence of hard sphere interactions) achieved with projec-
+tions into a range of map dimensionalities, similar to the
+plots in Fig. 13. Again, this analysis was conducted for a
+reduced data-set of 10,000 minima, with 10 independent
+SHEAP projections carried out for each number of map
+dimensions. As with the other structural data-sets con-
+sidered, no more than 3 map dimensions are required for
+convergence. However, here, 3 map dimensions does not
+produce a lower cost than 2, whereas a slight reduction
+was observed with the sorted list of distances descriptor
+for the same system. This is likely due to the less well
+represented global features of the landcape.
+[1] M. Born and R. Oppenheimer, Zur quantentheorie der
+molekeln, Annalen der Physik 389, 457 (1927).
+[2] D. J. Wales, Energy Landscapes: Applications to Clus-
+ters, Biomolecules and Glasses (Cambridge University
+Press, 2003).
+[3] A. R. Oganov and M. Valle, How to quantify energy land-
+scapes of solids, The Journal of Chemical Physics 130,
+104504 (2009).
+[4] D. J. Wales, Decoding the energy landscape: Extract-
+ing structure, dynamics and thermodynamics, Philosoph-
+ical Transactions of the Royal Society A: Mathematical,
+Physical and Engineering Sciences 370, 2877 (2012).
+[5] A. R. Oganov, C. J. Pickard, Q. Zhu, and R. J. Needs,
+Structure prediction drives materials discovery, Nature
+Reviews Materials 4, 331 (2019).
+[6] Z. Li and H. A. Scheraga, Monte carlo-minimization ap-
+proach to the multiple-minima problem in protein fold-
+ing, Proceedings of the National Academy of Sciences84,
+6611 (1987).
+[7] D. J. Wales and J. P. Doye, Global optimization by basin-
+hopping and the lowest energy structures of lennard-jones
+clusters containing up to 110 atoms, The Journal of Phys-
+ical Chemistry A 101, 5111 (1997).
+[8] M. Amsler and S. Goedecker, Crystal structure predic-
+
+--- page 22 ---
+22
+tion using the minima hopping method, The Journal of
+Chemical Physics 133, 224104 (2010).
+[9] Y. Wang, J. Lv, L. Zhu, and Y. Ma, Crystal structure
+prediction via particle-swarm optimization, Physical Re-
+view B 82, 094116 (2010).
+[10] Y. Wang, J. Lv, L. Zhu, and Y. Ma, Calypso: A method
+for crystal structure prediction, Computer Physics Com-
+munications 183, 2063 (2012).
+[11] A. R. Oganov and C. W. Glass, Crystal structure predic-
+tion using ab initio evolutionary techniques: Principles
+and applications, The Journal of Chemical Physics 124,
+244704 (2006).
+[12] C. W. Glass, A. R. Oganov, and N. Hansen, Us-
+pex—evolutionary crystal structure prediction, Com-
+puter Physics Communications 175, 713 (2006).
+[13] C. J. Pickard and R. J. Needs, High-pressure phases of
+silane, Physical Review Letters 97, 045504 (2006).
+[14] C. J. Pickard and R. J. Needs, Ab initio random struc-
+ture searching, Journal of Physics: Condensed Matter
+23, 053201 (2011).
+[15] C. J. Pickard and R. J. Needs, Structure of phase iii of
+solid hydrogen, Nature Physics 3, 473 (2007).
+[16] C. J. Pickard and R. J. Needs, Highly compressed am-
+monia forms an ionic crystal, Nature materials 7, 775
+(2008).
+[17] C. J. Pickard and R. J. Needs, Aluminium at terapascal
+pressures, Nature materials 9, 624 (2010).
+[18] D. G. Kleinbaum, L. L. Kupper, K. E. Muller, and
+A. Nizam, Applied Regression Analysis and Other Multi-
+variable Methods, Vol. 601 (Duxbury Press Belmont, CA,
+1988).
+[19] A. K. Jain, M. N. Murty, and P. J. Flynn, Data cluster-
+ing: A review, ACM computing surveys (CSUR) 31, 264
+(1999).
+[20] C. C. Aggarwal, Data Classiﬁcation: Algorithms and Ap-
+plications (CRC press, 2014).
+[21] M. A. Nielsen, Neural Networks and Deep Learning ,
+Vol. 25 (Determination press San Francisco, CA, USA:,
+2015).
+[22] S. R. Chitturi, P. C. Verpoort, A. A. Lee, and D. J. Wales,
+Perspective: New insights from loss function landscapes
+of neural networks, Machine Learning: Science and Tech-
+nology 1, 023002 (2020).
+[23] F. H. Stillinger and T. A. Weber, Packing structures and
+transitions in liquids and solids, Science 225, 983 (1984).
+[24] J. P. K. Doye and C. P. Massen, Characterizing the net-
+work topology of the energy landscapes of atomic clus-
+ters, The Journal of chemical physics122, 084105 (2005).
+[25] C. P. Massen and J. P. K. Doye, Power-law distributions
+for the areas of the basins of attraction on a potential
+energy landscape, Physical Review E 75, 037101 (2007).
+[26] J. D. Bryngelson, J. N. Onuchic, N. D. Socci, and P. G.
+Wolynes, Funnels, pathways, and the energy landscape of
+protein folding: A synthesis, Proteins: Structure, Func-
+tion, and Bioinformatics 21, 167 (1995).
+[27] O. M. Becker and M. Karplus, The topology of multidi-
+mensional potential energy surfaces: Theory and appli-
+cation to peptide structure and kinetics, The Journal of
+Chemical Physics 106, 1495 (1997).
+[28] L. van der Maaten and G. Hinton, Visualizing data us-
+ing t-sne, Journal of Machine Learning Research 9, 2579
+(2008).
+[29] L. McInnes, J. Healy, and J. Melville, Umap: Uniform
+manifold approximation and projection for dimension re-
+duction, arXiv preprint arXiv:1802.03426 (2018).
+[30] L. McInnes, J. Healy, N. Saul, and Großberger, Umap:
+Uniform manifold approximation and projection, Journal
+of Open Source Software 3, 861 (2018).
+[31] T. F¨ osel, P. Tighineanu, T. Weiss, and F. Marquardt, Re-
+inforcement learning with neural networks for quantum
+feedback, Physical Review X 8, 031084 (2018).
+[32] X. Li, O. E. Dyck, M. P. Oxley, A. R. Lupini, L. McInnes,
+J. Healy, S. Jesse, and S. V. Kalinin, Manifold learning
+of four-dimensional scanning transmission electron mi-
+croscopy, npj Computational Materials 5, 5 (2019).
+[33] V. Spiwok and P. Kˇ r´ ıˇ z, Time-lagged t-distributed
+stochastic neighbor embedding (t-sne) of molecular sim-
+ulation trajectories, arXiv preprint arXiv:2003.02505
+(2020).
+[34] B. Olsthoorn, R. M. Geilhufe, S. S. Borysov, and A. V.
+Balatsky, Band gap prediction for large organic crystal
+structures with machine learning, Advanced Quantum
+Technologies 2, 1900023 (2019).
+[35] C. Royse, S. Wolter, and J. A. Greenberg, Emergence and
+distinction of classes in xrd data via machine learning,
+in Anomaly Detection and Imaging with X-Rays (ADIX)
+IV, Vol. 10999 (International Society for Optics and Pho-
+tonics, 2019) p. 109990D.
+[36] M. Ghandi, F. W. Huang, J. Jan´ e-Valbuena, G. V.
+Kryukov, C. C. Lo, E. R. McDonald, J. Barretina, E. T.
+Gelfand, C. M. Bielski, H. Li, et al. , Next-generation
+characterization of the cancer cell line encyclopedia, Na-
+ture 569, 503 (2019).
+[37] C.-A. Dutertre, E. Becht, S. E. Irac, A. Khalilnezhad,
+V. Narang, S. Khalilnezhad, P. Y. Ng, L. L. van den
+Hoogen, J. Y. Leong, B. Lee, et al., Single-cell analysis of
+human mononuclear phagocytes reveals subset-deﬁning
+markers and identiﬁes circulating inﬂammatory dendritic
+cells, Immunity 51, 573 (2019).
+[38] S. Hemmers, M. Schizas, E. Azizi, S. Dikiy, Y. Zhong,
+Y. Feng, G. Altan-Bonnet, and A. Y. Rudensky, Il-2 pro-
+duction by self-reactive cd4 thymocytes scales regulatory
+t cell generation in the thymus, Journal of Experimental
+Medicine 216, 2466 (2019).
+[39] E. Becht, L. McInnes, J. Healy, C.-A. Dutertre, I. W.
+Kwok, L. G. Ng, F. Ginhoux, and E. W. Newell, Dimen-
+sionality reduction for visualizing single-cell data using
+umap, Nature biotechnology 37, 38 (2019).
+[40] R. Czerminski and R. Elber, Reaction path study of con-
+formational transitions in ﬂexible systems: Applications
+to peptides, The Journal of Chemical Physics 92, 5580
+(1990).
+[41] D. J. Wales, The energy landscape as a unifying theme
+in molecular science, Philosophical Transactions of the
+Royal Society A: Mathematical, Physical and Engineer-
+ing Sciences 363, 357 (2004).
+[42] G. J. Rylance, R. L. Johnston, Y. Matsunaga, C.-B. Li,
+A. Baba, and T. Komatsuzaki, Topographical complex-
+ity of multidimensional energy landscapes, Proceedings
+of the National Academy of Sciences 103, 18551 (2006).
+[43] L. C. Smeeton, M. T. Oakley, and R. L. Johnston, Vi-
+sualizing energy landscapes with metric disconnectivity
+graphs, Journal of Computational Chemistry 35, 1481
+(2014).
+[44] M. Ceriotti, G. A. Tribello, and M. Parrinello, Simplify-
+ing the representation of complex free-energy landscapes
+using sketch-map, Proceedings of the National Academy
+of Sciences 108, 13023 (2011).
+
+--- page 23 ---
+23
+[45] G. A. Tribello, M. Ceriotti, and M. Parrinello, Us-
+ing sketch-map coordinates to analyze and bias molec-
+ular dynamics simulations, Proceedings of the National
+Academy of Sciences (2012).
+[46] M. Ceriotti, G. A. Tribello, and M. Parrinello, Demon-
+strating the transferability and the descriptive power of
+sketch-map, Journal of chemical theory and computation
+9, 1521 (2013).
+[47] E. A. Engel, A. Anelli, M. Ceriotti, C. J. Pickard, and
+R. J. Needs, Mapping uncharted territory in ice from ze-
+olite networks to ice structures, Nature Communications
+9, 2173 (2018).
+[48] L. van der Maaten, E. Postma, and J. van den Herik,
+Dimensionality reduction: A comparative review, J Mach
+Learn Res 10, 13 (2009).
+[49] J. A. Lee and M. Verleysen, Nonlinear Dimensionality
+Reduction (Springer Science & Business Media, 2007).
+[50] T. Lin and H. Zha, Riemannian manifold learning, IEEE
+Transactions on Pattern Analysis and Machine Intelli-
+gence 30, 796 (2008).
+[51] H. Hotelling, Analysis of a complex of statistical vari-
+ables into principal components, Journal of Educational
+Psychology 24, 417 (1933).
+[52] J. B. Tenenbaum, V. De Silva, and J. C. Langford, A
+global geometric framework for nonlinear dimensionality
+reduction, science 290, 2319 (2000).
+[53] B. Sch¨ olkopf, A. Smola, and K.-R. M¨ uller, Nonlinear
+component analysis as a kernel eigenvalue problem, Neu-
+ral computation 10, 1299 (1998).
+[54] J. W. Sammon, A nonlinear mapping for data struc-
+ture analysis, IEEE Transactions on Computers 100, 401
+(1969).
+[55] S. T. Roweis and L. K. Saul, Nonlinear dimensionality
+reduction by locally linear embedding, science 290, 2323
+(2000).
+[56] M. Belkin and P. Niyogi, Laplacian eigenmaps and spec-
+tral techniques for embedding and clustering, inAdvances
+in Neural Information Processing Systems (2002) pp.
+585–591.
+[57] J. Tang, J. Liu, M. Zhang, and Q. Mei, Visualizing large-
+scale and high-dimensional data, in Proceedings of the
+25th international conference on world wide web (Inter-
+national World Wide Web Conferences Steering Commit-
+tee, 2016) pp. 287–297.
+[58] L. van der Maaten, Barnes-hut-sne, arXiv preprint
+arXiv:1301.3342 (2013).
+[59] G. C. Linderman, M. Rachh, J. G. Hoskins, S. Steiner-
+berger, and Y. Kluger, Eﬃcient algorithms for t-
+distributed stochastic neighborhood embedding, arXiv
+preprint arXiv:1712.09005 (2017).
+[60] J. Barzilai and J. M. Borwein, Two-point step size gradi-
+ent methods, IMA Journal of Numerical Analysis 8, 141
+(1988).
+[61] G. C. Linderman and S. Steinerberger, Clustering with
+t-sne, provably, arXiv preprint arXiv:1706.02582 (2017).
+[62] A. P. Bart´ ok, R. Kondor, and G. Cs´ anyi, On representing
+chemical environments, Physical Review B 87, 184115
+(2013).
+[63] S. De, A. P. Bart´ ok, G. Cs´ anyi, and M. Ceriotti, Compar-
+ing molecules and solids across structural and alchemical
+space, Physical Chemistry Chemical Physics 18, 13754
+(2016).
+[64] B. Cheng, R.-R. Griﬃths, S. Wengert, C. Kunkel,
+T. Stenczel, B. Zhu, V. L. Deringer, N. Bernstein,
+J. T. Margraf, K. Reuter, et al., Mapping materials and
+molecules, Accounts of Chemical Research , 12697 (2020).
+[65] C. J. Pickard, Hyperspatial optimization of structures,
+Physical Review B 99, 054102 (2019).
+[66] A. Stukowski, Visualization and analysis of atomistic
+simulation data with ovito–the open visualization tool,
+Modelling and Simulation in Materials Science and En-
+gineering 18, 015012 (2009).
+[67] J. P. K. Doye, M. A. Miller, and D. J. Wales, Evolu-
+tion of the potential energy surface with size for lennard-
+jones clusters, The Journal of Chemical Physics 111,
+8417 (1999).
+[68] D. J. Wales, Perspective: Insight into reaction coordi-
+nates and dynamics from the potential energy landscape,
+The Journal of Chemical Physics 142, 130901 (2015).
+[69] R. H. Leary, Global optima of lennard-jones clusters,
+Journal of Global Optimization 11, 35 (1997).
+[70] J. P. Neirotti, F. Calvo, D. L. Freeman, and J. D. Doll,
+Phase changes in 38-atom lennard-jones clusters. i. a par-
+allel tempering study in the canonical ensemble, The
+Journal of Chemical Physics 112, 10340 (2000).
+[71] B. Schaefer and S. Goedecker, Computationally eﬃcient
+characterization of potential energy surfaces based on ﬁn-
+gerprint distances, The Journal of Chemical Physics145,
+034101 (2016).
+[72] M. O. J¨ ager, E. V. Morooka, F. F. Canova, L. Himanen,
+and A. S. Foster, Machine learning hydrogen adsorption
+on nanoclusters through structural descriptors, npj Com-
+putational Materials 4, 1 (2018).
+[73] L. Himanen, M. O. J. J¨ ager, E. V. Morooka, F. Fed-
+erici Canova, Y. S. Ranawat, D. Z. Gao, P. Rinke, and
+A. S. Foster, Dscribe: Library of descriptors for machine
+learning in materials science, Computer Physics Commu-
+nications 247, 106949 (2020).
+[74] M. Sicher, S. Mohr, and S. Goedecker, Eﬃcient moves for
+global geometry optimization methods and their applica-
+tion to binary systems, The Journal of Chemical Physics
+134, 044106 (2011).
+[75] C. J. Pickard, Airss data for carbon at 10GPa and the
+C+N+H+O system at 1GPa, Materiials Cloud Archive
+10.24435/materialscloud:2020.0026/v1 (2020).
+[76] C. J. Pickard and R. J. Needs, Hypothetical low-energy
+chiral framework structure of group 14 elements, Physical
+Review B 81, 014106 (2010).
+[77] V. L. Deringer and G. Cs´ anyi, Machine learning based in-
+teratomic potential for amorphous carbon, Physical Re-
+view B 95, 094203 (2017).
+[78] S. Kirkpatrick, C. D. Gelatt, and M. P. Vecchi, Optimiza-
+tion by simulated annealing, science 220, 671 (1983).
+[79] X. Shi, C. He, C. J. Pickard, C. Tang, and J. Zhong,
+Stochastic generation of complex crystal structures com-
+bining group and graph theory with application to car-
+bon, Physical Review B 97, 014104 (2018).
+[80] J. A. Flores-Livas, L. Boeri, A. Sanna, G. Profeta,
+R. Arita, and M. Eremets, A perspective on conven-
+tional high-temperature superconductors at high pres-
+sure: Methods and materials, Physics Reports (2020).
+[81] D. P. Kingma and M. Welling, Auto-encoding variational
+bayes, arXiv preprint arXiv:1312.6114 (2013).
+[82] I. Goodfellow, J. Pouget-Abadie, M. Mirza, B. Xu,
+D. Warde-Farley, S. Ozair, A. Courville, and Y. Ben-
+gio, Generative adversarial nets, in Advances in Neural
+Information Processing Systems (2014) pp. 2672–2680.
+[83] S. Kim, J. Noh, G. H. Gu, A. Aspuru-Guzik, and Y. Jung,
+
+--- page 24 ---
+24
+Generative adversarial networks for crystal structure pre-
+diction, arXiv preprint arXiv:2004.01396 (2020).
+[84] M. Valle and A. R. Oganov, Crystal structures classi-
+ﬁer for an evolutionary algorithm structure predictor, in
+2008 IEEE Symposium on Visual Analytics Science and
+Technology (IEEE, 2008) pp. 11–18.
+[85] W. S. Torgerson, Multidimensional scaling: I. theory and
+method, Psychometrika 17, 401 (1952).
+[86] A. O. Lyakhov, A. R. Oganov, and M. Valle, How to pre-
+dict very large and complex crystal structures, Computer
+Physics Communications 181, 1623 (2010).
+[87] L. Zhu, M. Amsler, T. Fuhrer, B. Schaefer, S. Faraji,
+S. Rostami, S. A. Ghasemi, A. Sadeghi, M. Grauzinyte,
+C. Wolverton, and S. Goedecker, A ﬁngerprint based met-
+ric for measuring similarities of crystalline structures,
+The Journal of Chemical Physics 144, 034203 (2016).
+[88] T. Mikolov, I. Sutskever, K. Chen, G. S. Corrado,
+and J. Dean, Distributed representations of words and
+phrases and their compositionality, inAdvances in Neural
+Information Processing Systems (2013) pp. 3111–3119.
+[89] S. A. Nene, S. K. Nayar, and H. Murase, Columbia object
+image library (COIL-20), Technical Report CUCS-005-
+96, Columbia University (1996).
+[90] Y. LeCun, L. Bottou, Y. Bengio, and P. Haﬀner,
+Gradient-based learning applied to document recogni-
+tion, Proceedings of the IEEE 86, 2278 (1998).
+[91] W. B. Johnson and J. Lindenstrauss, Extensions of lips-
+chitz mappings into a hilbert space, Contemporary Math-
+ematics 26, 1 (1984).

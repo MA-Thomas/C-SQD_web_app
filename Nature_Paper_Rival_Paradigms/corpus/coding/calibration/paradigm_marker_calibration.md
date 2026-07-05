@@ -1,4 +1,4 @@
-# Paradigm-Marker Red-Team Calibration Set (v0.3-pilot)
+# Paradigm-Marker Red-Team Calibration Set (v0.1-pilot)
 
 ## Purpose
 
@@ -125,7 +125,7 @@ instrumental — same accent, opposite role.
 
 ## Scoring the calibration round
 
-Treat this as judge-round `round_calibration_v03_001` (rubric `v0.3-pilot`). Record scores in
+Treat this as judge-round `round_calibration_v03_001` (rubric `v0.1-pilot`). Record scores in
 `paradigm_marker_ratings.csv` using synthetic `paper_id`s `C01`–`C10`, and spans in
 `paradigm_marker_evidence.csv`. Compare against `calibration_items.csv`. If any item lands on the
 wrong side of its trap boundary, revise the anchor that failed **before** scoring real papers — the

@@ -1,0 +1,946 @@
+--- Page 1 ---
+RESEA RCH ARTICL E
+OpenABC enables flexible, simplified, and
+efficient GPU accelerated simulations of
+biomolecular condensates
+Shuming Liu
+1
+, Cong Wang
+1
+, Andrew P. Latham
+ID
+1,2
+, Xinqiang Ding
+1
+, Bin Zhang
+ID
+1
+*
+1 Department of Chemistry , Massachus etts Institute of Technology , Cambridge , Massach usetts, United
+States of America, 2 Department of Bioenginee ring and Therap eutic Sciences, Departmen t of
+Pharma ceutical Chem istry, Quantit ative Bioscience s Institute, University of Californi a, San Francisco, San
+Francisco, California, United States of America
+* binz@m it.edu
+Abstract
+Biomolecular condensates are important structures in various cellular processes but are
+challenging to study using traditional experimental techniques. In silico simulations with resi-
+due-level coarse-grained models strike a balance between computational efficiency and
+chemical accuracy. They could offer valuable insights by connecting the emergent proper-
+ties of these complex systems with molecular sequences. However, existing coarse-grained
+models often lack easy-to-follow tutorials and are implemented in software that is not opti-
+mal for condensate simulations. To address these issues, we introduce OpenABC, a soft-
+ware package that greatly simplifies the setup and execution of coarse-grained condensate
+simulations with multiple force fields using Python scripting. OpenABC seamlessly inte-
+grates with the OpenMM molecular dynamics engine, enabling efficient simulations with per-
+formance on a single GPU that rivals the speed achieved by hundreds of CPUs. We also
+provide tools that convert coarse-grained configurations to all-atom structures for atomistic
+simulations. We anticipate that OpenABC will significantly facilitate the adoption of in silico
+simulations by a broader community to investigate the structural and dynamical properties
+of condensates.
+Author summary
+Biomolecular condensates are essential cellular structures that underpin various cellular
+processes, including RNA splicing, ribosomal RNA processing, and stress response, etc.
+These membrane-less organelles exhibit liquid-like behavior, enriched with disordered
+proteins and RNA that can dynamically exchange with the surrounding media. Computa-
+tional modeling aids in understanding these condensates’ structural and dynamic aspects
+at high resolution, connecting molecular sequences with condensate emergent properties.
+Both coarse-grained and atomistic simulations can help offer insights into the nature of
+the molecular interactions that drive phase separation, the microenvironment of the con-
+densates, and their dynamical relaxation. However, software tools for such simulations
+PLOS COMP UTATIONAL  BIOLOGY
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 1 / 18
+a1111111111
+a1111111111
+a1111111111
+a1111111111
+a1111111111
+OPEN ACCESS
+Citation: Liu S, Wang C, Latham AP, Ding X, Zhang
+B (2023) OpenABC enables flexible, simplified, and
+efficient GPU accelerat ed simulatio ns of
+biomolecul ar condensates . PLoS Comput Biol
+19(9): e1011442. https:// doi.org/10.1371 /journal.
+pcbi.1011442
+Editor: Guanghon g Wei, Fudan University, CHINA
+Received: April 21, 2023
+Accepted: August 19, 2023
+Published: Septembe r 11, 2023
+Copyright: © 2023 Liu et al. This is an open access
+article distributed under the terms of the Creative
+Commons Attributi on License, which permits
+unrestricted use, distribution , and reproduction in
+any medium, provide d the original author and
+source are credited .
+Data Availabilit y Statement: OpenABC source
+code is available at https://g ithub.com/
+ZhangGroup -MITChemis try/OpenABC.
+Funding: This work was supported by the Nationa l
+Institutes of Health (Grant R35GM1335 80) and the
+National Science Foundation (Grant MCB-
+2042362) to BZ. The funders had no role in study
+design, data collection and analysis, decision to
+publish, or preparation of the manuscript.
+Competing interests : The authors have declared
+that no competing interests exist.
+
+
+--- Page 2 ---
+are limited. We introduce OpenABC, a flexible software package for GPU-accelerated
+simulations of biomolecular condensates. It simplifies setup using Python scripts, inte-
+grates with the molecular dynamics engine, OpenMM, for efficient simulations, and facili-
+tates transitioning between coarse-grained and atomistic representations. OpenABC aims
+to empower researchers by easing simulation setups, aiding force field comparison, and
+advancing biomolecular condensate research.
+Introduction
+Biomolecular condensates underlie the organization of many cellular processes, such as speck-
+les for RNA splicing, nucleoli for ribosomal RNA processes, and P granule for stress response,
+etc. [1–14]. They are also termed membrane-less organelles due to the lack of enclosure and
+exhibit liquid-like properties. Intrinsically disordered proteins (IDPs) and RNA molecules are
+enriched inside the condensates [3, 4, 9, 11]. These molecules promote promiscuous, multiva-
+lent interactions, leading to spontaneous phase transition and condensate formation [15]. The
+nature of the molecular interactions that drive phase separation, the microenvironment of the
+condensates, and their dynamical relaxation, are under active investigation.
+Computational modeling can prove invaluable for studying biomolecular condensates by
+providing detailed structural and dynamic characterizations [16–42]. Particle-based coarse-
+grained modeling approaches are promising since their computational efficiency enables long-
+timescale simulations to promote large-scale reorganization for structural relaxation [43–46].
+Such simulations may predict condensate physical properties de novo, elucidating the connec-
+tion between molecular sequences and emergent properties [18, 47]. However, the reduced
+resolution of these coarse-grained models could be insufficient to describe the complex micro-
+environment of the condensate interior [48–50]. Atomistic simulations with explicit represen-
+tation of solvent molecules and counter ions can be necessary to further characterize
+physicochemical interactions that produce the selective partition of small molecules within
+condensates [49–53]. Combining the two modeling approaches at different resolutions could
+be particularly powerful since they enable long-timescale simulations for structural relaxation
+while preserving the fine-resolution details.
+While many computational models and force fields have been introduced for simulations
+of IDPs and biomolecules, software engineering has yet to catch up. There is an urgent need to
+build user-friendly tools to set up and execute condensate simulations. Preparing biomolecular
+simulations can be rather involved. Even creating initial configurations for such simulations is
+often non-trivial. Much-dedicated software has been introduced to prepare atomistic simula-
+tions [54–57], and existing molecular dynamics (MD) simulation packages are highly opti-
+mized for computational efficiency [54, 57–59]. However, existing tools are not immediately
+transferable for setting up coarse-grained condensate simulations. Furthermore, coarse-
+grained force fields are often implemented into disparate simulation engines not necessarily
+best suited for condensate simulations, hindering cross-validation and the unleashing of full
+modeling potential. Further software development can significantly reduce the entry barrier
+for in silico studies, allowing more researchers to experience the usefulness of computational
+modeling. They could facilitate comparing and benchmarking various force fields, driving
+continuous improvement.
+We introduce a software package termed OpenABC for “OpenMM GPU-Accelerated sim-
+ulations of Biomolecular Condensates”. The package is flexible and implements multiple pop-
+ular coarse-grained force fields for simulating proteins and nucleic acids. It dramatically
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 2 / 18
+
+
+--- Page 3 ---
+simplifies the simulation setup: only a few lines of Python scripts are needed to carry out con-
+densate simulations starting from initial configurations of a single protein or DNA. The pack-
+age is integrated with OpenMM, a GPU-accelerated MD engine [60], enabling efficient
+simulations with advanced sampling techniques. Finally, we include tools that convert coarse-
+grained configurations to atomistic structures for further condensate modeling with all-atom
+force fields. Tutorials in Jupyter Notebooks are provided to demonstrate the various capabili-
+ties. We anticipate that OpenABC will greatly facilitate the application of existing computer
+models for simulating biomolecular condensates and the continued force field development.
+Results
+Flexible force field selections for Biomolecular simulations
+OpenABC implements several existing force fields for coarse-grained (CG) modeling of pro-
+tein, RNA, and DNA molecules (Fig 1). Single-bead per amino acid force field for proteins
+include the hydropathy scale (HPS) models [20, 28], the Mpipi force field [29], a generalized
+structure-based model [41, 61, 62], and the maximum entropy optimized force field (MOFF)
+[63]. HPS models define interactions between different pairs of amino acids based on various
+hydrophobicity scales [20, 28]. Recent studies have attempted to improve the accuracy of HPS
+models with systematic optimizations of the hydrophobicity scale to match experimental
+Fig 1. OpenABC facilitates coarse -grained and atomistic simulatio ns of biomolec ular condensa tes with multiple
+force fields. The diagram illustrates the workflo w and various functional ities of OpenABC. To set up condensate
+simulatio ns, the users must provide a configurati on file in the PDB format for the molecule of interest. OpenABC
+parses topological and structural information from the PDB file to build a molecule object. Specifying force field
+options allows direct simulatio ns of individual molecules. On the other hand, the molecule object can be replicated for
+condensate simulations . In addition , OpenABC allows the conversion of CG configurations to atomistic structures for
+simulatio ns with all-atom force fields.
+https://d oi.org/10.1371/j ournal.pc bi.1011442. g001
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 3 / 18
+
+
+--- Page 4 ---
+observations of IDP monomers [34, 36]. They have been used to study the phase behaviors of
+numerous proteins [64–66], revealing the contribution of charge distribution patterns, cation-
+π interactions, and the balance between hydrophobic and electrostatic interactions [65, 67] to
+the stability of condensates.
+The Mpipi force field was parameterized using data from all-atom simulations and bioin-
+formatics analysis with a careful calibration of π-π and π-cation interactions [29]. These inter-
+actions play significant roles in the formation of biomolecular condensates. The force field was
+shown to accurately capture the radius of gyration and critical temperatures of diverse protein
+sequences.
+SMOG was originally introduced for studying folded proteins using interaction potentials
+derived from initial input configurations. We generalized the model to describe proteins with
+disordered domains and leveraged the Miyazawa-Jernigan statistical potential [68] for protein-
+protein interactions [41, 62].
+MOFF was parameterized with the maximum entropy algorithm [69, 70] and the protein
+folding energy landscape theory [71] to provide consistent descriptions of both folded and dis-
+ordered proteins [63, 72–74]. It was shown to reproduce the radius of gyration for a collection
+of proteins, including both ordered and disordered proteins [63, 75]. The balanced interac-
+tions among amino acids have proven beneficial in describing complex contacts among phase-
+separating proteins, including those with both ordered and disordered domains [47, 63, 74].
+In addition to protein models, we implemented several force fields for nucleic acids. For
+example, the molecular renormalization group coarse-graining (MRG-CG) DNA model was
+initially introduced for simulations with explicit ions to reproduce the salt-dependent DNA
+persistence length [76]. We adopted it for implicit ion modeling with the Debye-Hu ¨ ckel
+approximation for electrostatic interactions. We rescaled the strength of bonded interactions
+to ensure the accuracy of the implicit-ion model in reproducing DNA persistence length at the
+physiological salt concentration [47]. We further incorporated the DNA model 3SPN [77, 78]
+into OpenABC for studying sequence specific properties. Unlike MRG-CG DNA that only
+uses one bead to represent each nucleotide, 3SPN adopts three beads to differentiate sugar,
+base, and phosphate. Finally, the Mpipi force field can be used to simulate RNA molecules.
+While one can in principle combine different force fields for simulating complex systems
+with both proteins and nucleic acids, care needs to be taken when modeling cross interactions.
+Previous studies have carried out systematic validations of protein-DNA and protein-RNA
+interactions and we implemented them into OpenABC, with combinations that include
+SMOG-3SPN [37, 41, 62, 78–82], MOFF-MRG-CG DNA [47], and Mpipi Protein-RNA [29].
+These combinations account for both excluded volume effect and electrostatic interactions.
+Detailed expressions of all the force field potentials are provided in the S1 Text—Force Field
+Definitions, with the parameters provided in Tables A-I in S1 Text.
+Simplified setup of condensate simulations
+OpenABC leverages the MD simulation engine, OpenMM [60], to offer simulation setup with
+Python scripting, thus dramatically simplifying the workflow. The software treats each mole-
+cule as an object and appends such objects into a container-like class. This class allows the
+incorporation of various force field options and integration schemes for MD simulations.
+An illustration of the typical workflow for condensate simulations is provided in Fig 1.
+OpenABC first parses a configuration file in the PDB format supplied by users to create a mol-
+ecule object. The object contains topological and structural information extracted from the
+input file. Upon introducing interactions defined in various force fields, the molecule object
+can be used to simulate individual biomolecules. On the other hand, the molecule object can
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 4 / 18
+
+
+--- Page 5 ---
+also be replicated N times for condensate simulations consisting of N molecules. As demon-
+strated in an example code in Fig 2, setting up an entire MD simulation of a protein conden-
+sate with default parameters only requires about 20 lines of code.
+To enhance conformational sampling of individual molecules and condensates, we provide
+an implementation of the temperature replica exchange algorithm [83] with PyTorch [84] as
+Fig 2. OpenAB C simplifies simula tion setup with Python scriptin g. The example code includes all the steps necessary for setting up and performing
+MD simulation s of a protein conden sate with MOFF and default settings in a cubic box of length 100 nm. The ten lines included in the highlight
+box correspond to the creation of the conden sate system by parsing topologi cal information from an initial PDB file, building a configuration file by
+inserting molecules into a box and incorporat ing the molecular objects, protein, into a container class, condensate, with appropriate force fields. The rest
+of the code includes standard simulation setups generic to OpenMM. We chose the Langevin middle integrator to perform simulations at 300 K with a
+friction coefficient of 1 ps
+−1
+and a timestep of 10 fs.
+https://doi.o rg/10.1371/j ournal.pcb i.1011442.g 002
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 5 / 18
+
+
+--- Page 6 ---
+part of the package (see S1 Text—Implementation of the temperature replica exchange algo-
+rithm for details). Furthermore, we introduce utility functions to reconstruct atomistic struc-
+tures from coarse-grained protein configurations with only α carbons. This functionality relies
+on the software “reconstruct atomic model from reduced representation (REMO)” [85] and
+can facilitate downstream all-atom simulations. More tutorials in Jupyter Notebook format are
+available online at the OpenABC GitHub repository.
+Efficient simulations with GPU-enabled MD engine
+A significant advantage of integrating with OpenMM comes from its native support of GPU
+acceleration. Simulating implicit solvent coarse-grained condensates on GPUs can be particu-
+larly beneficial due to the inhomogeneous distribution of particles arising from implicit solva-
+tion [78]. CPU parallelization, which often relies on the spatially-based, domain
+decomposition strategy, is often less effective because the inhomogeneity in particle density
+between the condensate and dilute phases produces an imbalanced workload between CPUs.
+To demonstrate the efficiency of GPU-enabled simulations, we studied five independent
+condensate systems. The first four systems consist of N
+1
+HP1α dimers and N
+2
+200-bp-long
+dsDNA randomly distributed in a cubic box of length 200 nm with periodic boundary condi-
+tions. In the fifth system, 100 HP1α dimers in a compact configuration were placed at the cen-
+ter of an elongated box of size 25 × 25 × 400 nm
+3
+(Fig 3A). This rectangular setup is typical for
+the so-called slab simulations to produce a dilute and dense interface along the z-axis for com-
+puting co-existence curves and phase diagrams [20, 86, 87]. MOFF and MRG-CG force fields
+were used to describe the interactions among coarse-grained particles. We simulated each sys-
+tem for one million steps using the Langevin middle integrator [88] to control the temperature
+at 300 K, with a friction coefficient of 1 ps
+−1
+and a time step of 10 fs. For comparison, we simu-
+lated the same systems with a closely related integrator using GROMACS, a leading MD
+engine with state-of-the-art performance on CPUs [54, 57]. More simulation details are pro-
+vided in the S1 Text—Benchmarking the performance of condensate simulations.
+As shown in Fig 3B, OpenMM single GPU performance matches GROMACS with hun-
+dreds of CPUs in the first four systems. While GROMACS achieved nearly linear scaling for
+the first four systems, introducing more CPUs did not lead to any significant speedup in the
+last system with a dense-dilute interface. As mentioned above, the presence of vacuum regions
+in slab simulations hinders the efficacy of domain decomposition. On the other hand,
+OpenMM is less sensitive to the simulation setup and retains superior performance.
+The performance of GROMACS depends on our implementation of the CG force fields
+and may not reflect the theoretical upper limit of the software. In particular, our use of tabu-
+lated potentials for the Debye Hu ¨ ckel potential and domain decomposition for parallelization
+may significantly affect the simulation speed. While performance improvement is possible
+with additional software engineering, the advantage of CG simulations of condensates on
+GPUs remains given the differences shown in Fig 3B.
+Application: Validating force field implementations in OpenABC
+Before applying the software for extensive simulations, we validated our implementations of
+various force fields with existing ones. We generated ten configurations for an HP1α dimer
+with MOFF and GROMACS through an NVT simulation. As shown in Table J in S1 Text, the
+potential energies evaluated using MOFF from OpenABC match those reported by GRO-
+MACS. Similar comparisons with a protein-DNA complex produce nearly identical energy
+values as well, as shown in Table K in S1 Text. The protein-DNA complex is formed by an
+HP1α dimer with a 200-bp-long dsDNA, and MOFF and MRG-CG DNA were used to
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 6 / 18
+
+
+--- Page 7 ---
+quantify their interactions. The minor differences between OpenMM and GROMACS ener-
+gies are mainly caused by using tabulated functions for nonbonded interactions in
+GROMACS.
+We further evaluated the potential energies defined by the HPS model on ten configura-
+tions of a disordered protein, DDX4, using both OpenMM and HOOMD-Blue [89]. As shown
+in Table L in S1 Text, the two sets of energies match exactly, supporting the correctness of our
+force field implementation. We also validated the Mpipi force field using interaction energies
+evaluated with OpenMM and LAMMPS [59] for a protein-RNA system, as shown in Table M
+in S1 Text.
+Fig 3. OpenABC integrates with OpenMM for GPU-accel erated MD simulations. (A) Snapsho ts of the five systems used to benchmark simulation
+performan ce. The systems consist of N
+1
+HP1α dimers (blue) and N
+2
+200-bp-long dsDNA (red, N
+2
+= 0 if not specified). The first four systems adopt
+homoge neous density distributions in cubic boxes of length 200 nm, while the last exhibits a dense-dilu te interface in an elongated box of size 25 × 25 × 400
+nm
+3
+. (B) The five data sets compare the performance of CPU simulatio ns using GROMACS with single GPU simulations using OpenMM. The differe nt
+colors indicate the number of CPUs in GROMACS simulations , as shown in the legends. The benchmarks were performed with Intel Xeon Gold 8260
+CPUs and Nvidia Volta V100 GPUs.
+https:// doi.org/10.1371 /journal.pcbi.1 011442.g003
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 7 / 18
+
+
+--- Page 8 ---
+In addition to energy comparisons, we examined the conformational ensembles of HP1α
+and HP1β dimers using MOFF with temperature replica exchange simulations [83]. Consistent
+with our previous study [63], the force field succeeds in resolving the difference in their con-
+formational distribution between the two homologs (Fig 4). The radii of gyration for the two
+dimers at 300 K are 3.33 ± 0.19 nm, and 4.27 ± 0.09 nm, respectively. These values match the
+previously reported values computed using GROMACS quantitatively, reproducing experi-
+mental trends. Therefore, OpenABC produces consistent results with other software despite
+differences in integration schemes.
+Using the MRG-DNA model, we computed the persistence length of a 200-bp-long DNA
+segment. The estimated value at a monovalent salt concentration of 100 mM, 48.83 ± 2.71 nm
+(see Fig A in S1 Text), is consistent with that reported in a previous study using simulations of
+the same model but with GROMACS [47]. Additional simulation details for estimating the
+persistence length are provided in the S1 Text—Estimating the persistence length of
+MRG-DNA.
+Application: Coarse-grained simulation of protein condensates
+As additional evaluations of force field implementation and to demonstrate the usefulness of
+OpenABC, we performed slab simulations to determine the phase diagram of four proteins,
+which are known to form various biomolecular condensates inside the cell. For example, HP1
+dimers are involved in chromatin compaction and regulation [91], while DDX4 and FUS are a
+primary constituent of nuage or germ granules [92] and cytoplasmic RNP granules [93],
+respectively. The simulations for HP1α and HP1β were performed with MOFF, while those for
+FUS LC and DDX4 were modeled with the HPS model using the shifted Urry hydrophobicity
+scale [28].
+The resulting phase diagrams are shown in Fig 5, with the concentrations listed in Tables
+N-P in S1 Text. The density profiles at different temperatures and the representative snapshots
+Fig 4. OpenABC produces consisten t results with a previous studying, resolving the structural differenc es between two HP1 homologs. (A) Secondary
+structur es of HP1α and HP1β along sequences. (B) Represen tative structures for HP1α and HP1β dimer rendered with Mol* Viewer [90]. The radii of
+gyration (R
+g
+) for the two structures are 2.77 and 4.44 nm, respectively. We colored the chromodom ain (CD) in orange, the chromo shadow domain (CSD)
+in blue, and the rest in green. (C) Probabilit y density distributions of R
+g
+for HP1α (red) and HP1β dimer (blue).
+https:// doi.org/10.1371 /journal.pcbi.1 011442.g004
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 8 / 18
+
+
+--- Page 9 ---
+at the lowest temperatures are shown in Figs B-C in S1 Text. We fitted the computed phase
+diagrams with an analytical expression to determine the critical temperature T
+c
+(see Methods).
+The critical temperatures are 306.30 K for HP1α and 245.99 K for HP1β, consistent with previ-
+ous results obtained with GROMACS simulations [63]. Similarly, the critical temperatures for
+DDX4 and FUS LC are 324.21 K and 340.04 K, respectively, matching values reported in a pre-
+vious study that used the software HOOMD-Blue for simulations [28]. Thus, OpenABC pro-
+duces statistically indistinguishable results on the phase behavior of protein condensates as in
+previous studies.
+Application: Atomistic simulation of protein condensates
+While residue-level CG models are helpful for long timescale simulations, their limited resolu-
+tion may prove insufficient to characterize specific properties of condensates, including the
+solvation environment [48], counter-ion distributions [49], and protein-ligand interactions
+[50]. Therefore, we implemented functionalities in OpenABC to convert equilibrated CG con-
+figurations to atomistic structures. Starting from these structures, well-established tools, such
+as CHARMM-GUI [55], GROMACS [54, 57], and AMBER [56], can be easily applied to set up
+explicit solvent simulations with diverse force fields. Furthermore, for explicit solvent simula-
+tions, the advantage of OpenMM over other MD packages is less evident. Therefore, we termi-
+nate the OpenABC workflow at producing atomistic condensate structures and leave the users
+with flexibility to choose MD packages and force fields for further studies.
+As proof of principle, we converted the final snapshot from the slab simulation of HP1α
+dimer at 260 K to an atomistic configuration (Fig 6). This conversion leverages the software
+REMO [85] to build atomistic details starting from the Cα positions of each amino acid. We
+solvated the atomistic HP1α dimer condensates with water molecules and counter ions. After
+energy minimization, we carried out an all-atom MD simulation using GROMACS with the
+CHARMM36m force field [94] and the CHARMM-modifie d TIP3P water model [95]. More
+details on simulation preparation can be found in the S1 Text—Building and relaxing atomistic
+structures from coarse-grained configurations. As shown in Fig 6, the system relaxes with a con-
+tinuously decreasing potential energy in the first 20 ns and remains stable afterward.
+Fig 5. OpenABC produces phase diagrams that match previous results. (A) Phase diagrams for HP1α (red) and HP1β (blue) dimer condensate s
+comput ed with MOFF. (B) Phase diagrams for DDX4 (red) and FUS LC (blue) computed with the HPS model parame terized using the Urry
+hydro phobicity scale. The dots in both plots denote the density values determine d from slab simulatio ns, and the triangles represent the critical point
+obtained from numerical fitting.
+https:// doi.org/10.1371 /journal.pcbi.1 011442.g005
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 9 / 18
+
+
+--- Page 10 ---
+Conclusion
+We introduced a software package, OpenABC, to facilitate coarse-grained and all-atom simu-
+lations of biomolecular condensates. The package implements several of the leading coarse-
+grained force fields for protein and DNA molecules into OpenMM, enabling GPU-accelerated
+simulations with performances rivaling GROMACS simulations with hundreds of CPUs. New
+force fields can be quickly introduced within the framework, and we plan to incorporate RNA
+models into the package as the next step. Comprehensive tutorials are provided to familiarize
+the users with the various functionalities offered by OpenABC. We anticipate the intuitive
+Python interface of OpenABC to reduce entry barriers and promote coarse-grained modeling
+for its adoption by a broader community.
+Materials and methods
+Details of molecular dynamics simulations
+We performed temperature replica-exchange simulations [83] with MOFF to determine the
+conformational ensembles of HP1α and HP1β dimers. Atomistic protein structures were pre-
+dicted with RaptorX [96] and used to initialize simulations. Details on modeling HP1 proteins
+to preserve the tertiary structure of folded domains are provided in the S1 Text—Setting up
+MOFF HP1 system. Six independent replicas were simulated to maintain temperatures at 300
+K, 315.79 K, 333.33 K, 352.94 K, 375.00 K, and 400 K, respectively, with the Langevin middle
+integrator [88] and a friction coefficient of 1 ps
+−1
+. Each replica lasted for 200 million steps with
+a timestep of 10 fs. Exchanges between neighboring replicas were attempted every 1000 steps.
+More details on the replica exchange simulations are attached in the S1 Text—Implementation
+Fig 6. OpenABC facilitates all-atom simulations by producing equilibrated initial atomistic configuration s. (A) Illustration s of the conversi on from a
+coarse-g rained configurati on (top) to a fully atomistic model with explicit solvent molecules (bottom). Only 2% of water molecules and counter ions of the
+atomisti c model are shown for clarity. The system consists of 100 HP1α dimers, and different molecules are shown in one of 25 colors. Both figures are
+render ed with Mol* Viewer [90]. (B) The atomistic potential energy evaluated using the CHARMM force field is shown as a function of simulation time.
+https:// doi.org/10.1371 /journal.pcbi.1 011442.g006
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 10 / 18
+
+
+--- Page 11 ---
+of the temperature replica exchange algorithm. We discarded the first 100 million steps as equil-
+ibration and used the remaining data for analysis.
+We carried out slab simulations to evaluate the stability of condensates formed by HP1α
+and HP1β dimers. Initial configurations of these simulations were prepared as follows. First,
+we randomly placed 100 copies of protein dimers into a cubic box of length 75 nm. Then we
+performed 5-million-step constant pressure and constant temperature (NPT) simulations at
+one bar and 150 K to compress the system with a timestep of 10 fs. Control of pressure and
+temperature was achieved by coupling the Monte Carlo barostat with the Langevin middle
+integrator [88]. The length of the compressed cubic box was about 25 nm. Then we fixed the
+compressed configuration and extended the box size to 25 × 25 × 400 nm
+3
+. The rectangular
+geometry leads to the creation of a dense-dilute interface along the z-axis. Simulation results
+are expected to be independent of the exact box lengths and we chose 400 nm to be long
+enough to support phase coexistence (Fig B in S1 Text). Starting from this initial configuration,
+we gradually increased the temperature from 150 K to a target value in the first 0.1 million
+steps. We then performed 200-million-step production simulations at constant volume and
+constant temperature using the Nose ´ -Hoover integrator [88] with a collision frequency of 1
+ps
+−1
+and a timestep of 5 fs. Compared to the Langevin thermostat, the Nose ´ -Hoover integrator
+allows faster diffusion of protein molecules in the dilute phase to facilitate the equilibration of
+slab simulations.
+Following similar protocols outlined above, we performed slab simulations for disordered
+regions of protein DDX4 and FUS with the HPS model using parameters derived from the
+Urry hydrophobicity scale [97]. Detailed amino acid sequences of the two proteins are pro-
+vided in the S1 Text. For each protein, we first obtained an equilibrium configuration from a
+0.1-million-step constant temperature simulation initialized with a straight C
+α
+chain. We
+placed 100 replicas of the equilibrium configurations into a cubic box of length 75 nm. Upon
+compression by a 5-million-step NPT compression at 1 bar and 150 K with a timestep of 10 fs,
+the system reaches a cubic box with a size of about 15 nm. We then performed slab simulations
+with an elongated box of size 15 × 15 × 280 nm
+3
+and a 10 fs timestep. Nose ´ -Hoover integrator
+was again applied with a collision frequency of 1 ps
+−1
+to maintain the temperature.
+Computing phase diagrams from slab simulations
+To determine the concentration of dense and dilute phases from slab simulations, we first
+identified the largest cluster in a given configuration as the largest connected component of
+the protein-contact network. Two monomers were defined as in contact if their center-of-
+mass distance was less than 5 nm, though the computed phase diagrams are rather insensitive
+to this specific cutoff value (Table O in S1 Text). Subsequently, we translated the system so that
+the center of mass of the largest cluster coincides with the box center, which was located at
+z = 0. We recognized the region with |z| < 5 nm for HPS simulations and |z| < 10 nm for
+MOFF simulations as the dense phase, while the region with |z| > 50 nm as the dilute phase.
+The threshold values were chosen to be consistent with prior literature [20, 63] and to roughly
+follow the size of the condensate as revealed in the density profiles (Figs B-C in S1 Text). The
+concentrations were determined as the average density value in specified regions using the sec-
+ond half of the simulation trajectories. We fitted the concentration values at various tempera-
+tures using the following equation to determine the critical temperature
+r
+H
+  r
+L
+¼ AðT
+c
+  T Þ
+b
+:
+ð1Þ
+ρ
+H
+and ρ
+L
+are the densities at the concentrated and dilute phases. Parameter β = 0.325 is the
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 11 / 18
+
+
+--- Page 12 ---
+critical exponent corresponding to the universality class of 3D Ising model [98]. T
+c
+is the criti-
+cal temperature and A is the coefficient.
+Supporting information
+S1 Text. Fig A. The log of the bond vector correlation, log C(n), as a function of the bond sep-
+aration n. The dots were obtained from MD simulations, with three colors indicate three inde-
+pendent simulations. The lines are numerical fits to the data. See text Section: Computing DNA
+persistence length with the MRG-CG model for simulation details and computing persistence
+length from the numerical fitting. Fig B. Density profiles obtained from slab simulations of
+HP1α (left) and HP1β (right) dimers with the MOFF model. Vertical lines are set at z = ±10
+and ±50 nm. The final snapshots of the slab simulations at the lowest temperatures are shown.
+CG atoms with |z| < 10 nm are colored in yellow, while the remaining are shown in blue. Fig
+C. Density profiles obtained from slab simulations of DDX4 and FUS LC with the HPS model
+using the Urry scale optimal parameter set (m ¼ m
+opt
+Ur ry
+¼ 1 and D ¼ D
+opt
+Urr y
+¼ 0:08) at different
+temperatures. Vertical dashed lines are set at z = ±5 nm and ±50 nm. The final snapshots of
+the slab simulations at 260 K are shown. CG atoms with |z| < 5 nm are colored in yellow,
+while the remaining are shown in blue. This figure shows that the |z| < 5 nm and |z| > 50 nm
+regimes can represent the concentrated and dilute phases, respectively. Table A. The amino
+acid mass, sizes, and charges used by MOFF and HPS models. Both models share the same
+amino acid mass and sizes. The charge of HIS differs in the two models, while other amino
+acids share the same charge. Here e is the elementary charge. Table B. MOFF protein contact
+�
+ij
+values as defined in equation S6 in S1 Text. Due to limited space, the numbers are rounded
+to 3 decimal places. The values are in unit kJ/mol. Table C. MRG DNA model bond parame-
+ters. All the k
+bond,n
+are in unit kcal/mol/nm
+2
+, and r
+0
+unit is nm. Table D. MRG DNA model
+angle parameters. All the k
+angle,n
+are in unit kcal/mol/degree
+2
+, and θ
+0
+unit is degree. Table E.
+MRG DNA model fan bond parameters. All the k
+fan bond,n
+are in kcal/mol/nm
+2
+, and r
+Δ,0
+unit is
+nm. Δ means the fan bond between CG nucleotide i and j + Δ, where nucleotide i and j are
+WC-paired. Table F. The normalized KR scale and Urry hydropathy scale values (i.e. λ
+i
+parameters in equation S14 in S1 Text). Table G. Mpipi parameter � values as defined in equa-
+tion S25 in S1 Text. Due to limited space, the numbers are rounded to 3 decimal places. The
+values are in unit kJ/mol. Table H. Mpipi parameter σ values as defined in equation S25 in S1
+Text. Due to limited space, the numbers are rounded to 3 decimal places. The values are in
+unit nm. Table I. SMOG MJ potential parameter � as defined in equation S31 in S1 Text. Due
+to the limited space, the numbers are rounded to 3 decimal places. The values are in unit kJ/
+mol. Table J. Comparison of potential energies computed with OpenMM and GROMACS
+using MOFF for ten configurations of HP1α dimer. Table K. Comparison of potential energies
+computed with OpenMM and GROMACS using MOFF for proteins and MRG for DNA for
+ten configurations of HP1α dimer bound to a dsDNA. The energy unit is kJ/mol. See text Sec-
+tion: Validating the force field implementation in OpenMM for simulation details. Table L.
+Comparison of potential energies computed with OpenMM and HOOMD-Blue using HPS
+with Urry or KR scales for ten configurations of protein DDX4. The energy unit is kJ/mol. See
+text Section: Validating the force field implementation in OpenMM for simulation details.
+Table M. Comparison of potential energies computed with OpenMM and LAMMPS using
+Mpipi force field for a polyR+polyK+polyU system. The system consists of a chain of 10 argi-
+nines, a chain of 10 lysines, and 2 individual chains of 10 uracils. The energy unit is kJ/mol.
+See text Section: Validating the force field implementation in OpenMM for simulation details.
+Table N. The coexistence concentrations of HP1α and HP1β dimers measured by slab simula-
+tions with MOFF at different temperatures below the critical temperature. The cutoff distance
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 12 / 18
+
+
+--- Page 13 ---
+for searching the largest cluster is 5 nm. Table O. The coexistence concentrations of HP1α and
+HP1β dimers measured by slab simulation with MOFF. The concentrations were similarly
+determined as those shown in Table N but the cutoff distance for searching the largest cluster
+set as 8 instead of 5 nm. The results are almost identical to the ones shown in Table N, support-
+ing the robustness of phase diagrams with respect to the cutoff distance used for protein
+clustering. Table P. The coexistence concentrations of FUS LC and DDX4 proteins measured
+by performing slab simulations with HPS model Urry scale and the optimal parameter set
+(m ¼ m
+opt
+Urr y
+¼ 1 and D ¼ D
+opt
+Urr y
+¼ 0:08) at different temperatures below the critical temperature.
+The cutoff distance for searching the largest cluster is 5 nm.
+(PDF)
+Acknowledgmen ts
+We appreciate Azamat Rizuan’s help verifying the implementation of HPS models.
+Author Contributions
+Conceptualization: Shuming Liu, Bin Zhang.
+Data curation: Shuming Liu, Cong Wang, Bin Zhang.
+Formal analysis: Shuming Liu, Cong Wang, Bin Zhang.
+Funding acquisition: Bin Zhang.
+Investigation: Shuming Liu, Cong Wang, Bin Zhang.
+Methodology: Shuming Liu, Bin Zhang.
+Project administration: Bin Zhang.
+Resources: Bin Zhang.
+Software: Shuming Liu, Cong Wang, Andrew P. Latham, Xinqiang Ding, Bin Zhang.
+Supervision: Bin Zhang.
+Validation: Shuming Liu, Cong Wang, Bin Zhang.
+Visualization: Shuming Liu, Cong Wang, Bin Zhang.
+Writing – original draft: Shuming Liu, Bin Zhang.
+Writing – review & editing: Shuming Liu, Cong Wang, Andrew P. Latham, Xinqiang Ding,
+Bin Zhang.
+References
+1. Brangwyn ne CP, Mitchison TJ, Hyman AA. Active liquid-like behavior of nucleoli determines their size
+and shape in Xenopus laevis oocytes. Proceedings of the National Academy of Sciences. 2011;
+108(11):43 34–4339. https:/ /doi.org/10.10 73/pnas.1 01715010 8 PMID: 21368180
+2. Brangwyn ne CP, Eckmann CR, Courson DS, Rybarska A, Hoege C, Gharakhani J, et al. Germline P
+granules are liquid droplets that localize by controlled dissolution /condensati on. Science. 2009; 324
+(5935):172 9–1732. https:// doi.org/10.11 26/scienc e.1172046 PMID: 194609 65
+3. Banani SF, Lee HO, Hyman AA, Rosen MK. Biomolec ular condensate s: organiz ers of cellular biochem-
+istry. Nature reviews Molecular cell biology. 2017; 18(5):285– 298. https://doi.or g/10.1038/ nrm.2017.7
+PMID: 282250 81
+4. Shin Y, Brangwyn ne CP. Liquid phase condensati on in cell physiolog y and disease. Science. 2017;
+357(6357) :eaaf4382 . https://doi.or g/10.1126/ science.aaf43 82 PMID: 28935776
+5. Narlikar GJ. Phase-sep aration in chromatin organiz ation. Journal of bioscienc es. 2020; 45:1–5.
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 13 / 18
+
+
+--- Page 14 ---
+6. Choi JM, Holehouse AS, Pappu RV. Physical principles underlying the complex biology of intracellular
+phase transitio ns. Annua l review of biophysic s. 2020; 49:107– 133. https://doi.or g/10.114 6/annurev-
+biophys-1 21219-0816 29 PMID: 320040 90
+7. Sabari BR, Dall’Agn ese A, Young RA. Biomolec ular condensate s in the nucleus. Trends in biochemical
+sciences . 2020; 45(11):961 –977. https://d oi.org/10.101 6/j.tibs.202 0.06.007 PMID: 32684431
+8. Bhat P, Honson D, Guttman M. Nuclear compartme ntalization as a mechanism of quantita tive control of
+gene expression . Nature Reviews Molecular Cell Biology. 2021; 22(10):653 –670. https://doi.o rg/10.
+1038/s41 580-021-0 0387-1 PMID: 34341548
+9. Lyon AS, Peeples WB, Rosen MK. A framework for understa nding the functions of biomole cular con-
+densates across scales. Nature Reviews Molecular Cell Biology. 2021; 22(3):215– 235. https://doi.or g/
+10.1038/ s41580-020- 00303-z PMID: 33169001
+10. Boija A, Klein IA, Young RA. Biomolecular condensate s and cancer. Cancer cell. 2021; 39(2):174– 192.
+https://doi.or g/10.101 6/j.ccell.202 0.12.003 PMID: 33417833
+11. Borcherds W, Bremer A, Borgia MB, Mittag T. How do intrinsically disordered protein regions encode a
+driving force for liquid–liqu id phase separation? Current opinion in structural biology. 2021; 67:41–5 0.
+https://doi.or g/10.101 6/j.sbi.202 0.09.004 PMID: 330690 07
+12. Belmont AS. Nuclear compartm ents: an incomplete primer to nuclear compartm ents, bodies, and
+genome organization relative to nuclear architectur e. Cold Spring Harbor Perspe ctives in Biology.
+2022; 14(7):a041 268. https://doi.or g/10.1101/ cshperspect.a0 41268 PMID: 34400557
+13. Latham AP, Zhang B. Molecular determinant s for the layering and coarsenin g of biologic al conden-
+sates. Aggregate. 2022; p. e306. https://doi.or g/10.100 2/agt2.30 6 PMID: 37065433
+14. Pappu RV, Cohen SR, Dar F, Farag M, Kar M. Phase Transitio ns of Assoc iative Biomacro molecules.
+Chemica l Reviews. 2023;. https://doi.or g/10.102 1/acs.chem rev.2c008 14 PMID: 36881934
+15. Brangwyn ne CP, Tompa P, Pappu RV. Polymer physics of intracel lular phase transitions . Nature Phys-
+ics. 2015; 11(11):899 –904. https:// doi.org/10.10 38/nphys35 32
+16. Hori N, Takada S. Coarse-g rained structure-bas ed model for RNA-prote in complexes developed by
+fluctuation matching. Journal of Chem ical Theory and Computation. 2012; 8(9):3384 –3394. https://doi.
+org/10.1021/ ct300361j PMID: 26605744
+17. Li W, Wang W, Takada S. Energy landscape views for interp lays among folding, binding, and alloster y
+of calmoduli n domains. Proceedings of the National Academy of Sciences. 2014; 111(29):10 550–
+10555. https:// doi.org/10.10 73/pnas.1 402768111 PMID: 25002491
+18. Feric M, Vaidya N, Harmon TS, Mitrea DM, Zhu L, Richards on TM, et al. Coexisting liquid phases
+underlie nucleolar subcomp artments. Cell. 2016; 165(7):168 6–1697. https://doi.or g/10.101 6/j.cell.
+2016.04. 047 PMID: 27212236
+19. Harmon TS, Holehouse AS, Rosen MK, Pappu RV. Intrinsically disordered linkers determin e the inter-
+play between phase separation and gelatio n in multivalent proteins. elife. 2017; 6:e30294. https://doi.
+org/10.7554/ eLife.30294 PMID: 290910 28
+20. Dignon GL, Zheng W, Kim YC, Best RB, Mittal J. Sequence determin ants of protein phase behavio r
+from a coarse-g rained model. PLoS comput ational biology. 2018; 14(1):e100 5941. https://doi.or g/10.
+1371/journa l.pcbi.100 5941 PMID: 293648 93
+21. Shi G, Liu L, Hyeon C, Thirumalai D. Interphas e human chromosom e exhibits out of equilibrium glassy
+dynamics . Nature commu nications. 2018; 9(1):3161. https:// doi.org/10.10 38/s4146 7-018-056 06-6
+PMID: 300898 31
+22. Choi JM, Dar F, Pappu RV. LASSI: A lattice model for simulating phase transitions of multivalent pro-
+teins. PLoS computation al biology. 2019; 15(10):e10 07028. https://doi.or g/10.137 1/journal.pcbi .
+1007028 PMID: 31634364
+23. Dignon GL, Best RB, Mittal J. Biomolec ular phase separation: From molecular driving forces to macro-
+scopic properties. Annua l review of physic al chemis try. 2020; 71:53. https://doi.or g/10.114 6/annurev-
+physchem -071819-1 13553 PMID: 32312191
+24. Baul U, Chakrabort y D, Mugnai ML, Straub JE, Thirumal ai D. Seque nce effects on size, shape, and
+structural heterogenei ty in intrinsi cally disordered proteins . The Journal of Physical Chemistry B. 2019;
+123(16):34 62–3474. https:/ /doi.org/10.10 21/acs.jpc b.9b02575 PMID: 309138 85
+25. Wang J, Olsson S, Wehmey er C, Pe ´ rez A, Charron NE, De Fabritiis G, et al. Machine learning of
+coarse-g rained molecular dynamics force fields. ACS central scienc e. 2019; 5(5):755–7 67. https:// doi.
+org/10.1021/ acscentsci.8 b00913 PMID: 311397 12
+26. Husic BE, Charron NE, Lemm D, Wang J, Pe ´ rez A, Majews ki M, et al. Coarse graining molecular
+dynamics with graph neural networks . The Journal of chemic al physics. 2020; 153(19 ):194101. https://
+doi.org/10.10 63/5.0026133 PMID: 332182 38
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 14 / 18
+
+
+--- Page 15 ---
+27. Regy RM, Dignon GL, Zheng W, Kim YC, Mittal J. Sequence depend ent phase separati on of protein-
+polynucle otide mixtures elucidate d using molecular simulation s. Nucleic acids research . 2020; 48
+(22):12593 –12603. https:// doi.org/10.10 93/nar/g kaa1099 PMID: 332644 00
+28. Regy RM, Thompson J, Kim YC, Mittal J. Improved coarse-g rained model for studying sequence
+dependent phase separation of disordered proteins. Protein Science. 2021; 30(7):1371 –1379. https://
+doi.org/10.10 02/pro.4094 PMID: 3393441 6
+29. Joseph JA, Reinhar dt A, Aguirre A, Chew PY, Russell KO, Espinosa JR, et al. Physics-dri ven coarse-
+grained model for biomole cular phase separation with near-quan titative accurac y. Nature Computa-
+tional Science. 2021; 1(11):732– 743. https://doi.or g/10.1038/ s43588-021- 00155-3 PMID: 3579582 0
+30. Farr SE, Woods EJ, Joseph JA, Garaizar A, Collepar do-Guevar a R. Nucleos ome plasticity is a critical
+element of chromatin liquid–liqu id phase separati on and multivalen t nucleosome interacti ons. Nature
+communic ations. 2021; 12(1):2883 . https://doi.or g/10.103 8/s41467-021- 23090-3 PMID: 34001913
+31. Qi Y, Zhang B. Chromatin network retards nucleoli coalescence . Nature Commun ications. 2021; 12
+(1):6824. https://doi.or g/10.103 8/s41467 -021-2712 3-9 PMID: 34819511
+32. Kamat K, Lao Z, Qi Y, Wang Y, Ma J, Zhang B. Compartment alization with nuclear landmark s yields
+random, yet precise, genome organiz ation. Biophysica l Journal. 2023; 122(7):137 6–1389. https://do i.
+org/10.1016/ j.bpj.2023.03.0 03 PMID: 36871158
+33. Souza PC, Alessand ri R, Barnoud J, Thallmair S, Faustino I, Gru ¨ newald F, et al. Martini 3: a general
+purpose force field for coarse-grain ed molecular dynamics . Nature methods. 2021; 18(4):382– 388.
+https://doi.or g/10.103 8/s41592 -021-01098 -3 PMID: 33782607
+34. Dannenho ffer-Lafage T, Best RB. A data-driven hydrophobic ity scale for predicting liquid–liqu id phase
+separation of proteins. The Journal of Physical Chemistry B. 2021; 125(16):40 46–4056. https:// doi.org/
+10.1021/ acs.jpcb.0c11 479 PMID: 33876938
+35. Wesse ´ n J, Pal T, Das S, Lin YH, Chan HS. A simple explicit-solve nt model of polyampho lyte phase
+behavio rs and its ramificatio ns for dielectr ic effects in biomole cular condensate s. The Journal of Physi-
+cal Chemis try B. 2021; 125(17):43 37–435 8. https://doi.or g/10.102 1/acs.jpcb.1c 00954 PMID: 3389046 7
+36. Tesei G, Schulze TK, Crehuet R, Lindorff-Lar sen K. Accurate model of liquid–liqu id phase behavio r of
+intrinsica lly disordered proteins from optimization of single-ch ain properties. Proceedings of the
+National Academy of Sciences. 2021; 118(44):e2 111696118. https://do i.org/10.1073 /pnas.
+2111696118
+37. Lin X, Leicher R, Liu S, Zhang B. Coopera tive DNA looping by PRC2 complexe s. Nucleic Acids
+Research. 2021; 49(11):623 8–6248. https://doi. org/10.1093/n ar/gkab4 41 PMID: 34057467
+38. Chen Y, Kra ¨ mer A, Charron NE, Husic BE, Clementi C, Noe ´ F. Machine learning implicit solvation for
+molecular dynamics. The Journal of Chemic al Physics. 2021; 155(8):084 101.
+39. Nguyen HT, Hori N, Thirumal ai D. Condens ates in RNA repeat sequences are hetero geneously orga-
+nized and exhibit reptation dynamics . Nature chemistry. 2022; 14(7):775– 785. https://doi.or g/10.103 8/
+s41557-022 -00934-z PMID: 35501484
+40. Tan C, Jung J, Kobayash i C, Torre DUL, Takada S, Sugita Y. Implementati on of residue -level coarse-
+grained models in GENESIS for large-scale molecular dynamics simulation s. PLOS Computationa l
+Biology. 2022; 18(4):e100 9578. https://doi.or g/10.137 1/journal.pcbi .100957 8 PMID: 35381009
+41. Liu S, Lin X, Zhang B. Chromat in fiber breaks into clutches under tension and crowding. Nucleic Acids
+Research. 2022; 50(17):973 8–9747. https://doi. org/10.1093/n ar/gkac72 5 PMID: 360291 49
+42. Ding X, Zhang B. Contrastiv e learning of coarse-grain ed force fields. Journal of Chem ical Theory and
+Computat ion. 2022; 18(10):633 4–6344. https:// doi.org/10.10 21/acs.jc tc.2c00616 PMID: 36112935
+43. Di Pierro M, Potoyan DA, Wolynes PG, Onuchic JN. Anomal ous diffusion, spatial coherence, and visco-
+elasticity from the energy landscape of human chromosom es. Proceedings of the National Academy of
+Sciences. 2018; 115(30 ):7753–7758 . https://doi.or g/10.107 3/pnas.18 06297115 PMID: 299870 17
+44. Kluber A, Burt TA, Clementi C. Size and topolog y modulate the effects of frustrati on in protein folding.
+Proceedings of the National Academy of Sciences. 2018; 115(37):92 34–9239. https://doi. org/10.1073/
+pnas.180 1406115 PMID: 301503 75
+45. Chen X, Chen M, Schafer NP, Wolynes PG. Exploring the interplay between fibrillization and amor-
+phous aggreg ation channels on the energy landscape s of tau repeat isoforms. Proceedings of the
+National Academy of Sciences. 2020; 117(8):412 5–4130. https://doi.o rg/10.1073/pn as.19217 02117
+PMID: 320295 93
+46. Wu H, Dalal Y, Papoian GA. Binding dynamic s of disorde red linker histone H1 with a nucleosom al parti-
+cle. Journal of molecular biology. 2021; 433(6):166 881. https://doi.or g/10.1016/ j.jmb.2021 .166881
+PMID: 336178 99
+47. Latham AP, Zhang B. On the stability and layered organiz ation of protein-D NA condensate s. Biophysi-
+cal Journal . 2022; 121(9):172 7–1737. https:// doi.org/10.10 16/j.bpj .2022.03.028 PMID: 35364104
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 15 / 18
+
+
+--- Page 16 ---
+48. Latham AP, Zhu L, Sharon DA, Ye S, Willard AP, Zhang X, et al. Frustrate d Micropha se Separation Pro-
+duces Interfacia l Enviro nment within Biological Condensat es. bioRxiv. 2023; p. 2023–03. https:// doi.
+org/10.1101/ 2023.03.30.534 967 PMID: 37034777
+49. Zheng W, Dignon GL, Jovic N, Xu X, Regy RM, Fawzi NL, et al. Molecular details of protein conden-
+sates probed by microsec ond long atomistic simulation s. The Journal of Physica l Chem istry B. 2020;
+124(51):11 671–11679. https://doi.or g/10.1021/ acs.jpcb.0c10 489 PMID: 33302617
+50. Thody SA, Clements HD, Baniasadi H, Lyon AS, Sigman MS, Rosen MK. Small Molecule Properties
+Define Partitioning into Biomolec ular Condensates. bioRxiv . 2022; p. 2022–1 2.
+51. Robustelli P, Piana S, Shaw DE. Developing a molecular dynamics force field for both folded and disor-
+dered protein states. Proceeding s of the National Academy of Sciences. 2018; 115(21):E 4758–E4766 .
+https://doi.or g/10.107 3/pnas.18 00690115 PMID: 297356 87
+52. Galvanett o N, Ivanović MT, Chowd hury A, Sottini A, Nu ¨ esch M, Nettels D, et al. Ultrafast molecular
+dynamics observed within a dense protein condensate . bioRxiv. 2022; p. 2022–12.
+53. Klein IA, Boija A, Afeyan LK, Hawken SW, Fan M, Dall’Agn ese A, et al. Partitioning of cancer therap eu-
+tics in nuclear condensate s. Science. 2020; 368(6497) :1386–1392. https:// doi.org/10.11 26/science .
+aaz4427 PMID: 32554597
+54. Berendsen HJ, van der Spoel D, van Drunen R. GROMA CS: A messag e-passing parallel molecular
+dynamics implementa tion. Compute r physics communic ations. 1995; 91(1-3):43–56. https://doi.or g/10.
+1016/0010-4 655(95)00 042-E
+55. Jo S, Kim T, Iyer VG, Im W. CHARM M-GUI: a web-based graphical user interface for CHARM M. Jour-
+nal of computation al chemis try. 2008; 29(11):185 9–1865 . https://doi.or g/10.100 2/jcc.20945 PMID:
+18351591
+56. Salomon -Ferrer R, Case DA, Walker RC. An overview of the Amber biomole cular simulation package.
+Wiley Interdisciplinar y Reviews: Computationa l Molecular Science. 2013; 3(2):198–2 10.
+57. Abraham MJ, Murtola T, Schulz R, Pa ´ ll S, Smith JC, Hess B, et al. GROMACS : High perform ance
+molecular simulation s through multi-leve l parallelism from laptops to supercompu ters. SoftwareX .
+2015; 1:19–25 . https://doi.or g/10.101 6/j.softx.2015.0 6.001
+58. Phillips JC, Hardy DJ, Maia JD, Stone JE, Ribeiro JV, Bernardi RC, et al. Scalable molecular dynamics
+on CPU and GPU architectures with NAMD. The Journal of chemical physics. 2020; 153(4):044 130.
+https://doi.or g/10.106 3/5.0014475 PMID: 32752662
+59. Thompson AP, Aktulga HM, Berger R, Bolintinean u DS, Brown WM, Crozier PS, et al. LAMMPS -a flexi-
+ble simulation tool for particle-bas ed materials modelin g at the atomic, meso, and continuum scales.
+Computer Physics Communic ations. 2022; 271:108171. https://doi. org/10.1016/j .cpc.2021.1 08171
+60. Eastman P, Swails J, Chodera JD, McGibbo n RT, Zhao Y, Beauch amp KA, et al. OpenM M 7: Rapid
+develop ment of high perform ance algorithm s for molecular dynamics. PLoS comput ational biology.
+2017; 13(7):e100 5659. https://doi.or g/10.1371/ journal.pcbi.1 005659 PMID: 28746339
+61. Noel JK, Levi M, Raghunath an M, Lammert H, Hayes RL, Onuchi c JN, et al. SMOG 2: a versatile soft-
+ware package for generat ing structure-bas ed models. PLoS computation al biology. 2016; 12(3):
+e1004794. https:// doi.org/10.13 71/journal.p cbi.10047 94 PMID: 26963394
+62. Ding X, Lin X, Zhang B. Stability and folding pathways of tetra-nucl eosome from six-dimensio nal free
+energy surface. Nature commun ications. 2021; 12(1):1091. https://doi.o rg/10.103 8/s41467-0 21-
+21377-z PMID: 33597548
+63. Latham AP, Zhang B. Consiste nt force field captures homolog ue-resolved hp1 phase separation. Jour-
+nal of chemical theory and computation . 2021; 17(5):3134 –3144. https://doi.or g/10.102 1/acs.jctc.
+0c01220 PMID: 33826337
+64. Murthy AC, Dignon GL, Kan Y, Zerze GH, Parekh SH, Mittal J, et al. Molecular interacti ons underlying
+liquid-liqu id phase separati on of the FUS low-complexit y domain. Nature structural & molecular biolog y.
+2019; 26(7):637– 648. https://doi.or g/10.1038/ s41594-019- 0250-x PMID: 31270472
+65. Schuster BS, Dignon GL, Tang WS, Kelley FM, Ranganath AK, Jahnke CN, et al. Identifying sequence
+perturbation s to an intrinsically disordered protein that determin e its phase-se paration behavior. Pro-
+ceeding s of the National Academy of Sciences. 2020; 117(21):11 421–11431. https:// doi.org/10.10 73/
+pnas.200 0223117
+66. Conicella AE, Dignon GL, Zerze GH, Schmidt HB, D’Ordine AM, Kim YC, et al. TDP-43 α-helical struc-
+ture tunes liquid–liqu id phase separation and function. Procee dings of the National Academy of Sci-
+ences. 2020; 117(11):58 83–589 4. https://doi.or g/10.107 3/pnas.191 2055117 PMID: 32132204
+67. Krainer G, Welsh TJ, Joseph JA, Espinosa JR, Wittmann S, de Csille ´ ry E, et al. Reentrant liquid con-
+densate phase of proteins is stabilized by hydroph obic and non-ionic interacti ons. Nature communic a-
+tions. 2021; 12(1):1085 . https://doi.o rg/10.1038/s41 467-021-21 181-9 PMID: 33597515
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 16 / 18
+
+
+--- Page 17 ---
+68. Miyazawa S, Jernigan RL. Residue–r esidue potentia ls with a favorable contact pair term and an unfa-
+vorable high packing density term, for simulation and threading. Journal of molecular biology. 1996;
+256(3):623 –644. https:// doi.org/10.10 06/jmbi.19 96.0114 PMID: 8604144
+69. Pitera JW, Chodera JD. On the use of experime ntal observatio ns to bias simulated ensembles. Journal
+of chemical theory and computation . 2012; 8(10):3445 –3451. https://doi.or g/10.102 1/ct30011 2v PMID:
+26592995
+70. Roux B, Weare J. On the statistical equivale nce of restrained -ensemble simulation s with the maximum
+entropy method. The Journal of chemical physics. 2013; 138(8):02B 616. https:// doi.org/10.10 63/1.
+4792208 PMID: 23464140
+71. Bryngels on JD, Onuchic JN, Socci ND, Wolynes PG. Funnels, pathways , and the energy landscape of
+protein folding: a synthes is. Proteins: Structure, Function, and Bioinforma tics. 1995; 21(3):167– 195.
+https://doi.or g/10.100 2/prot.340210 302 PMID: 7784423
+72. Latham AP, Zhang B. Maximu m entropy optimized force field for intrinsically disordered proteins. Jour-
+nal of chemical theory and computation . 2019; 16(1):773– 781. https://doi.or g/10.102 1/acs.jctc.9 b00932
+PMID: 317561 04
+73. Latham AP, Zhang B. Improving coarse-g rained protei n force fields with small-ang le X-ray scattering
+data. The Journal of Physical Chemis try B. 2019; 123(5):102 6–1034. https://doi.or g/10.1021/ acs.jpcb.
+8b10336 PMID: 30620594
+74. Latham AP, Zhang B. Unifying coarse-g rained force fields for folded and disordered proteins. Current
+opinion in structural biology. 2022; 72:63–7 0. https://doi.or g/10.101 6/j.sbi.202 1.08.006 PMID:
+34536913
+75. Regmi R, Srinivasan S, Latham AP, Kukshal V, Cui W, Zhang B, et al. Phosph orylation-D ependent
+Conformatio ns of the Disordere d Carboxyl-Te rminus Domain in the Epidermal Growth Factor Recept or.
+J Phys Chem Lett. 2020; 11(23):100 37–10044. https:// doi.org/10.10 21/acs.jpc lett.0c0232 7 PMID:
+33179922
+76. Savelyev A, Papoian GA. Chemica lly accurate coarse graining of double-s tranded DNA. Proceedings
+of the National Academy of Sciences . 2010; 107(47):20 340–20345. https://doi.or g/10.1073/ pnas.
+1001163107 PMID: 21059937
+77. Hinckley DM, Freeman GS, Whitmer JK, De Pablo JJ. An experime ntally-informed coarse-g rained 3-
+site-per-nucl eotide model of DNA: Structure, thermodyn amics, and dynamic s of hybridiza tion. The
+Journal of chemic al physics. 2013; 139(14 ):10B604_1 . https://doi.or g/10.106 3/1.4822042 PMID:
+24116642
+78. Lu W, Bueno C, Schafer NP, Moller J, Jin S, Chen X, et al. OpenAWSE M with Open3SP N2: A fast, flexi-
+ble, and accessib le framework for large-scale coarse-grain ed biomole cular simulation s. PLoS computa-
+tional biology. 2021; 17(2):e100 8308. https://d oi.org/10.137 1/journal.pc bi.1008308 PMID: 335775 57
+79. Lequieu J, Co ´ rdoba A, Schwartz DC, de Pablo JJ. Tension-depen dent free energies of nucleosom e
+unwrapp ing. ACS central science. 2016; 2(9):660–6 66. https:// doi.org/10.10 21/acsc entsci.6b00 201
+PMID: 277259 65
+80. Tan C, Terakawa T, Takada S. Dynami c coupling among protein binding, sliding, and DNA bending
+revealed by molecular dynamic s. Journal of the American Chem ical Society. 2016; 138(27):85 12–
+8522. https://d oi.org/10.102 1/jacs.6b03 729 PMID: 27309278
+81. Parsons T, Zhang B. Critical role of histone tail entropy in nucleosome unwindin g. J Chem Phys. 2019;
+150(18):18 5103. https:// doi.org/10.10 63/1.508 5663 PMID: 31091895
+82. Leicher R, Ge EJ, Lin X, Reynolds MJ, Xie W, Walz T, et al. Single-mole cule and in silico dissec tion of
+the interacti on between Polycomb repressive complex 2 and chromatin . Proc Natl Acad Sci. 2020;
+117(48):30 465–30475. https://doi.or g/10.1073/ pnas.2003395 117 PMID: 33208532
+83. Sugita Y, Okamoto Y. Replica-e xchange molecular dynamics method for protein folding. Chemic al
+physics letters. 1999; 314(1-2):1 41–151. https://doi.or g/10.1016/ S0009-261 4(99)0112 3-9
+84. Paszke A, Gross S, Massa F, Lerer A, Bradbury J, Chanan G, et al. Pytorch: An imperati ve style, high-
+performanc e deep learning library. Advances in neural informati on processing systems. 2019; 32.
+85. Li Y, Zhang Y. REMO: A new protocol to refine full atomic protein models from C-alpha traces by opti-
+mizing hydrogen-bo nding networks . Proteins: Structure , Function, and Bioinformatic s. 2009; 76
+(3):665–67 6. https://do i.org/10.1002 /prot.223 80
+86. Dignon GL, Zheng W, Best RB, Kim YC, Mittal J. Relation between single- molecule properties and
+phase behavio r of intrinsica lly disordered proteins. Proceedings of the National Academy of Sciences.
+2018; 115(40):99 29–993 4. https://doi.or g/10.107 3/pnas.180 4177115 PMID: 30217894
+87. Regy RM, Zheng W, Mittal J. Using a sequence- specific coarse-g rained model for studying protein liq-
+uid–liquid phase separati on. In: Methods in enzymo logy. vol. 646. Elsevier; 2021. p. 1–17.
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 17 / 18
+
+
+--- Page 18 ---
+88. Zhang Z, Liu X, Yan K, Tuckerman ME, Liu J. Unified efficient thermostat scheme for the canonical
+ensemble with holonomic or isokinetic constraints via molecular dynamics. The Journal of Physical
+Chemistry A. 2019; 123(28):60 56–6079. https://doi.or g/10.1021/ acs.jpca.9b02 771 PMID: 31117592
+89. Anderson JA, Glaser J, Glotzer SC. HOOMD-bl ue: A Python package for high-perfo rmance molecular
+dynamics and hard particle Monte Carlo simulation s. Comp utational Materials Science. 2020;
+173:109363 . https://doi.or g/10.1016/ j.commatsci .2019.109 363
+90. Sehnal D, Bittrich S, Deshpande M, Svobodov a ´ R, Berka K, Bazgier V, et al. Mol* Viewer: modern web
+app for 3D visualization and analysis of large biomole cular structures. Nucleic Acids Research. 2021;
+49(W1):W 431–W437. https:// doi.org/10.10 93/nar/gk ab314 PMID: 339561 57
+91. Maison C, Almouzni G. HP1 and the dynamics of heterochrom atin maintena nce. Nature reviews Molec-
+ular cell biology. 2004; 5(4):296–3 05. https://doi.o rg/10.1038/nr m1355 PMID: 15071554
+92. Nott TJ, Petsalaki E, Farber P, Jervis D, Fussner E, Plochowie tz A, et al. Phase transitio n of a disor-
+dered nuage protein generates environm entally responsive membrane less organelles. Molecular cell.
+2015; 57(5):936– 947. https://doi.or g/10.1016/ j.molcel.201 5.01.013 PMID: 25747659
+93. Burke KA, Janke AM, Rhine CL, Fawzi NL. Residue-b y-residue view of in vitro FUS granules that bind
+the C-termina l domain of RNA polymera se II. Molecular cell. 2015; 60(2):231– 241. https://doi.or g/10.
+1016/j.mo lcel.2015 .09.006 PMID: 264553 90
+94. Huang J, Rausch er S, Nawrocki G, Ran T, Feig M, De Groot BL, et al. CHARMM3 6m: an improved
+force field for folded and intrinsically disordered proteins. Nature methods. 2017; 14(1):71– 73. https://
+doi.org/10.10 38/nmeth.4 067 PMID: 27819658
+95. Jorgense n WL, Chandra sekhar J, Madura JD, Impey RW, Klein ML. Comparis on of simple potentia l
+functions for simulating liquid water. The Journal of chemic al physics. 1983; 79(2):926 –935. https://doi.
+org/10.1063/ 1.445869
+96. Ka ¨ llberg M, Wang H, Wang S, Peng J, Wang Z, Lu H, et al. Template- based protein structure modelin g
+using the RaptorX web server. Nature protocols. 2012; 7(8):1511– 1522. https://doi.or g/10.1038/ nprot.
+2012.085 PMID: 22814390
+97. Urry DW, Gowda DC, Parker TM, Luan CH, Reid MC, Harris CM, et al. Hydrophob icity scale for proteins
+based on inverse temperatu re transitions . Biopolym ers: Original Resea rch on Biomolec ules. 1992;
+32(9):1243 –1250. https:// doi.org/10.10 02/bip.3 60320913 PMID: 1420991
+98. Rowlins on JS, Widom B. Molecular theory of capillarity . Courier Corporat ion; 2013.
+PLOS COMP UTATIONAL  BIOLOGY
+Simplifi ed GPU simulation s of biomole cular condensate s
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1011442 Septemb er 11, 2023 18 / 18

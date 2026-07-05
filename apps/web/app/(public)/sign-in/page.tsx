@@ -22,10 +22,10 @@ function SignInForm() {
 
   if (user) {
     return (
-      <article className="auth-panel">
-        <p className="eyebrow">Signed in</p>
+      <article className="pub-auth">
+        <p className="pub-kicker">Signed in</p>
         <h1>You are signed in as {user.display_name}</h1>
-        <div className="source-actions">
+        <div className="pub-auth-actions">
           <Link className="primary-action" href={returnTo}>
             Continue
           </Link>
@@ -65,30 +65,32 @@ function SignInForm() {
   };
 
   return (
-    <article className="auth-panel">
-      <p className="eyebrow">Identity required</p>
+    <article className="pub-auth">
+      <p className="pub-kicker">Identity required</p>
       <h1>Sign In To C-SQD</h1>
       <p>
         Public audit records are readable without an account. Submitting
         reviews, watching subjects, challenging audit claims, and sponsor or
         reviewer operations require identity and role state.
       </p>
-      {explain ? <p className="auth-note">{explain}</p> : null}
+      {explain ? <p className="pub-auth-note">{explain}</p> : null}
 
       {issued ? (
-        <div className="auth-issued">
+        <div>
           <p>
             A sign-in link was issued for <strong>{issued.email}</strong>. In
             this preview environment no email is sent — use the link directly:
           </p>
-          <a className="primary-action" href={issued.sign_in_url}>
-            Complete sign-in
-          </a>
+          <div className="pub-auth-actions">
+            <a className="primary-action" href={issued.sign_in_url}>
+              Complete sign-in
+            </a>
+          </div>
         </div>
       ) : (
-        <form className="auth-form" onSubmit={submit}>
+        <form onSubmit={submit}>
           <label htmlFor="sign-in-email">Email address</label>
-          <div className="retrieval-controls">
+          <div className="pub-auth-controls">
             <input
               autoComplete="email"
               id="sign-in-email"
@@ -98,7 +100,7 @@ function SignInForm() {
               type="email"
               value={email}
             />
-            <button disabled={pending} type="submit">
+            <button className="primary-action" disabled={pending} type="submit">
               {pending ? "Issuing…" : "Email me a sign-in link"}
             </button>
           </div>
@@ -106,7 +108,7 @@ function SignInForm() {
         </form>
       )}
 
-      <div className="source-actions">
+      <div className="pub-auth-actions">
         <Link className="secondary-action" href={returnTo}>
           Continue to public record
         </Link>
@@ -120,11 +122,9 @@ function SignInForm() {
 
 export default function SignInPage() {
   return (
-    <section className="workspace auth-workspace">
-      <Suspense fallback={null}>
-        <SignInForm />
-      </Suspense>
-    </section>
+    <Suspense fallback={null}>
+      <SignInForm />
+    </Suspense>
   );
 }
 

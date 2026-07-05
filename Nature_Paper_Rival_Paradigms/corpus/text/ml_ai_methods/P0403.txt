@@ -1,0 +1,3515 @@
+--- Page 1 ---
+Journal of Machine Learning Research 22 (2021) 1-34 Submitted 6/20; Revised 5/21; Published 6/21
+Optimal Rates of Distributed Regression with Imperfect
+Kernels
+Hongwei Sun ss sunhw@ujn.edu.cn
+School of Mathematical Sciences, University of Jinan
+Jinan, Shandong, P. R. China
+Qiang Wu qwu@mtsu.edu
+Department of Mathematical Sciences, Middle Tennessee State University
+Murfreesboro, TN 37132, USA
+Editor: John Shawe-Taylor
+Abstract
+Distributed machine learning systems have been receiving increasing attentions for their
+eﬃciency to process large scale data. Many distributed frameworks have been proposed for
+diﬀerent machine learning tasks. In this paper, we study the distributed kernel regression
+via the divide and conquer approach. The learning process consists of three stages. Firstly,
+the data is partitioned into multiple subsets. Then a base kernel regression algorithm is ap-
+plied to each subset to learn a local regression model. Finally the local models are averaged
+to generate the ﬁnal regression model for the purpose of predictive analytics or statistical
+inference. This approach has been proved asymptotically minimax optimal if the kernel
+is perfectly selected so that the true regression function lies in the associated reproducing
+kernel Hilbert space. However, this is usually, if not always, impractical because kernels
+that can only be selected via prior knowledge or a tuning process are hardly perfect. In-
+stead it is more common that the kernel is good enough but imperfect in the sense that the
+true regression can be well approximated by but does not lie exactly in the kernel space.
+We show distributed kernel regression can still achieve capacity independent optimal rate
+in this case. To this end, we ﬁrst establish a general framework that allows to analyze dis-
+tributed regression with response weighted base algorithms by bounding the error of such
+algorithms on a single data set, provided that the error bounds have factored the impact of
+unexplained variance of the response variable. Then we perform a leave one out analysis of
+the kernel ridge regression and bias corrected kernel ridge regression, which in combination
+with the aforementioned framework allows us to derive sharp error bounds and capacity
+independent optimal rates for the associated distributed kernel regression algorithms. As
+a byproduct of the thorough analysis, we also prove the kernel ridge regression can achieve
+rates faster than O(N −1) (where N is the sample size) in the noise free setting which, to
+our best knowledge, are ﬁrst observed and novel in regression learning.
+Keywords: Learning Theory, Distributed regression learning, Optimal rates, Imperfect
+kernels, Leave one out analysis
+1. Introduction
+Distributed machine learning systems have been receiving increasing attentions for their
+eﬃciency to process large scale data. Many distributed frameworks have been proposed for
+diﬀerent machine learning tasks; see for instance Dean and Ghemawat (2004); Dobriban and
+c⃝2021 Hongwei Sun and Qiang Wu.
+License: CC-BY 4.0, see https://creativecommons.org/licenses/by/4.0/. Attribution requirements are provided
+at http://jmlr.org/papers/v22/20-627.html.
+
+
+--- Page 2 ---
+Sun and Wu
+Sheng (2020); Kraska et al. (2013); Boyd et al. (2011); Xu et al. (2018); Zhang et al. (2015).
+Among others, the divide and conquer approach has been proved easy to implement but
+eﬃcient for statistical estimation and predictive analytics. This approach is used when the
+data is too big to be analyzed by one computer node and usually consists of three stages.
+First, the data is randomly partitioned into multiple subsets. In some applications the data
+may be naturally stored in diﬀerent locations as a result of data collection process and there
+is no need for further partitioning. Second, a base algorithm is selected according to the
+learning task and applied to each subset to learn a local model. Finally, all local models are
+averaged to generate the ﬁnal model. This approach is computationally eﬃcient because
+the second stage can be easily parallelized. Also, because the local model training does
+not require mutual communication between the computing nodes, it can largely preserve
+privacy and conﬁdentiality.
+In the context of nonlinear regression analysis distributed kernel methods implemented
+via the divide and conquer approach have been widely studied and showed asymptotically
+minimax optimal in many situations. In particular, if the kernel is perfectly selected so that
+the true regression function lies in the associated reproducing kernel space, the minimax
+optimality was veriﬁed for kernel ridge regression (Zhang et al., 2015; Szab´ o et al., 2016; Lin
+et al., 2017), kernel spectral algorithm (Guo et al., 2017a), kernel based gradient descent
+(Lin and Zhou, 2018), bias corrected regularization kernel network (Guo et al., 2017b), and
+minimum error entropy (Hu et al., 2020). However, it is usually, if not always, impractical to
+select perfect kernels for real world problems. More commonly one has to select an imperfect
+kernel by some prior knowledge and/or a tuning process. Such a kernel is empirically optimal
+within a family of candidate kernels, usually good enough for applications, but there is
+no guarantee of perfectness. A typical example is the widely used Gaussian radial basis
+kernel. It is eﬀective in most nonlinear data analysis problems because of its universality.
+But it is well known that its associated reproducing kernel Hilbert space consists of only
+inﬁnitely diﬀerentiable functions. Functions that are not inﬁnitely diﬀerentiable can be well
+approximated by the kernel but cannot lie exactly in the associated kernel space. In this
+situation the learning rates obtained in the literature are suboptimal.
+The primary goal of this study is to verify the capacity independent optimality of dis-
+tributed kernel regression algorithms when the kernel is imperfect. We focus on the use of
+kernel ridge regression (KRR) and bias corrected kernel ridge regression (BCKRR) in the
+divide and conquer approach. For this purpose, we propose a framework to analyze a broad
+class of distributed regression methods and conduct rigorous leave one out analyses. More
+speciﬁcally, we make the following four contributions.
+• First, we introduce the concept of response weighted regression algorithm, which
+covers a broad class of regression algorithms and has both KRR and BCKRR as
+examples. We propose a general framework to analyze the learning performance of re-
+sponse weighted distributed regression algorithms and show that, for such algorithms,
+it suﬃces to study the learning performance of the response weighted algorithm on a
+single data set provided that it characterizes the impact of the unexplained variance
+of the response variable on the learning performance. This makes the analysis of such
+distributed learning algorithms much easier. Because both KRR and BCKRR fall
+into this framework, we will utilize it to analyze the distributed KRR and distributed
+BCKRR in this study.
+2
+
+
+--- Page 3 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+• Second, we conduct a leave one out analysis of the KRR algorithm and prove capacity
+independent error bounds, which are sharp in the sense that they lead to optimal
+capacity independent rates regardless the kernel is perfect or imperfect. While the idea
+of leave one out analysis was originally developed in Bousquet and Elisseeﬀ (2002);
+Zhang (2003), our analysis is more rigorous so that the error bounds factor in the
+impact of the unexplained variance of the response variable and therefore we are
+able to utilize them in combination with the aforementioned framework to derive
+sharp error bounds and optimal learning rates for distributed KRR. Furthermore, our
+analysis also greatly relaxes the restriction on the number of local machines used in
+the distributed regression. In particular, our results indicate that fast rates can still
+be achieved with the number of local machines increasing at the order ofO(
+√
+N) (with
+N being the sample size) if the true regression does lie in the kernel space. This is a
+signiﬁcant relaxation compared with those in the literature; see detailed comparison
+in Section 2.3.
+• Third, we conduct a rigorous leave one out analysis of the BCKRR and utilize the
+results to derive error bounds and learning rates for distributed BCKRR algorithm.
+Again, the results are optimal from a capacity independent viewpoint when the kernel
+is imperfect. As the BCKRR was proposed by the idea of bias correction, its original
+formula involves a two-step procedure and admits an operator representation which,
+if not impossible, is unsuitable for leave one analysis in a natural way. To overcome
+this diﬃculty we prove two alternative formulae for the algorithm, among which the
+recentering regularization formula deﬁnes the target function by a Tikhonov regular-
+ization scheme and allows us to conduct leave one analysis naturally. Moreover, these
+two perspectives also shed light on the design of other bias corrected algorithms whose
+solutions do not have an explicit representation like KRR. See Section 6.1 and the
+discussions in Section 7 for details.
+• Last, as a byproduct of our leave one out analysis, we derive super fast learning rates
+for both KRR and BCKRR when the unexplained variance of the response variable
+becomes zero, that is, the response value is determined and noise free for any ﬁxed
+input. If the kernel is perfect, the rate can be faster than O(N−1) and even as fast as
+O(N−2) in the best situation. To our best knowledge, such super fast rates for kernel
+regression are ﬁrst observed and novel in learning theory research.
+The rest of the paper is organized as follows. In Section 2 we describe the problem
+setting, algorithms, and the main results. Discussions and detailed comparisons between
+our results and those in the literature will be given. Empirical studies will be used to
+illustrate the eﬀectiveness of imperfect kernels in distributed regression. In Section 3 we
+propose a general framework for the analysis of response weighted distributed regression
+algorithms. Some preliminary lemmas were proved in Section 4. Then in Section 5 and
+Section 6 we conduct leave one out analyses of KRR and BCKRR, respectively. The results
+are then used to prove our main results regarding the error bounds and learning rates of
+distributed KRR and distributed BCKRR. We close with conclusions and discussions in
+Section 7.
+3
+
+
+--- Page 4 ---
+Sun and Wu
+2. Problem setting and main results
+LetX be the sample space of input variable x andY the sample space of the response
+variable y. They are linked by a joint probability measure ρ on the product space X×Y .
+The goal is to learn the mean regression function that minimizes the mean squared prediction
+error, i.e.,
+f∗ = arg minE(f) where E(f) = E[(y− f(x))2].
+This is usually implemented by minimizing the empirical mean squared error or its regu-
+larized version when we have in hand a sampled data set D ={(xi, yi), i = 1, . . . , N}. If f∗
+is linear, multiple linear regression or the regularized methods such as ridge regression or
+LASSO performs well. When f∗ is nonlinear, kernel ridge regression can be used to search
+a good approximating function in a suitable reproducing kernel Hilbert space.
+Let K be a Mercer kernel, namely, a continuous, symmetric, and positive-semideﬁnite
+function K :X×X→ R. The inner product deﬁned by⟨K(x,·), K(t,·)⟩K = K(x, t) induces
+a reproducing kernel Hilbert space (RKHS)HK associated to the kernel K. The space is the
+closure of the function class spanned by{Kx = K(x,·) : x∈X} . The reproducing property
+f(x) = ⟨f, Kx⟩K leads to |f(x)|≤
+√
+K(x, x)∥f∥K. Thus if κ = supx∈X
+√
+K(x, x) <∞,
+thenHK can be embedded into C(X ) and∥f∥∞≤ κ∥f∥K. We refer to Aronszajn (1950)
+for more other properties of RKHS. The kernel ridge regression (KRR) estimates the true
+regression function f∗ by the function fD,λ∈H K minimizing the regularized sample mean
+squared error,
+fD,λ = arg min
+f∈HK
+{
+1
+N
+N∑
+i=1
+(yi− f(xi))2 + λ∥f∥2
+K
+}
+, (1)
+where λ > 0 is a regularization parameter. It is a popular kernel method for nonlinear
+regression analysis. Its predictive consistency has been extensively studied in the literature;
+see e.g. Evgeniou et al. (2000); Bousquet and Elisseeﬀ (2002); Zhang (2003); De Vito et al.
+(2005); Wu et al. (2006); Bauer et al. (2007); Caponnetto and De Vito (2007); Smale and
+Zhou (2007); Sun and Wu (2009b); Steinwart et al. (2009) and many references therein. Its
+applications were also extensively explored and shown successful in many problem domains.
+By the famous representer theorem, fD,λ admits a representation
+fD,λ(x) =
+N∑
+i=1
+ciK(xi, x)
+with c = ( c1, . . . , cN)⊤ ∈ RN solved from the linear system ( λN I + K)c = y where
+I is the identity matrix, K = [ K(xi, xj)]N
+i,j=1 is the kernel matrix on the input data
+and y = ( y1, . . . , yN)⊤ ∈ RN . Let S : HK → RN be be the sampling operator de-
+ﬁned by Sf = ( f(x1), . . . , f(xN))⊤ for f ∈H K. Its dual operator S∗ is given by S∗c =∑N
+i=1 ciK(xi,·)∈H K for c∈ RN . In Smale and Zhou (2007) it is proved that fD,λ has an
+operator representation
+fD,λ = 1
+N
+(
+λI + 1
+N S∗S
+)−1
+S∗y. (2)
+One objective of this paper is to study the performance of the distributed version of this
+method.
+4
+
+
+--- Page 5 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+We need several assumptions that are used throughout the paper. Recall the true
+regression function is f∗(x) = E[y|x] and deﬁne σ2 = E[var(y|x)] = E[(y− f∗(x))2]. Notice
+that
+var(y) = E
+[
+var(y|x)
+]
++ var
+(
+E[y|x]
+)
+= σ2 + var
+(
+f∗(x)
+)
+.
+The second term on the right is the part of variance of y that is explained by the regression
+function while the ﬁrst term is unexplained. Our ﬁrst assumption is on the ﬁniteness of
+unexplained variance.
+Assumption 1. The unexplained variance of the response variable is ﬁnite, i.e., σ2 <∞.
+If in particular σ2 = 0, then y = f∗(x) is determined for each given x∈X and we call
+the regression problem is noise free. Note also for any function f independent of (x, y) there
+holds
+E
+[
+(y− f(x))2]
+= E
+[
+(f∗(x)− f(x))2]
++ σ2. (3)
+This identity will be repeatedly used in the proof of our main results.
+Next we need the so called source condition. To state it, let ρX denote the marginal
+distribution onX . Deﬁne
+LKf(x) =
+∫
+X
+K(x, t)f(t)dρX (t).
+Then LK deﬁnes a compact operator both on L2
+ρX
+(the space of square integrable functions
+with respect to the probability measure ρX ) andHK. Let τi and φi be the eigenvalues and
+eigenfunctions of LK as an operator on L2
+ρX
+. Then{φi}∞
+i=1 form an orthogonal basis of L2
+ρX
+and
+LKf =
+∞∑
+i=1
+τi⟨f, φi⟩
+L2ρX
+φi, ∀ f∈ L2
+ρX
+.
+Also,{ψi =√τiφi : τi̸= 0} form an orthonormal basis of HK and, as an operator on HK,
+LKf =
+∑
+i:τi̸=0
+τi⟨f, ψi⟩K ψi, ∀ f∈H K.
+It is easy to verify that LK is a population version of the operator 1
+N S∗S (as operators on
+HK).
+Because LK is compact and admits an eigen-decomposition form, Lr
+K is well deﬁned for
+all r > 0. In particular, letHK be the closure ofHK in L2
+ρX
+. Then for each f∈HK we have
+L
+1
+2
+Kf∈H K and
+∥f∥L2ρX
+=∥L
+1
+2
+Kf∥K. (4)
+If the kernel K is universal in the sense thatHK is dense in C(X ), thenHK = L2
+ρX
+and (4)
+holds for all f∈ L2
+ρX
+. The source condition is stated as follows.
+Assumption 2. There exist some u∗∈ L2
+ρX
+and r > 0 such that f∗ = Lr
+Ku∗.
+If the source condition holds with r≥ 1
+2 then f∗∈H K and the kernel is perfect for
+learning the regression function. If r < 1
+2, then f∗ does not lie in HK and the kernel is
+imperfect. We will focus our study on the imperfect case in this paper.
+5
+
+
+--- Page 6 ---
+Sun and Wu
+Before moving on to the distributed KRR, let us ﬁrst recall that if the source condition
+holds with 0 < r ≤ 1, KRR can reach the optimal capacity independent rate O(N− 2r
+1+2r )
+(Zhang, 2003). If 1
+2≤ r≤ 1 and in addition the capacity of the reproducing kernel Hilbert
+space as measured by the eﬀective dimension satisﬁes
+N (λ) = Tr((λI + LK)−1LK)≤ C0λ−β (5)
+for some C0 > 0 and 0 < β < 1, KRR reaches the minimax optimal capacity dependent
+rate O(N− 2r
+β+2r ) (Caponnetto and De Vito, 2007). However, to our best knowledge, if r < 1
+2
+meaning that the kernel is imperfect, such minimax optimality has never been veriﬁed in
+the literature. Note all our results in this paper will not assume any capacity conditions.
+2.1 Distributed kernel ridge regression
+In the context of distributed kernel regression we divide the whole data D into m disjoint
+subset D = ⋃m
+ℓ=1 Dℓ. Without loss of generality we assume all data sets are of equal size
+n = N/m and denote Dℓ ={(xℓ,1, yℓ,1), . . . ,(xℓ,n, yℓ,n)}. Let fDℓ,λ be the local estimator
+learned from Dℓ by using KRR method (1). The distributed KRR deﬁnes the ﬁnal global
+estimator by
+fD,λ =
+m∑
+ℓ=1
+n
+N fDℓ,λ = 1
+m
+m∑
+ℓ=1
+fDℓ,λ. (6)
+This approach has been studied in Zhang et al. (2015); Lin et al. (2017) and the minimax
+optimality was veriﬁed for 1
+2 ≤ r ≤ 1. In this paper we prove the following capacity
+independent bounds for all r > 0.
+Theorem 1 Assume σ2 <∞ and f∗ = Lr
+Ku∗ for some u∗∈ L2
+ρX
+and 0 < r≤ 1.
+(i) If 0 < r≤ 1
+2, then there exists a constant C1 > 0 independent of N, n, m , or λ such
+that
+E
+[fD,λ− f∗2
+L2ρX
+]
+≤ C1
+{ mσ2
+N 2λ2 + σ2
+N λ + λ2r
+(
+1 + m2
+N 2λ2 + m
+N λ
+)}
+.
+Consequently, if m≤ N
+2r
+1+2r , then with the choice λ = N− 1
+1+2r , we have
+E
+[fD,λ− f∗2
+L2ρX
+]
+= O
+(
+N− 2r
+1+2r
+)
+.
+(ii) If 1
+2 < r≤ 1 and λn≥ 1, then there exists a constant C2 > 0 such that
+E
+[fD,λ− f∗2
+L2ρX
+]
+≤ C2
+{
+mσ2
+N 2λ2 + σ2
+N λ + λ2r + λrm
+r
+2 + 1
+4
+N
+r
+2 + 1
+4
+}
+.
+Consequently, if m≤ N
+4r2+1
+(1+2r)2 , then with the choice λ = N− 1
+1+2r , we have
+E
+[fD,λ− f∗2
+L2ρX
+]
+= O
+(
+N− 2r
+1+2r
+)
+.
+6
+
+
+--- Page 7 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+Note if r > 1 the error bounds and convergence rates are the same as r = 1 due to the
+saturation eﬀect of KRR and have been omitted. The error bounds in Theorem 1 are sharp
+and the rates are capacity independent optimal. A detailed comparison with the results in
+the literature is given in Section 2.3.
+2.2 Bias correction
+The bias corrected kernel ridge regression (BCKRR) was proposed in Wu (2017) to eﬃciently
+handle block wise data, for which the distributed learning is an example. Notice the operator
+representation (2) implies fD,λ has asymptotic bias −λ(λI + LK)−1f∗. The BCKRR is
+formulated by subtracting an empirical estimate of the asymptotic bias:
+f♯
+D,λ = fD,λ + λ
+(
+λI + 1
+N S∗S
+)−1
+fD,λ. (7)
+Similar to distributed KRR, a distributed BCKRR can be designed by applying BCKRR
+on each subset and averaging the local estimators to obtain the global estimator as
+f♯
+D,λ = 1
+m
+m∑
+ℓ=1
+f♯
+Dℓ,λ.
+The bias and variance of BCKRR had been characterized in Wu (2017) and the distributed
+BCKRR was studied in Guo et al. (2017b). Those studies have shown that the BCKRR
+beneﬁts the block wise data analysis both theoretically and empirically. Similar to the
+distributed KRR case, the distributed BCKRR has been shown asymptotically minimax
+optimal when the kernel is perfect. But when the kernel is imperfect, Guo et al. (2017b)
+derived the rate of O(N− r
+β+2r ) under the capacity condition (5). It implies a capacity
+independent rate of O(N− r
+1+2r ), which is far from optimal. Even with the capacity condition,
+if it is weak, say β > 1
+2− r, the rate in Guo et al. (2017b) is still worse than the capacity
+independent rate O(N− 2r
+1+2r ). One of our main contributions is to address this question.
+Theorem 2 Assume σ2 <∞ and f∗ = Lr
+Ku∗ for some u∗∈ L2
+ρX
+with some 0 < r≤ 2. If
+λn≥ 1, then there exists a constant ˜C > 0 independent of N, n, m , or λ such that
+E
+[ f♯
+D,λ− f∗
+
+2
+L2ρX
+]
+≤ ˜C
+
+
+
+σ2
+N λ + λ2r, if 0 < r≤ 1
+2;
+σ2
+N λ + λ2r + λrm
+r
+2 + 1
+4
+N
+r
+2 + 1
+4
+, if 1
+2 < r≤ 1;
+λ2r + λrm
+r
+2 + 1
+4
+N
+r
+2 + 1
+4
++ λr+ 1
+2 m
+1
+2
+N
+1
+2
++ σ2
+λN , if 1 < r≤ 3
+2;
+λ2r + λm
+N + λr+ 1
+2 m
+1
+2
+N
+1
+2
++ σ2
+λN , if 3
+2 < r≤ 2.
+7
+
+
+--- Page 8 ---
+Sun and Wu
+Consequently, if choosing λ = N− 1
+2r+1 and the number of local machines satisﬁes m≤ Nθ
+with
+θ =
+
+
+
+2r
+1 + 2r , if 0 < r≤ 1
+2;
+4r2 + 1
+(1 + 2r)2 , if 1
+2 < r≤ 1+
+√
+2
+2 ;
+2
+1 + 2r , if 1+
+√
+2
+2 < r≤ 2,
+then we have
+E
+[ f♯
+D,λ− f∗
+
+2
+L2ρX
+]
+= O
+(
+N− 2r
+1+2r
+)
+.
+2.3 Comparison with literature
+The minimax rate analysis of regularized least square algorithms has been extensively stud-
+ied in statistics and learning theory literature. If the eigenvalues of the operator LK decays
+as τi≤ i− 1
+β , which implies the capacity condition (5), then the minimax learning rate of
+kernel ridge regression is O(N− 2r
+2r+β ) for 1
+2 ≤ r≤ 1; see e.g. Caponnetto and De Vito
+(2007); Lin et al. (2017); Blanchard and M¨ ucke (2018). To our best knowledge, this rate
+has never been proved for r < 1
+2 without imposing additional conditions.
+Note that the capacity condition (5) roughly measures the smoothness of kernel K.
+The smoother the kernel is, the smaller the β. For example, it is proved in Mendelson and
+Neeman (2010) that, if K∈ Cα(X 2×X 2) with some integer α≥ 1 andX 2 is locally the
+graph of a Lipschitz function, then (5) is satisﬁed with β =
+(
+α
+2dim(X ) + 1
+2
+)−1
+. Moreover,
+the Mercer theorem guarantees all kernels satisﬁes (5) with β = 1. Therefore, β = 1
+corresponds to the worst situation and imposing a capacity condition (5) with β = 1 is
+equivalent to no capacity condition. We see the rate O(N− 2r
+2r+1 ) is minimax optimal in a
+capacity independent sense. It is proved in Zhang (2003) that kernel ridge regression can
+achieve this capacity independent optimal rate when r≤ 1
+2 .
+Concerning the distributed kernel ridge regression via the divide and conquer technique,
+under the assumptions that E[|φi(x)|2k] ≤ A2k for some k > 2 and constant A < ∞,
+λi≤ ai− 1
+β , and f∗∈H K (i.e. r = 1
+2), it is proved in Zhang et al. (2015) that the optimal
+learning rate of O(N− 1
+1+β ) can be achieved by restricting the number of local processors
+m≤ cα
+(
+N
+k−4−kβ
+1+β
+A4k logk N
+) 1
+k−2
+.
+This unfortunately does not apply to the case β = 1. Later in Lin et al. (2017) the minimax
+optimal rate was veriﬁed for all r∈ [ 1
+2 , 1] if m≤ N min( 3(2r−1)+β
+5(2r+β) , 2r−1
+2r+β ) and in Guo et al.
+(2017a) the restriction was relaxed to m≤ N min( 2
+2r+β, 2r−1
+2r+β ). Although their results apply
+to β = 1, the restriction on m is strict. If r = 1
+2, the data is essentially not able to be
+distributed according to their results. The error bounds in Lin et al. (2017); Guo et al.
+8
+
+
+--- Page 9 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+(2017a) also apply to r≤ 1
+2 but only lead to suboptimal rate O(N− 2r
+1+β ) with the restriction
+m = O(1). If β = 1, the capacity independent rate is O(N−r).
+In this paper our primary interest is to understand the performance of distributed kernel
+regression when the kernel is imperfect, i.e., whenr < 1
+2 and thus the true regression function
+f∗ is not inHK. For this case, Theorem 1 (i) tells that, with the restriction m≤ N
+2r
+1+2r , the
+capacity independent optimal rate O(N− 2r
+1+2r ) for r≤ 1
+2 can be achieved. Note this rate
+is even faster than the existing capacity dependent rate O(N− 2r
+1+β ) when r < β
+2 , let alone
+the capacity independent rate O(N−r). In other words, we proved faster rates under weaker
+restrictions on m. More importantly, unlike previous results that requires m = O(1) and
+thus disclaims the eﬀectiveness of distributed kernel regression algorithms in this situation,
+our results instead veriﬁed their feasibility.
+If f∗ lies in HK, i.e. r≥ 1
+2, it is as expected that the rate O(N− 2r
+1+2r ) in Theorem 1
+is worse than the minimax capacity dependent rate in the literature. But comparing the
+restrictions on the number of local machines, we see our restriction is much relaxed. In
+particular, when r is close to 1
+2, the restrictions in the literature approaches to O(1). But
+our restriction still allows about O(
+√
+N) local machines while preserving fast rates. It is
+a sacriﬁce of convergence rates for more local machines and may be useful for applications
+where analysis of super big data is necessary.
+Concerning the distributed BCKRR, similar conclusions can be made. When r < 1
+2,
+the rate in Theorem 2 is faster and the restriction is more relaxed than the results in
+Guo et al. (2017b) while when r≥ 1
+2 the rate is worse than those in Guo et al. (2017b)
+but the restriction on m is greatly relaxed. As noted in Wu (2017); Guo et al. (2017b) a
+main theoretical advantage of BCKRR is to relax the saturation eﬀect of KRR. Comparing
+Theorem 2 with Theorem 1, we see the the rate of distributed BCKRR continues improving
+beyond r > 1 and ceases to improve until r = 2. The restriction on m also continues to get
+relaxed to N
+√
+2
+1+
+√
+2 until r = 1+
+√
+2
+2 .
+It is worth mentioning that Shi (2019) studied coeﬃcient regularization approach for
+distributed kernel regression and obtained capacity dependent optimal rate O(N− 2r
+2r+β ) for
+1
+2− β
+2 ≤ r < 1
+2 , which implies the capacity independent optimal rate O(N− 2r
+2r+1 ) for all
+0 < r < 1
+2 . But the requirement m < N− 2r
+1+2r / log N is slightly more restrictive. Therefore,
+on the one hand, the techniques there may be adapted to analyze DKRR and DBCKRR for
+capacity dependent optimal rates under the same range of r. On the other hand, they are
+not supposed to supersede leave one out analysis and provide sharpest capacity independent
+error bounds.
+2.4 Empirical eﬀectiveness of imperfect kernels
+In this subsection we illustrate the empirical eﬀectiveness of using imperfect kernels in
+distributed regression. To this end, we adopt the example used in Zhang et al. (2015);
+Guo et al. (2017b). The true regression function is given by f∗(x) = min( x, 1− x) with
+x∼ Uniform[0, 1] and the observations are generated by the additive noise model yi =
+f∗(xi) + ϵi where ϵi∼ N(0, σ2) and σ2 = 1
+5 . We consider two kernels: the Sobolev space
+kernel KS(x, t) = 1 + min( x, t) and the Guassian kernel KG(x, t) = exp(−(x− t)2/0.3).
+9
+
+
+--- Page 10 ---
+Sun and Wu
+Recall that f∗ belongs toHKS with∥f∗∥KS = 1. So KS is a perfect kernel for this problem.
+Notice that the reproducing kernel Hilbert space associated to a Gaussian kernel consists
+only inﬁnitely diﬀerentiable functions and even polynomials may not lie in the space (Minh,
+2010). We conclude f∗ does not lie inHKG and KG is an imperfect kernel. We generate N =
+4098 sample points and use number of partitions m∈{ 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024}.
+Mean squared errors between the estimated function and the true regression function is used
+to measure the performance.
+According to Zhang et al. (2015), if the Soboleve space kernel KS is used, the theoreti-
+cally optimal choice of the regularization parameter is λ = N− 2
+3 . When Guassian kernel is
+used, by Theorem 1 and Theorem 2, the optimal choice of λ should depend on the index
+r in the source condition, which, unfortunately, is unknown. By 0 < r < 1
+2 we know the
+optimal choice should be N−α with 1
+2 < α < 1 and α = 2
+3 seems an acceptable choice. So
+we will also use λ = N− 2
+3 for the Guassian kernel to make the ﬁrst comparison between
+the four distributed kernel regression algorithms, namely, distributed KRR with Sobolev
+space kernel (DKRR-S), distributed BCKRR with Sobolev space kernel (DBCKRR-S), dis-
+tributed KRR with Guassian kernel (DKRR-G), and distributed BCKRR with Gaussian
+kernel (DBCKRR-G). To do this, for each aforementioned m value and each algorithm, we
+repeat the experiment 50 times and report the mean squared errors in Figure 1(a). The
+results indicate that, even if KG is imperfect for the problem, it performs comparable with
+the perfect kernel KS when m is small and may even outperforms KS when m becomes
+large.
+To our best knowledge, all rate analysis literature of distributed kernel regression, in-
+cluding Zhang et al. (2015); Lin et al. (2017); Lin and Zhou (2018); Guo et al. (2017b,a)
+and this study, suggest the optimal regularization parameter be selected as λ = N−α with
+α an index depending on the regularity of the true regression function f∗. While this is very
+helpful for researchers to understand the optimality of the algorithms, it is less informative
+for their practical use because such an index is unknown for real problems. Furthermore,
+distributed kernel regression becomes necessary only if the data is too big to be processed
+by a single machine. In this situation, it is imaginable that globally tuning the optimal pa-
+rameter is either impossible or too time consuming. At the same time, note that distributed
+kernel regression requires underregularization, meaning that the regularization parameter
+must be chosen according to the total sample size N, not on the local sample size n. To
+resolve all these problems, Guo et al. (2017b) proposed a practical strategy to tune the
+parameter for distributed kernel regression. It ﬁrst cross-validates the regularization pa-
+rameter locally to get optimal choice λℓ,n = n−αℓ for each subset for Dℓ and then use an
+underregularized parameter
+λℓ = λ
+logN
+logn
+ℓ,n = N−αℓ (8)
+to train the local model on Dℓ. To mimic a real problem, now let us assume we have
+no information about the true regression function and the regularization parameters have
+to be selected by using the above tuning strategy. We run the four algorithms again for
+each m value and report the mean squared errors in Figure 1(b). We see that, when a
+theoretically optimal regularization parameter is not available and λ has to be tuned from
+data, the performance of all four methods deteriorates faster as m increases. But Guassian
+10
+
+
+--- Page 11 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+kernel, though imperfect, seems less sensitive to the number of local machines and so the
+performance deteriorates slower than Sobolev space kernel.
+Finally, the results in both plots indicate that, regardless the choices of kernels and
+regularization parameters, bias correction always helps to improve the learning performance
+and relax the restriction on the number of local machines.
+Figure 1: Mean squared error of distributed kernel regression with Sobolev space kernel and
+Guassian kernel when (a) the regularization parameters is ﬁxed as λ = N− 2
+3 and
+(b) the regularization parameter is locally tuned and underregularized according
+to equation (8).
+1 2 3 4 5 6 7 8 9 10
+log2(m)
+0
+1
+2
+3
+4
+5
+6
+7
+8MSE
+#10-3
+DKRR-S
+DBCKRR-S
+DKRR-G
+DBCKRR-G
+1 2 3 4 5 6 7 8 9 10
+log2(m)
+0
+0.005
+0.01
+0.015
+0.02
+0.025MSE
+DKRR-S
+DBCKRR-S
+DKRR-G
+DBCKRR-G
+(a) (b)
+3. A framework for fast rate analysis of distributed regression
+In this section we ﬁrst establish a general procedure to prove fast rate for a class of regression
+algorithms that possess certain special features and apply to the two algorithms we study
+in this paper.
+Deﬁnition 3 Let Λ be a parameter space andH a set of hypothesis functions. A regression
+algorithmA : (X×Y )N×Λ→H that tunes parameters in Λ is response weighted if for any
+data D∈ (X×Y )N and any λ∈ Λ there exists a vector of functions g1(Dx, λ), . . . , gN(Dx, λ)
+which depend only on the input data Dx ={x1, . . . , xN} and the parameter λ but not on the
+output data Dy ={yi}N
+i=1 such that
+A(D, λ) =
+N∑
+i=1
+yigi(Dx, λ).
+There are many regression algorithms belonging to the response weighted family. By
+the representation of fD,λ and f♯
+D,λ, it is easy to verify that both KRR and BCKRR belong
+to this family. There are more examples in the literature. For instance, traditional multiple
+11
+
+
+--- Page 12 ---
+Sun and Wu
+linear regression, the kernel smooth estimators, the stochastic gradient descent algorithms
+associated with the least square loss are all response weighted regression algorithms.
+Denote by A the distributed algorithm that applies the divide and conquer approach
+and usesA as the base algorithm on local subsets. It is easy to derive the following lemma.
+Lemma 4 IfA is a response weighted regression algorithm, then A is also a response
+weighted regression algorithm.
+This lemma simply says that the response weighted feature can be inherited by the dis-
+tributed algorithm. This property allows to derive fast rates for such distributed algorithms
+by studying error bounds of the base algorithm, as shown in the following theorem.
+Theorem 5 LetA be a response weighted regression algorithm and, when applying to a
+data D of N observations with parameter λ, have the error bound as
+E
+[
+∥A(D, λ)− f∗∥2
+L2ρX
+]
+≤ ε(N, λ, σ2).
+Then the corresponding distributed algorithm A will have the error bound
+E
+[
+∥A(D, λ)− f∗∥2
+L2ρX
+]
+≤ ε(n, λ, σ2)
+m + ε(n, λ,0)
+assuming the whole data D is equally split into m subsets with each subset containing n
+observations.
+Proof Let y∗
+ℓ,i = f∗(xℓ,i) for 1≤ ℓ≤ m, 1≤ i≤ n and
+D∗
+ℓ ={(xℓ,1, y∗
+ℓ,1), . . . ,(xℓ,n, y∗
+ℓ,n)}
+be the noise free observations associated to the subset Dℓ. We have
+(σ∗)2 = E
+[
+var
+(
+y∗
+ℓ,i|xℓ,i
+)]
+= E
+[ (
+y∗
+ℓ,i− f∗(xℓ,i)
+)2 ]
+= 0
+and therefore
+E
+[ A(D∗
+ℓ , λ)− f∗
+
+2
+L2ρX
+]
+≤ ε(n, λ,0). (9)
+Because of the response weighted feature of A we have
+E
+[
+A(Dℓ, λ)|Dℓ,x
+]
+=
+n∑
+i=1
+E[yℓ,i|xℓ,i]gi(Dℓ,x, λ) =
+n∑
+i=1
+f∗(xℓ,i)gi(Dℓ,x, λ) =A(D∗
+ℓ , λ).
+Therefore E
+[
+A(Dℓ, λ)
+]
+= E
+[
+A(D∗
+ℓ , λ)
+]
+and we have
+E
+[
+∥A(D, λ)− f∗∥2
+L2ρX
+]
+12
+
+
+--- Page 13 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+= E
+
+
+
+1
+m
+m∑
+ℓ=1
+(
+A(Dℓ, λ)− E [A(Dℓ, λ)]
+)
+2
+L2ρX
+
+ +
+
+1
+m
+m∑
+ℓ=1
+(
+E [A(Dℓ, λ)]− f∗
+)
+2
+L2ρX
+≤ 1
+m2
+m∑
+ℓ=1
+E
+[ A(Dℓ, λ)− E [A(Dℓ, λ)]
+
+2
+L2ρX
+]
++ 1
+m
+m∑
+ℓ=1
+ E [A(Dℓ, λ)]− f∗
+
+2
+L2ρX
+= 1
+m2
+m∑
+ℓ=1
+E
+[ A(Dℓ, λ)− f∗
+
+2
+L2ρX
+]
++
+( 1
+m− 1
+m2
+) m∑
+ℓ=1
+E [A(Dℓ, λ)]− f∗
+
+2
+L2ρX
+≤ 1
+m2
+m∑
+ℓ=1
+ε(n, λ, σ2) + 1
+m
+m∑
+ℓ=1
+E
+[ A(D∗
+ℓ , λ)− f∗
+
+2
+L2ρX
+]
+≤ 1
+m ε(n, λ, σ2) + ε(n, λ,0),
+where we used (9) in the last step.
+Theorem 5 states that, if the base algorithm A admits sharper error bounds for the
+noise free data (i.e. σ2 = 0), then the distributed algorithm will be able to converges fast in
+the sense that the distributed computing is playing a rule and produces an estimator better
+than the algorithm on a single subset.
+In order to use this general framework to derive error bounds and fast rates for dis-
+tributed algorithm, however, we must study the performance of the base algorithm on a
+single data with full exploration of impact of the unexplained variance σ2. Although both
+KRR and BCKRR have already been studied in the literature, the error bounds that clearly
+involve σ2 and allow us to derive error bounds of their distributed version with imperfect
+kernels are not available. They will be our main objectives in Sections 5 and 6.
+4. Preliminaries
+In this section we provide some notations and preliminary lemmas that will be used in the
+proofs. For any regularization parameter λ > 0, deﬁne
+fλ = arg min
+f∈HK
+{
+∥f− f∗∥2
+L2ρX
++ λ∥f∥2
+K
+}
+. (10)
+It is a sample limit version of the KRR estimation fD,λ and admits an operator represen-
+tation
+fλ = (λI + LK)−1LKf∗.
+It plays an essential role to characterize the approximation error of the two algorithms under
+study. The following lemma is well known.
+13
+
+
+--- Page 14 ---
+Sun and Wu
+Lemma 6 Under the source condition f∗ = Lr
+Ku∗ for some r > 0 and u∗∈ L2
+ρX
+, there hold
+∥fλ− f∗∥2
+L2ρX
+≤ λmin(2r,2)∥u∗∥2
+L2ρX
+,
+and
+λ∥fλ∥2
+K≤ λmin(2r,1)∥u∗∥2
+L2ρX
+.
+In the analysis of BCKRR, we will need the sample limit of f♯
+D,λ deﬁned by
+f♯
+λ = fλ + λ(λI + LK)−1fλ = (λI + LK)−2(2λLK + L2
+K)f∗. (11)
+For this function, we have the following approximation property (Guo et al., 2017b).
+Lemma 7 Under the source condition f∗ = Lr
+Ku∗ for some r > 0 and u∗∈ L2
+ρX
+, there
+holds
+∥f♯
+λ− f∗∥2
+L2ρX
+≤ λmin(2r,4)∥u∗∥2
+L2ρX
+.
+The following lemma can be derived from operator monotone property; see e.g. Sun and
+Wu (2009b).
+Lemma 8 If T1 and T2 are two bounded self-adjoint positive operators, then for any α∈
+[0, 1] there holds
+∥Tα
+1 − Tα
+2∥≤∥ T1− T2∥α.
+The Lemma 9 below follows from simple calculation.
+Lemma 9 Let ξ be a random variable with values in a Hilbert space H and{ξ1, . . . , ξN} be
+a set of i.i.d. observations for ξ. Then
+E
+
+
+
+1
+N
+N∑
+i=1
+ξi− Eξ
+
+2
+≤ E[∥ξ∥2]
+N .
+Let HS(HK) be the class of Hilbert-Schmidt operators on HK. It is known HS( HK)
+forms a Hilbert space with the Hilbert-Schmidt norm which, give an operator A onHK, is
+deﬁned by∥A∥2
+HS = Trace(A∗A). Then LK as an operator on HK belongs to HS(HK) and
+∥LK∥HS≤ κ2; see e.g. Sun and Wu (2009a). Deﬁne the rank one operator Kx⊗ Kx by
+Kx⊗ Kxf =⟨f, Kx⟩KKx = f(x)Kx.
+Then∥Kx⊗ Kx∥HS ≤ κ2. Note for any Hilbert-Schmidt operator A there holds ∥A∥≤
+∥A∥HS. Applying Lemma 9 to ξ = Kx⊗ Kx we have the following lemma.
+Lemma 10 We have
+E
+[ 
+1
+N S∗S− LK
+
+2]
+≤ κ4
+N
+14
+
+
+--- Page 15 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+Deﬁne
+Q(λ, N ) = min
+f∈HK
+{
+∥f− f∗∥2
+L2ρX
++ λ∥f∥2
+K
+}
+− λE
+[
+∥fD,λ∥2
+K
+]
+.
+Note that Q(λ, N) depends on the regularization parameter λ and sample size N, not on
+the data D. We will need a sharp bound for Q(λ, N).
+Lemma 11 Assume f∗ = Lr
+Ku∗ for some r > 0, u∗∈ L2
+ρX
+.
+(i) If 0 < r≤ 1
+2 , then
+Q(λ, N)≤ 2λ2r∥u∗∥2
+L2ρX
+.
+(ii) If 1
+2 < r≤ 1, then
+Q(λ, N)≤ λ2r∥u∗∥2
+L2ρX
+(
+1 + 2κ2r
+λrN
+r
+2 + 1
+4
++ 2κ√
+λN
+)
+.
+(iii) If 1 < r≤ 3
+2, then
+Q(λ, N)≤ λ2∥u∗∥2
+L2ρX
+(
+1 + 2κ2r
+λN
+r
+2 + 1
+4
++ 2κλr−1
+√
+λN
+)
+.
+(iv) If r > 3
+2, then
+Q(λ, N)≤ λ2∥u∗∥2
+L2ρX
+(
+1 + 2κ3
+λN + 2κ√
+N
+)
+.
+Proof By the deﬁnition (10) we see
+Q(λ, N) =∥fλ− f∗∥2
+L2ρX
++ λ∥fλ∥2
+K− λE
+[
+∥fD,λ∥2
+K
+]
+. (12)
+We see conclusion (i) follows easily from Lemma 6.
+To prove conclusions (ii)-(iv), the key is to bound ∥fλ∥2
+K− E
+[
+∥fD,λ∥2
+K
+]
+. To this end,
+ﬁrst note that
+∥fλ∥2
+K− E
+[
+∥fD,λ∥2
+K
+]
+= E
+[
+⟨fλ− fD,λ, f λ + fD,λ⟩K
+]
+= 2E
+[
+⟨fλ− fD,λ, f λ⟩K−∥ fλ− fD,λ∥2
+K
+]
+≤ 2E
+[
+⟨fλ− fD,λ, f λ⟩K
+]
+= 2⟨fλ− E[fD,λ], f λ⟩K .
+By the operator representation (2) of fD,λ we have
+E[fD,λ] = E
+[
+1
+N
+(
+λI + 1
+N S∗S
+)−1
+S∗Sf∗
+]
+.
+It is easy to verify thatfλ−E[fD,λ] = E
+[(
+λI+ 1
+N S∗S
+)−1U
+]
+with U =
+(1
+N S∗S−LK
+)
+(fλ−f∗).
+Applying Lemma 9 to theHK-valued random variableξ = (fλ(x)−f∗(x))Kx and by Lemma
+6 we have
+E
+[
+∥U∥2
+K
+]
+≤ κ2∥fλ− f∗∥2
+L2ρX
+N−1≤ κ2∥u∗∥2
+L2ρX
+λmin(2r,2)N−1.
+15
+
+
+--- Page 16 ---
+Sun and Wu
+Then, by the assumption f∗ = Lr
+Ku∗ for 1
+2 < r≤ 3
+2 and using Lemma 8, H¨ older’s inequality,
+and Lemma 10, we obtain
+⟨fλ− E[fD,λ], f λ⟩K = E
+[⟨(
+λI + 1
+N S∗S
+)−1
+U,
+(
+λI + LK
+)−1
+L1+r
+K u∗
+⟩
+K
+]
+= E
+[⟨
+L
+r+ 1
+2
+K (λI + LK)−1
+(
+λI + 1
+N S∗S
+)−1
+U, L
+1
+2
+Ku∗
+⟩
+K
+]
+≤∥ u∗∥L2ρX
+E
+[L
+r− 1
+2
+K
+(
+λI + 1
+N S∗S
+)−1
+U
+
+K
+]
+(13)
+≤∥ u∗∥L2ρX
+E
+[(
+λ−1
+L
+r− 1
+2
+K −
+(1
+N S∗S
+)r− 1
+2
+ + λr− 3
+2
+)
+∥U∥K
+]
+≤∥ u∗∥L2ρX
+E
+[ (
+λ−1
+LK− 1
+N S∗S
+
+r− 1
+2
++ λr− 3
+2
+)
+∥U∥K
+]
+≤∥ u∗∥L2ρX
+
+
+λ−1
+(
+E
+[ LK− 1
+N S∗S
+
+2])r
+2− 1
+4
++ λr− 3
+2
+
+
+
+(
+E
+[
+∥U∥2
+K
+] )1
+2
+≤∥ u∗∥2
+L2ρX
+(
+κ2rλmin(r−1,0)
+N
+r
+2 + 1
+4
++ κλmin(2r− 3
+2,r− 1
+2 )
+N
+1
+2
+)
+.
+Plugging this estimate into (12) and applying Lemma 6 again we obtain the desired bounds
+in conclusion (ii) and conclusion (iii).
+If r > 3
+2 , then by (13), we have
+⟨fλ− E[fD,λ], f λ⟩K≤∥ u∗∥L2ρX
+E
+[(
+λ−1
+LK− 1
+N S∗S
+ + 1
+)
+∥U∥K
+]
+≤∥ u∗∥2
+L2ρX
+(κ3
+N + κλ
+N
+1
+2
+)
+.
+The conclusion (iv) follows by plugging this estimate into (12).
+Next we deﬁne
+Q♯(λ, N) =∥f♯
+λ− f∗∥2
+L2ρX
++ λ
+(
+E
+[
+∥f♯
+λ− fD,λ∥2
+K
+]
+− E
+[
+∥f♯
+D,λ− fD,λ∥2
+K
+])
+.
+It will be used to derive the error bound for BCKRR when r≥ 1.
+Lemma 12 Assume f∗ = Lr
+Ku∗ for some r≥ 1
+2 and u∗∈ L2
+ρX
+. If λ≤ 1, then
+Q♯(λ, N)≤ 20(κ2r + κ2 + κ)∥u∗∥2
+L2ρX
+(
+λmin(2r,4) + λmin(2r−1,1)
+N + λmin(r,1)
+N min(r
+2 + 1
+4,1)
+16
+
+
+--- Page 17 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
++ λmin(2r− 1
+2,r+ 1
+2,2)
+N
+1
+2
+)
++ 4κ2σ2
+λN .
+Proof First note that
+E
+[
+∥f♯
+λ− fD,λ∥2
+K
+]
+− E
+[
+∥f♯
+D,λ− fD,λ∥2
+K
+]
+≤ 2E
+[⣨
+f♯
+λ− f♯
+D,λ, f ♯
+λ− fD,λ
+⟩
+K
+]
+.
+Let
+f♯
+x,λ = E
+[
+f♯
+D,λ|Dx
+]
+=
+(
+λI + 1
+N S∗S
+)−2(
+2λI + 1
+N S∗S
+)1
+N S∗Sf∗
+and
+fx,λ = E [fD,λ|Dx] =
+(
+λI + 1
+N S∗S
+)−1 1
+N S∗Sf∗.
+Then we have that
+E
+[⣨
+f♯
+D,λ, f D,λ
+⟩
+K
+]
+− E
+[⣨
+f♯
+x,λ, f x,λ
+⟩
+K
+]
+=E
+[ ⟨(
+λI + 1
+N S∗S
+)−2(
+2λI + 1
+N S∗S
+)1
+N S∗(y− Sf∗),
+(
+λI + 1
+N S∗S
+)−1 1
+N S∗(y− Sf∗)
+⟩
+K
+]
+=E
+[ 
+(
+λI + 1
+N S∗S
+)−1 1
+N S∗(y− Sf∗)
+
+2
+K
+]
++ E
+[ λ
+1
+2
+(
+λI + 1
+N S∗S
+)− 3
+2 1
+N S∗(y− Sf∗)
+
+2
+K
+]
+≤ 2λ−2E
+[ 
+1
+N S∗(y− Sf∗)
+
+2
+K
+]
+≤ 2κ2σ2
+λ2N .
+Therefore,
+E
+[
+∥f♯
+λ− fD,λ∥2
+K
+]
+− E
+[
+∥f♯
+D,λ− fD,λ∥2
+K
+]
+≤ 2E
+[⣨
+f♯
+λ− f♯
+x,λ, f ♯
+λ− fx,λ
+⟩
+K
+]
++ 4κ2σ2
+λ2N .
+By the fact λ2f♯
+λ = (2λLK + L2
+K)(f∗− f♯
+λ) we have
+f♯
+λ− f♯
+x,λ =
+(
+λI + 1
+N S∗S
+)−2 {(
+2λI + 1
+N S∗S
+)1
+N S∗S− (2λI + LK)LK
+}
+(f♯
+λ− f∗)
+=
+(
+λI + 1
+N S∗S
+)−2(
+2λI + 1
+N S∗S
+)(1
+N S∗S− LK
+)
+(f♯
+λ− f∗)
++
+(
+λI + 1
+N S∗S
+)−2(1
+N S∗S− LK
+)
+LK(f♯
+λ− f∗).
+Applying Lemma 9 to the random variable ξ = ( f∗(x)− f♯
+λ(x))Kx and by Lemma 7 we
+obtain
+E
+[ 
+(1
+N S∗S− LK
+)
+(f♯
+λ− f∗)
+
+2
+K
+]
+≤
+κ2∥f♯
+λ− f∗∥2
+L2ρX
+N ≤
+κ2∥u∗∥2
+L2ρX
+λmin(2r,4)
+N .
+Similarly, we have
+E
+[ 
+(1
+N S∗S− LK
+)
+LK(f♯
+λ− f∗)
+
+2
+K
+]
+≤
+κ2∥LK(f♯
+λ− f∗)∥2
+L2ρX
+N ≤
+κ2∥u∗∥L2ρX
+p2λmin(2r+2,4)
+N .
+17
+
+
+--- Page 18 ---
+Sun and Wu
+Hence we have
+E
+[f♯
+λ− f♯
+x,λ
+
+2
+K
+]
+≤
+10κ2∥u∗∥2
+L2ρX
+λmin(2r−2,0)
+N .
+By Lemma 8 and Lemma 10 we have
+E
+[f♯
+x,λ− fx,λ
+
+2
+K
+]
+= E
+[ λ
+(
+λI + 1
+N S∗S
+)−2 1
+N S∗SLr
+Ku∗
+
+2
+K
+]
+≤ 2λ2E
+[ 
+(
+λI + 1
+N S∗S
+)−2 1
+N S∗S
+(
+L
+min(r− 1
+2, 1)
+K −
+(1
+N S∗S
+)min(r− 1
+2, 1))
+L
+max(r−1, 1
+2 )
+K u∗
+
+2
+K
+]
++ 2λ2E
+[ 
+(
+λI + 1
+N S∗S
+)−2(1
+N S∗S
+)min(r+ 1
+2, 2)L
+max(r−1, 1
+2 )
+K u∗
+
+2
+K
+]
+≤ 2∥u∗∥2
+L2ρX
+κmax(4r−6, 0)
+(
+E
+[ L
+min(r− 1
+2, 1)
+K −
+(1
+N S∗S
+)min(r− 1
+2, 1)
+
+2]
++ λmin(2r−1, 2)
+)
+≤ 2∥u∗∥2
+L2ρX
+κmax(4r−6, 0)
+(
+κmin(4r−2, 4)
+N min(r− 1
+2,1) + λmin(2r−1,2)
+)
+.
+So we have
+E
+[⣨
+f♯
+λ− f♯
+x,λ, f ♯
+λ− fx,λ
+⟩
+K
+]
+= E
+[f♯
+λ− f♯
+x,λ
+
+2
+K
+]
++ E
+[⣨
+f♯
+λ− f♯
+x,λ, f ♯
+x,λ− fx,λ
+⟩
+K
+]
+≤ 10(κ2r + κ2 + κ)∥u∗∥2
+L2ρX
+(
+λmin(2r−2,0)
+N + λmin(r−1,0)
+N min(r
+2 + 1
+4,1) + λmin(2r− 3
+2,r− 1
+2,1)
+N
+1
+2
+)
+and therefore
+λ
+(
+E
+[
+∥f♯
+λ− fD,λ∥2
+K
+]
+− E
+[
+∥f♯
+D,λ− fD,λ∥2
+K
+])
+≤ 20(κ2r + κ2 + κ)∥u∗∥2
+L2ρX
+(
+λmin(2r−1,1)
+N + λmin(r,1)
+N min(r
+2 + 1
+4,1) + λmin(2r− 1
+2,r+ 1
+2,2)
+N
+1
+2
+)
++ 4κ2σ2
+λN .
+This together with Lemma 7 gives the desired conclusion.
+5. Error bounds for KRR and distributed KRR
+The main result of this section is the following error bound for KRR on a single data set.
+Theorem 13 Assume f∗ = Lr
+Ku∗ for some 0 < r≤ 2 and u∗∈ L2
+ρX
+.
+18
+
+
+--- Page 19 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+(i) If 0 < r≤ 1
+2, then
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+≤ 2λ2r∥u∗∥2
+L2ρX
+(
+1 + κ4
+N 2λ2 + 2κ2
+N λ
+)
++
+( κ4
+N 2λ2 + 2κ2
+N λ
+)
+σ2.
+(ii) If r≥ 1
+2 and λ is chosen so that λN≥ 1, then there is a constant c1 > 0 such that
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+≤ c1
+(
+λmin(2r,2) + λmin(r,1)
+N min(r
+2 + 1
+4,1) + σ2
+λN
+)
+.
+The proof of Theorem 13 will be proved in Section 5.1 below. With this theorem, the
+following corollary on the capacity independent rate of KRR follows immediately.
+Corollary 14 Under the assumption of Theorem 13, by choosing λ = N− max( 1
+1+2r, 1
+3 ) we
+have
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+= O
+(
+N− min( 2r
+1+2r, 2
+3 )
+)
+.
+If, in addition, σ2 = 0, then we can choose λ = N−1 to obtain
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+=
+
+
+
+O
+(
+N−2r)
+, if 0 < r≤ 1
+2;
+O
+(
+N−( 3r
+2 + 1
+4 )
+)
+, if 1
+2 < r≤ 1;
+O
+(
+N−(r
+2 + 5
+4 )
+)
+, if 1 < r≤ 3
+2;
+O
+(
+N−2)
+, if r≥ 3
+2 .
+While the capacity independent rate of O(N− 2r
+1+2r ) is well known in the literature and
+it is expected the noise free learning should intuitively be better, it is still surprising to
+see the rate for noise free learning in Corollary 14 can be faster than O(N−1). Moreover,
+KRR was known to suﬀer from a saturation eﬀect that says the rate ceases to increase for
+r≥ 1. We see from Corollary 14 that for noise free learning the rate can continue to increase
+beyond r≥ 1 and the saturation eﬀect occurs when r≥ 3
+2 . To our best knowledge, both the
+super fast rate and the relaxed saturation eﬀect for noise free regression learning are novel
+observations.
+We can now prove Theorem 1 by combining Theorem 5 and Theorem 13.
+Proof [Proof of Theorem 1.] Theorem 13 tells that, if 0 < r≤ 1
+2, the error bound for KRR
+with a single data set of sample size n is
+ε(n, λ, σ2)≤ 2λ2r∥u∗∥2
+L2ρX
+(
+1 + κ4
+n2λ2 + 2κ2
+nλ
+)
++
+( κ4
+n2λ2 + 2κ2
+nλ
+)
+σ2.
+Consequently
+ε(n, λ,0)≤ 2λ2r∥u∗∥2
+L2ρX
+(
+1 + κ4
+n2λ2 + 2κ2
+nλ
+)
+.
+19
+
+
+--- Page 20 ---
+Sun and Wu
+By Theorem 5 and the fact N = mn, we obtain
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+≤ ε(n, λ, σ2)
+m + ε(n, λ,0)
+≤ 4λ2r∥u∗∥2
+L2ρX
+(
+1 + κ4
+n2λ2 + 2κ2
+nλ
+)
++
+( κ4
+mn2λ2 + 2κ2
+mnλ
+)
+σ2
+≤ C1
+{
+λ2r
+(
+1 + m2
+N 2λ2 + m
+N λ
+)
++ σ2m
+N 2 + σ2
+N λ
+}
+with C1 = (1 + κ4) max(4∥u∗∥2
+L2ρX
+, 1). If λ = N− 1
+2r+1 and m≤ N
+2r
+1+2r , then m≤ N λ and
+therefore
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+≤ 3C1
+{
+λ2r + σ2
+N λ
+}
+= 3C1(1 + σ2)N− 2r
+1+2r .
+This proves the claim in (i).
+To prove claim (ii) we note that if 1
+2≤ r≤ 1 and λn≥ 1, the error bound for KRR is
+ε(n, λ, σ2)≤ c1
+(
+λ2r + λr
+n
+r
+2 + 1
+4
++ σ2
+λn
+)
+.
+By Theorem 5 we have
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+≤ 2c1
+(
+λ2r + λr
+n
+r
+2 + 1
+4
++ σ2
+λnm
+)
+= 2c1
+(
+λ2r + λrm
+r
+2 + 1
+4
+N
+r
+2 + 1
+4
++ σ2
+λN
+)
+.
+With the choice λ = N− 1
+2r+1 and m≤ N
+4r2+1
+4r2+4r+1 , we obtain
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+≤ 2c1(2 + σ2)N− 2r
+2r+1 .
+This ﬁnishes the proof.
+5.1 Leave one out analysis for KRR
+In this subsection we bound the error of KRR on a single data set and prove Theorem 13.
+To this end, we perform a leave one out analysis of KRR. While the idea of leave one out
+analysis roots in the work of Zhang (2003), we need a more rigorous analysis to quantify
+the dependence on σ2.
+Let ˜D be a sample of N + 1 observations ˜D ={zi = ( xi, yi) : 1 ≤ i≤ N + 1}, and
+˜D(i) denote the sample of N observations generated by removing the ith observation (xi, yi)
+from ˜D, that is, ˜D(i) ={zj = (xj, yj) : 1≤ j≤ N + 1, j̸= i}. Let
+ˆg = arg min
+f∈HK
+
+
+
+1
+N
+N +1∑
+j=1
+(f(xj)− yj)2 + λ∥f∥2
+K
+
+
+
+20
+
+
+--- Page 21 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+and deﬁne the leave one out estimators associated to ˜D(i) by
+ˆf(i) = arg min
+f∈HK
+
+
+
+1
+N
+N +1∑
+j=1
+j̸=i
+(f(xj)− yj)2 + λ∥f∥2
+K
+
+
+
+.
+It is easy to verify that ˆg = f ˜D, Nλ
+N +1
+and fD,λ = ˆf(N +1). We also note that ˆf(i), 1≤ i≤ N +1
+are identically distributed (but not independent).
+The following bound for the leave one out estimator is referred to leave one out stability
+and has been proved in Zhang (2003). We still give the proof for the purpose of self-
+containing.
+Lemma 15 We have
+∥ ˆf(i)− ˆg∥K≤ κ
+N λ|ˆg(xi)− yi|.
+Proof We denote△fi = ˆf(i)− ˆg and
+Ei(f) =
+N +1∑
+j=1
+j̸=i
+(
+f(xj)− yj
+)2.
+Recall that, if h is convex, then for any a, b∈ R and t∈ [0, 1], there holds
+h(a + t(b− a))− h(a)≤ t
+(
+h(b)− h(a)
+)
+.
+By the convexity of the square loss, we have
+Ei(ˆg + t△fi)−Ei(ˆg)≤ t
+(
+Ei( ˆf(i))−Ei(ˆg)
+)
+(14)
+and
+Ei( ˆf(i)− t△fi)−Ei( ˆf(i))≤ t
+(
+Ei(ˆg)−Ei( ˆf(i))
+)
+. (15)
+By the deﬁnition of ˆf(i), we have
+1
+NEi( ˆf(i)) + λ
+ ˆf(i)
+
+2
+K
+≤ 1
+NEi( ˆf(i)− t△fi) + λ
+ ˆf(i)− t△fi
+
+2
+K
+.
+This together with (15) leads to
+2t
+⣨
+ˆf(i), △fi
+⟩
+K
+− t2∥△fi∥2
+K =
+ ˆf(i)
+
+2
+K
+−
+ ˆf(i)− t△fi
+
+2
+K
+≤ t
+N λ
+(
+Ei(ˆg)−Ei( ˆf(i))
+)
+. (16)
+Similarly, by the deﬁnition of ˆg, we have
+1
+NEi(ˆg) + λ∥ˆg∥2
+K + 1
+N (ˆg(xi)− yi)2≤ 1
+NEi(ˆg + t△fi) + λ∥ˆg + t△fi∥2
+K
++ 1
+N (ˆg(xi) + t△fi(xi)− yi)2 .
+21
+
+
+--- Page 22 ---
+Sun and Wu
+By (14), we obtain
+− 2t⟨ˆg, △fi⟩K− t2∥△fi∥2
+K =
+ˆg
+
+2
+K
+−
+ˆg + t△fi
+
+2
+K
+≤ t
+N λ
+(
+Ei( ˆf(i))−Ei(ˆg)
+)
++ 1
+N λ
+{
+(ˆg(xi) + t△fi(xi)− yi)2− (ˆg(xi)− yi)2
+}
+. (17)
+Adding (16) and (17) together, we obtain
+2t(1− t)∥△fi∥2
+K≤ 1
+N λ
+{
+(ˆg(xi) + t△fi(xi)− yi)2− (ˆg(xi)− yi)2
+}
+= t
+N λ△fi(xi)
+(
+2ˆg(xi) + t△fi(xi)− 2yi
+)
+≤ κt
+N λ∥△fi∥K
+⏐⏐⏐2ˆg(xi) + t△fi(xi)− 2yi
+⏐⏐⏐.
+Therefore,
+2(1− t)∥△fi∥K≤ κ
+N λ
+⏐⏐⏐2ˆg(xi) + t△fi(xi)− 2yi
+⏐⏐⏐.
+Letting t→ 0, we obtain
+∥△fi∥K≤ κ
+N λ
+⏐⏐⏐ˆg(xi)− yi
+⏐⏐⏐.
+This proves Lemma 15.
+We will need the following lemma.
+Lemma 16 We have
+E
+[
+1
+N + 1
+N +1∑
+i=1
+(
+ˆg(xi)− yi
+)2
+]
+≤ Q
+( N λ
+N + 1, N + 1
+)
++ σ2.
+Proof Let ˜λ = Nλ
+N +1 and f˜λ be deﬁned by (10) associated with the regularization parameter
+˜λ. By the deﬁnition of ˆg, we have
+E
+[
+1
+N + 1
+N +1∑
+i=1
+(
+ˆg(xi)− yi
+)2
+]
+= N
+N + 1E
+[ 1
+N
+N +1∑
+i=1
+(
+ˆg(xi)− yi
+)2 + λ
+[
+∥ˆg∥2
+K
+] ]
+− N λ
+N + 1E∥ˆg∥2
+K
+≤ N
+N + 1E
+[ 1
+N
+N +1∑
+i=1
+(
+f˜λ(xi)− yi
+)2 + λ∥f˜λ∥2
+K
+]
+− N λ
+N + 1E
+[
+∥ˆg∥2
+K
+]
+=∥f˜λ− f∗∥2
+L2ρX
++ ˜λ∥f˜λ∥2
+K− ˜λE∥ˆg∥2
+K + σ2
+= Q
+(
+˜λ, N + 1
+)
++ σ2,
+22
+
+
+--- Page 23 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+where we have used the fact that f˜λ is independent of ( xi, yi) and the identity (3).
+Proposition 17 There holds that
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+≤
+(
+1 + κ4
+N 2λ2 + 2κ2
+N λ
+)
+Q
+( N λ
+N + 1, N + 1
+)
++
+( κ4
+N 2λ2 + 2κ2
+N λ
+)
+σ2.
+Proof By the facts that fD,λ = ˆf(N +1) and ˆf(i), 1≤ i≤ N + 1 are identically distributed,
+we have
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+= E
+[
+∥ ˆf(N +1)− f∗∥2
+L2ρX
+]
+= 1
+N + 1
+N +1∑
+i=1
+E
+[
+∥ ˆf(i)− f∗∥2
+L2ρX
+]
+By the fact that f(i) is independent of ( xi, yi) and the identity (3) we obtain
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+= 1
+N + 1
+N +1∑
+i=1
+E
+[(
+ˆf(i)(xi)− f∗(xi)
+)2]
+= 1
+N + 1
+N +1∑
+i=1
+(
+E
+[
+( ˆf(i)(xi)− yi)2
+]
+− σ2
+)
+= E
+[
+1
+N + 1
+N +1∑
+i=1
+(ˆf(i)(xi)− yi
+)2
+]
+− σ2
+= E
+[
+1
+N + 1
+N +1∑
+i=1
+(ˆf(i)(xi)− yi
+)2− 1
+N + 1
+N +1∑
+i=1
+(
+ˆg(xi)− yi
+)2
+]
++
+(
+E
+[
+1
+N + 1
+N +1∑
+i=1
+(
+ˆg(xi)− yi
+)2
+]
+− σ2
+)
+By Lemma 15 and the reproducing property we have
+| ˆf(i)(xi)− ˆg(xi)|≤ κ∥ ˆf(i)− ˆg∥K≤ κ2
+N λ|ˆg(xi)− yi|.
+Therefore,
+E
+[
+1
+N + 1
+N +1∑
+i=1
+(ˆf(i)(xi)− yi
+)2− 1
+N + 1
+N +1∑
+i=1
+(
+ˆg(xi)− yi
+)2
+]
+= E
+[
+1
+N + 1
+N +1∑
+i=1
+(ˆf(i)(xi)− ˆg(xi)
+)(ˆf(i)(xi) + ˆg(xi)− 2yi
+)
+]
+= E
+[
+1
+N + 1
+N +1∑
+i=1
+(ˆf(i)(xi)− ˆg(xi)
+)2 + 2
+N + 1
+N +1∑
+i=1
+(ˆf(i)(xi)− ˆg(xi)
+)(
+ˆg(xi)− yi
+)
+]
+23
+
+
+--- Page 24 ---
+Sun and Wu
+≤ E
+[
+1
+N + 1
+N +1∑
+i=1
+κ4
+N 2λ2
+(
+ˆg(xi)− yi
+)2 + 2
+N + 1
+N +1∑
+i=1
+κ2
+N λ
+(
+ˆg(xi)− yi
+)2
+]
+=
+( κ4
+N 2λ2 + 2κ2
+N λ
+)
+E
+[
+1
+N + 1
+N +1∑
+i=1
+(
+ˆg(xi)− yi
+)2
+]
+.
+Then
+E
+[
+∥fD,λ− f∗∥2
+L2ρX
+]
+≤
+(
+1 + κ4
+N 2λ2 + 2κ2
+N λ
+)
+E
+[
+1
+N + 1
+N +1∑
+i=1
+(
+ˆg(xi)− yi
+)2
+]
+− σ2
+and the desired conclusion follows by using Lemma 16.
+Note that Theorem 13 follows immediately from Proposition 17 and Lemma 11.
+6. Error bound for BCKRR and distributed BCKRR
+The main result of this section is the following error bounds for BCKRR on a single data
+set that will be used in combination with Theorem 5 to derive the error bounds for its
+distributed version.
+Theorem 18 Assume σ2 <∞ and f∗ = Lr
+Ku∗ for some 0 < r≤ 2 and u∗∈ L2
+ρX
+.
+(i) If 0 < r≤ 1
+2, then
+E
+[
+∥f♯
+D,λ− f∗∥2
+L2ρX
+]
+≤ 8λ2r∥u∗∥2
+L2ρX
+(
+1 + κ4
+N 2λ2 + κ2
+N λ
+)
++ 4σ2
+( κ4
+N 2λ2 + κ2
+N λ
+)
+.
+(ii) If 1
+2 < r≤ 1 and λN≥ 1, then there is a constant ˜c1 > 0 such that
+E
+[
+∥f♯
+D,λ− f∗∥2
+L2ρX
+]
+≤ ˜c1
+(
+λ2r + λr
+N
+r
+2 + 1
+4
++ σ2
+λN
+)
+.
+(iii) If 1 < r≤ 3
+2 , λ≤ 1 and λN≥ 1, then there is a constant ˜c2 > 0 such that
+E
+[
+∥f♯
+D,λ− f∗∥2
+L2ρX
+]
+≤ ˜c2
+(
+λ2r + λ
+N
+r
+2 + 1
+4
++ λr+ 1
+2
+√
+N
++ σ2
+λN
+)
+.
+(iv) If r≥ 3
+2 , λ≤ 1 and λN≥ 1, then there is a constant ˜c3 > 0 such that
+E
+[
+∥f♯
+D,λ− f∗∥2
+L2ρX
+]
+≤ ˜c3
+(
+λmin(2r, 4) + λ
+N + σ2
+λN + λ2
+√
+N
+)
+.
+The proof of Theorem 18 will be proved in Section 6.2 below. The following corollary
+on the capacity independent rate of BCKRR follows immediately.
+24
+
+
+--- Page 25 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+Corollary 19 Under the assumption of Theorem 18, by choosing λ = N− 1
+1+2r we have
+E
+[
+∥f♯
+D,λ− f∗∥2
+L2ρX
+]
+= O
+(
+N− 2r
+1+2r
+)
+.
+If, in addition, σ2 = 0, then we can choose λ = N−1 to obtain
+E
+[
+∥f♯
+D,λ− f∗∥2
+L2ρX
+]
+=
+
+
+
+O
+(
+N−2r)
+, if 0 < r≤ 1
+2;
+O
+(
+N−( 3r
+2 + 1
+4 )
+)
+, if 1
+2 < r≤ 1;
+O
+(
+N−(r
+2 + 5
+4 )
+)
+, if 1 < r≤ 3
+2;
+O
+(
+N−2)
+, if r≥ 3
+2 .
+BCKRR suﬀers from a saturation eﬀect when r≥ 2, which relaxed the saturation eﬀect
+of KRR (Guo et al., 2017b). For noise free learning, however, we see the result for BCKRR
+is the same as that for KRR in Corollary 14 and the saturation occurs when r = 3
+2. A
+plausible interpretation of this phenomenon is that the rate O(N−2) might be the fastest
+rate a regression learning algorithm can achieve and thus bias correction cannot help further
+improve the rate.
+Theorem 2 can now be proved by combining Theorem 5 and Theorem 18. The proof is
+similar to that of Theorem 1 in Section 5. We omit the details.
+6.1 Two alternative perspectives for bias correction
+Recall the BCKRR estimator is deﬁned by a two step procedure. Although it admits an
+explicit expression and an operator representation, neither is suitable for leave one out
+analysis, if not impossible. In this section we show that BCKRR can be interpreted by
+two alternative perspectives, ﬁtting the residual and recentering regularization. The latter
+represents BCKRR as a Tikhonov regularization scheme and plays an essential role in
+the leave one out analysis of BCKRR in the next subsection. These two perspectives on
+bias correction may also be of independent interest by themselves; see the discussions in
+Section 7.
+Suppose KRR estimator fD,λ ﬁt the data by trading oﬀ the ﬁtting error and model
+complexity. If we further ﬁt the residuals by a function ˆh and add it to fD,λ, the resulted
+function will have smaller ﬁtting error. In other words, the bias is reduced. The following
+proposition tells that BCKRR deﬁned in (7) is equivalent to this process.
+Proposition 20 Let ri = yi− fD,λ(xi) be the residual and ˆh is the KRR estimator obtained
+by ﬁtting the residual, i.e.,
+ˆh = arg min
+g∈HK
+{
+1
+N
+N∑
+i=1
+(ri− g(x))2 + λ∥g∥2
+K
+}
+.
+Then we have f♯
+D,λ = fD,λ + ˆh.
+25
+
+
+--- Page 26 ---
+Sun and Wu
+Proof Denote by r = ( r1, r2, . . . , rn)⊤ the column vector of residuals. By the operator
+representation of the KRR estimator we have
+ˆh = 1
+N
+(
+λI + 1
+N S∗S
+)−1
+S∗r. (18)
+It can be easily veriﬁed that
+S∗r = S∗(y− SfD,λ) = S∗y− 1
+N S∗S
+(
+λI + 1
+N S∗S
+)−1
+S∗y
+= λ
+(
+λI + 1
+N S∗S
+)−1
+S∗y = λN fD,λ.
+Plugging it into (18) we obtain
+ˆh = λ
+(
+λI + 1
+N S∗S
+)−1
+fD,λ = f♯
+D,λ− fD,λ.
+This proves the conclusion.
+Recall that KRR is somewhat equivalent to search a minimizer of the ﬁtting error in a
+ball of radius 1√
+λ centered at the zero function. The following proposition explains BCKRR
+as a re-search for a minimizer of the ﬁtting error in a ball centered atfD,λ. This is somewhat
+equivalent to increasing the searching region to reduce the ﬁtting error and thus implement
+bias reduction.
+Proposition 21 We have
+f♯
+D,λ = arg min
+f∈HK
+{
+1
+N
+N∑
+i=1
+(yi− f(xi))2 + λ∥f− fD,λ∥2
+K
+}
+. (19)
+Proof By the fact yi = fD,λ(xi) + ri and Proposition 20, for all f∈H K, we have
+1
+N
+N∑
+i=1
+(yi− f♯
+D,λ(xi))2 + λ∥f♯
+D,λ− fD,λ∥2
+K
+= 1
+N
+N∑
+i=1
+(ri− ˆh(xi))2 + λ∥ˆh∥2
+K
+≤ 1
+N
+N∑
+i=1
+(ri− [f(xi)− fD,λ(xi)])2 + λ∥f− fD,λ∥2
+K
+= 1
+N
+N∑
+i=1
+(yi− f(xi))2 + λ∥f− fD,λ∥2
+K.
+26
+
+
+--- Page 27 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+Therefore, f♯
+D,λ is a minimizer of the recentered risk functional
+1
+N
+N∑
+i=1
+(yi− f(xi))2 + λ∥f− fD,λ∥2
+K.
+Since the recentered risk functional is convex in f, the minimizer is unique. This proves
+(19).
+Proposition 21 writes the BCKRR as a recentering Tikhonov regularization scheme. It
+enables the use of convex analysis to derive the leave one out error bound for BCKRR.
+6.2 Leave one out analysis of BCKRR
+We now perform a leave one analysis of BCKRR by the similar framework as that we have
+done in Section 5. The result will be used to prove Theorem 18. To this end, recall the
+deﬁnitions of ˜D, ˆf(i) and ˆg in Section 5.1. We deﬁne
+ˆf♯
+(i) = arg min
+f∈HK
+{ 1
+N
+N +1∑
+j=1
+j̸=i
+(
+f(xj)− yj
+)2 + λ∥f− ˆf(i)∥2
+K
+}
+(20)
+ˆg♯ = arg min
+f∈HK
+{ 1
+N
+N +1∑
+j=1
+(
+f(xj)− yj
+)2 + λ∥f− ˆg∥2
+K
+}
+. (21)
+Notice that that ˆf♯
+(N +1) = f♯
+D,λ and ˆg♯ = f♯
+˜D,˜λ where again ˜λ = Nλ
+N +1 .
+Lemma 22 For all 1≤ i≤ n + 1, there is
+∥ ˆf♯
+(i)− ˆg♯∥K≤ κ
+N λ
+[
+|ˆg(xi)− yi| +|ˆg♯(xi)− yi|
+]
+.
+Proof Recall
+Ei(f) =
+N +1∑
+j=1
+j̸=i
+(
+f(xj)− yj
+)2.
+Let△fi = ˆf♯
+(i)− ˆg♯. By the convexity of the square function, for any t∈ (0, 1), we have
+Ei(ˆg♯ + t△fi)−Ei(ˆg♯)≤ t
+[
+Ei( ˆf♯
+(i))−Ei(ˆg♯)
+]
+, (22)
+and
+Ei( ˆf♯
+(i)− t△fi)−Ei( ˆf♯
+(i))≤ t
+[
+Ei(ˆg♯)−Ei( ˆf♯
+(i))
+]
+. (23)
+By the deﬁnition of ˆf♯
+(i) in (20), for any t∈ (0, 1)
+1
+NEi( ˆf♯
+(i)) + λ∥ ˆf♯
+(i)− ˆf(i)∥2
+K≤ 1
+NEi( ˆf♯
+(i)− t△fi) + λ∥ ˆf♯
+(i)− t△fi− ˆf(i)∥2
+K.
+27
+
+
+--- Page 28 ---
+Sun and Wu
+This yields
+λ
+{
+2t
+⣨
+ˆf♯
+(i)− ˆf(i),△fi
+⟩
+K
+− t2∥△fi∥2
+K
+}
+≤ 1
+N
+{
+Ei( ˆf♯
+(i)− t△fi)−Ei( ˆf♯
+(i))
+}
+. (24)
+Similarly, by the deﬁnition of ˆg♯ in (21), we have for any t∈ (0, 1)
+1
+NEi(ˆg♯) + 1
+N (ˆg♯(xi)− yi)2 + λ∥ˆg♯− ˆg∥2
+K
+≤ 1
+NEi(ˆg♯ + t△fi) + 1
+N
+(
+(1− t)ˆg♯(xi) + t ˆf♯
+(i)(xi)− yi
+)2 + λ∥ˆg♯− ˆg + t△fi∥2
+K.
+Thus,
+λ
+{
+−2t
+⣨
+ˆg♯− ˆg,△fi
+⟩
+K
+− t2∥△fi∥2
+K
+}
+≤ 1
+N
+{
+Ei(ˆg♯ + t△fi)−Ei(ˆg♯)
+}
++ t
+N
+(
+ˆf♯
+(i)(xi)− ˆg♯(xi)
+) (
+(2− t)ˆg♯(xi) + t ˆf♯
+(i)(xi)− 2yi
+)
+. (25)
+Adding (24) and (25) together and applying (22), (23), we obtain
+2(1− t)∥△fi∥2
+K + 2
+⣨
+ˆg− ˆf(i),△fi
+⟩
+K
+≤ 1
+N λ
+(
+ˆf♯
+(i)(xi)− ˆg♯(xi)
+) (
+(2− t)ˆg♯(xi) + t ˆf♯
+(i)(xi)− 2yi
+)
+.
+Letting t→ 0, we have
+∥△fi∥2
+K +
+⣨
+ˆg− ˆf(i),△fi
+⟩
+K
+≤ 1
+N λ
+(
+ˆf♯
+(i)(xi)− ˆg♯(xi)
+) (
+ˆg♯(xi)− yi
+)
+= 1
+N λ△fi(xi)
+(
+ˆg♯(xi)− yi
+)
+.
+Therefore,
+∥△fi∥2
+K≤∥ ˆg− ˆf(i)∥K∥△fi∥K + κ
+N λ∥△fi∥K
+⏐⏐ˆg♯(xi)− yi
+⏐⏐,
+which implies
+∥△fi∥K≤∥ ˆg− ˆf(i)∥K + κ
+N λ
+⏐⏐ˆg♯(xi)− yi
+⏐⏐,
+By Lemma 15, we obtain the desired bound.
+Proposition 23 We have
+E
+[
+∥f♯
+D,λ− f∗∥2
+L2ρX
+]
+≤
+(
+1 + 4κ2
+N λ + 4κ4
+N 2λ2
+)
+Q
+( N λ
+N + 1, N + 1
+)
++
+(4κ2
+N λ + 4κ4
+N 2λ2
+)
+σ2.
+28
+
+
+--- Page 29 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+Proof Note that ˆf♯
+(i), 1≤ i≤ N + 1, are identically distributed, and ˆf♯
+(i) is independent of
+the observation (xi, yi). By the fact f♯
+D,λ = ˆf♯
+(N +1), we have
+E
+[
+∥f♯
+D,λ− f∗∥2
+L2ρX
+]
+= E
+[
+1
+N + 1
+N +1∑
+i=1
+ ˆf♯
+(i)− f∗
+
+2
+L2ρX
+]
+= E
+[
+1
+N + 1
+N +1∑
+i=1
+( ˆf♯
+(i)(xi)− yi)2
+]
+− σ2
+=
+{
+E
+[
+1
+N + 1
+N +1∑
+i=1
+(ˆg♯(xi)− yi)2
+]
+− σ2
+}
++ E
+[
+1
+N + 1
+N +1∑
+i=1
+(
+ˆf♯
+(i)(xi)− ˆg♯(xi)
+)2
+]
++ 2E
+[
+1
+N + 1
+N +1∑
+i=1
+(
+ˆf♯
+(i)(xi)− ˆg♯(xi)
+) (
+ˆg♯(xi)− yi
+)]
+:= J1 + J2 + J3. (26)
+Recall Lemma 16 tells that
+E
+[
+1
+N + 1
+N +1∑
+i=1
+(ˆg(xi)− yi)2
+]
+≤ Q
+( N λ
+N + 1, N + 1
+)
++ σ2. (27)
+By the deﬁnition of ˆg♯ we also obtain
+E
+[
+1
+N + 1
+N +1∑
+i=1
+(ˆg♯(xi)− yi)2
+]
+≤ E
+[
+1
+N + 1
+N +1∑
+i=1
+(ˆg(xi)− yi)2
+]
+≤ Q
+( N λ
+N + 1, N + 1
+)
++ σ2.
+(28)
+Therefore, we can bound J1 by
+J1≤ Q
+( N λ
+N + 1, N + 1
+)
+. (29)
+To estimate J2, we apply Lemma 22 and obtain
+(
+ˆf♯
+(i)(xi)− ˆg♯(xi)
+)2
+≤ κ2∥ ˆf♯
+(i)− ˆg♯∥2
+K≤ κ2
+( κ
+N λ|ˆg(xi)− yi| + κ
+N λ|ˆg♯(xi)− yi|
+)2
+≤ 2κ2
+( κ2
+N 2λ2 (ˆg(xi)− yi)2 + κ2
+N 2λ2 (ˆg♯(xi)− yi)2
+)
+.
+Then by (27) and (28) we obtain
+J2≤ 4κ4
+N 2λ2
+(
+Q
+( N λ
+N + 1, N + 1
+)
++ σ2
+)
+. (30)
+29
+
+
+--- Page 30 ---
+Sun and Wu
+For J3, by Lemma 22 again, we have
+2
+⏐⏐⏐
+(
+ˆf♯
+(i)(xi)− ˆg♯(xi)
+) (
+ˆg♯(xi)− yi
+)⏐⏐⏐≤ 2κ∥ ˆf♯
+(i)− ˆg♯∥K|ˆg♯(xi)− yi|
+≤ 2κ
+( κ
+N λ|ˆg(xi)− yi| + κ
+N λ|ˆg♯(xi)− yi|
+)
+|ˆg♯(xi)− yi|
+≤ κ2
+N λ(ˆg(xi)− yi)2 + 3κ2
+N λ(ˆg♯(xi)− yi)2
+By (27) and (28) again, we have
+J3≤ 4κ2
+N λ
+(
+Q
+( N λ
+N + 1, N + 1
+)
++ σ2
+)
+. (31)
+The desired error bound follows by combining the estimation for J1, J2 and J3.
+Theorem 18 part (i) and part (ii) now follow immediately from Proposition 23 and
+Lemma 11.
+If r≥ 1, the bound in Proposition 23 is still true but the estimation for Q(λ, N) is not
+suﬃcient to prove sharp bounds for BCKRR. Instead, we will estimate J1 in (26) alterna-
+tively to obtain the following error bound for BCKRR, which together with by Lemma 12
+allows to derive the sharp bounds in Theorem 18 part (iii) and part (iv).
+Proposition 24 If r≥ 1, we have
+E
+[
+∥f♯
+D,λ− f∗∥2
+L2ρX
+]
+≤ Q♯
+( N λ
+N + 1, N + 1
+)
++
+(4κ2
+N λ + 4κ4
+N 2λ2
+) {
+Q
+( N λ
+N + 1, N + 1
+)
++ σ2
+}
+.
+Proof Let ˜λ = Nλ
+N +1 and f♯
+˜λ be deﬁned by (11) associated to the parameter ˜λ. Since
+ˆg♯ = f♯
+˜D,˜λ, we can regard f♯
+˜λ as the sample limit of ˆg. Recall the error decomposition in (26).
+By (19) and a similar process to the proof of Lemma 16, we have
+E
+[
+1
+N + 1
+N +1∑
+i=1
+(ˆg♯(xi)− yi)2
+]
+≤ N
+N + 1E
+[
+1
+N
+N +1∑
+i=1
+(ˆg♯(xi)− yi)2 + λ∥ˆg♯− ˆg∥2
+K
+]
+− N λ
+N + 1E
+[
+∥ˆg♯− ˆg∥2
+K
+]
+≤ E
+[
+1
+N + 1
+N +1∑
+i=1
+(f♯
+˜λ(xi)− yi)2
+]
++ ˜λE
+[
+∥f♯
+˜λ− ˆg∥2
+K−∥ ˆg♯− ˆg∥2
+K
+]
+≤∥ f♯
+˜λ− f∗∥2
+L2ρX
++ σ2 + ˜λE
+[
+∥f♯
+˜λ− ˆg∥2
+K−∥ ˆg♯− ˆg∥2
+K
+]
+.
+Hence we can bound J1 as
+J1≤∥ f♯
+˜λ− f∗∥2
+L2ρX
++ ˜λE
+[
+∥f♯
+˜λ− ˆg∥2
+K−∥ ˆg♯− ˆg∥2
+K
+]
+= Q♯
+( N λ
+N + 1, N + 1
+)
+.
+Combining this with the estimations in (30) for J2 and (31) for J3 we obtain the desired
+bound.
+30
+
+
+--- Page 31 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+7. Conclusions and discussions
+In this paper, we ﬁrst proposed a general framework to analyze the performance of response
+weighted distributed regression algorithms. Then we conducted leave one analyses of KRR
+and BCKRR, which lead to sharp error bounds and capacity independent optimal rates
+for both approaches. The error bounds factored in the impact of unexplained variance of
+the response variable and hence are able to be used in combination with aforementioned
+framework to deduce sharp error bounds and optimal learning rates for distributed KRR and
+distributed BCKRR even when the kernel is imperfect in the sense that the true regression
+function does not lie in the associated reproducing kernel Hilbert space.
+Our analysis involves two interesting byproducts. The ﬁrst one is the super fast rates
+for noise free learning. To our best knowledge, rates that are faster than O(N−1) have been
+observed for classiﬁcation learning in some special situations (Smale and Zhou, 2007) but
+have never been observed for regression learning in the literature. In this paper we ﬁrst
+show that they are also possible for regression learning.
+The second one is the two alternative perspectives to reformulate BCKRR. They are
+not only critical for us to analyze the performance of BCKRR in this study, but also shed
+light on the design of bias corrected algorithms for other machine learning tasks. Recall
+that the original design of BCKRR in Wu (2017) heavily depends on the explicit operator
+representation of KRR. In machine learning, most regression or classiﬁcation algorithms
+are solved by an iterative optimization process and no explicit analytic solution exists.
+It is thus impractical to characterize or estimate the bias. However, the idea of ﬁtting
+residuals may apply to all regression problems while recentering regularization can apply to
+all regularization schemes. Regression learning usually adopts a loss function L(|y− f(x)|)
+and minimizes the regularized empirical loss:
+ˆfL = arg min
+f∈HK
+{
+1
+N
+N∑
+i=1
+L(|yi− f(xi)|) + λ∥f∥2
+K
+}
+.
+Deﬁne the residuals ri = yi− ˆfL(xi) and ﬁt the residual by a function ˆgL such that
+ˆgL = arg min
+g∈HK
+{
+1
+N
+N∑
+i=1
+L(|ri− g(xi)|) + λ∥g∥2
+K
+}
+.
+The bias corrected estimator with respect to the loss L can then be deﬁned as ˆf♯
+L = ˆfL +
+ˆgL. In binary classiﬁcation one usually uses a loss function of form L(yf (x)) where y∈
+{1,−1}, for instance, the hingle loss in support vector machines or the logistic loss in
+logistic regression. Because yi are labels and residuals are meaningless, it is not appropriate
+to implement bias correction by ﬁtting residuals in binary classiﬁcation. Instead, we can
+still use recentering regularization. Namely, suppose the regularized binary classiﬁcation
+algorithm estimates a classiﬁer ˆfL by
+ˆfL = arg min
+f∈HK
+{
+1
+N
+N∑
+i=1
+L(yif(xi)) + λ∥f∥2
+K
+}
+.
+31
+
+
+--- Page 32 ---
+Sun and Wu
+We deﬁne the bias corrected classiﬁer by
+ˆf♯
+L = arg min
+f∈HK
+{
+1
+N
+N∑
+i=1
+L(yif(xi)) + λ∥f− ˆfL∥2
+K
+}
+.
+It would be interesting to study these bias corrected algorithms in the future and investigate
+their theoretical properties as well as empirical application domains.
+Acknowledgment
+The work by Hongwei Sun described in this paper is supported by National Natural Science
+Foundation of China (Grants No. 11671171 and 11871167). The work by Qiang Wu is par-
+tially supported by Simons Foundation Collaboration Grants for Mathematicians #712916.
+The two authors made equal contributions to the paper and are listed alphabetically.
+References
+Nachman Aronszajn. Theory of reproducing kernels. Transactions of the American Math-
+ematical Society, 68:337–404, 1950.
+Frank Bauer, Sergei Pereverzev, and Lorenzo Rosasco. On regularization algorithms in
+learning theory. Journal of Complexity , 23(1):52–72, 2007.
+Gilles Blanchard and Nicole M¨ ucke. Optimal rates for regularization of statistical inverse
+learning problems. Foundations of Computational Mathematics , 18(4):971–1013, 2018.
+Olivier Bousquet and Andr´ e Elisseeﬀ. Stability and generalization. Journal of Machine
+Learning Research, 2:499–526, 2002.
+Stephen Boyd, Neal Parikh, Eric Chu, Borja Peleato, and Jonathan Eckstein. Distributed
+optimization and statistical learning via the alternating direction method of multipliers.
+Foundations and Trends R⃝ in Machine learning , 3(1):1–122, 2011.
+Andrea Caponnetto and Ernesto De Vito. Optimal rates for the regularized least-squares
+algorithm. Foundations of Computational Mathematics , 7(3):331–368, 2007.
+Ernesto De Vito, Andrea Caponnetto, and Lorenzo Rosasco. Model selection for regularized
+least-squares algorithm in learning theory. Foundations of Computational Mathematics ,
+5(1):59–85, 2005.
+Jeﬀrey Dean and Sanjay Ghemawat. MapReduce: Simpliﬁed data processing on large
+clusters. In Proceedings of the 6th Conference on Symposium on Operating Systems Design
+and Implementation, 2004.
+Edgar Dobriban and Yue Sheng. Wonder: Weighted one-shot distributed ridge regression
+in high dimensions. Journal of Machine Learning Research , 21(66):1–52, 2020.
+Theodoros Evgeniou, Massimiliano Pontil, and Tomaso Poggio. Regularization networks
+and support vector machines. Advances in Computational Mathematics , 13:1–50, 2000.
+32
+
+
+--- Page 33 ---
+Optimal Rates of Distributed Regression with Imperfect Kernels
+Zheng-Chu Guo, Shao-Bo Lin, and Ding-Xuan Zhou. Learning theory of distributed spectral
+algorithms. Inverse Problems, 2017a.
+Zheng-Chu Guo, Lei Shi, and Qiang Wu. Learning theory of distributed regression with
+bias corrected regularization kernel network. Journal of Machine Learning Research , 18
+(118):1–25, 2017b.
+Ting Hu, Qiang Wu, and Ding-Xuan Zhou. Distributed kernel gradient descent algorithm
+for minimum error entropy principle. Applied and Computational Harmonic Analysis , 49
+(1):229–256, 2020.
+Tim Kraska, Ameet Talwalkar, John C Duchi, Rean Griﬃth, Michael J Franklin, and
+Michael I Jordan. MLbase: A distributed machine-learning system. In 6th Biennial
+Conference on Innovative Data Systems Research (CIDR’13) , 2013.
+Shao-Bo Lin and Ding-Xuan Zhou. Distributed kernel gradient descent algorithms. Con-
+structive Approximation, 47:249–276, 2018.
+Shao-Bo Lin, Xin Guo, and Ding-Xuan Zhou. Distributed learning with regularized least
+squares. Journal of Machine Learning Research , 18(92):1–31, 2017.
+Shahar Mendelson and Joseph Neeman. Regularization in kernel learning. The Annals of
+Statistics, 38(1):526–565, 2010.
+Ha Quang Minh. Some properties of Gaussian reproducing kernel Hilbert spaces and their
+implications for function approximation and learning theory. Constructive Approxima-
+tion, 32(2):307–338, 2010.
+Lei Shi. Distributed learning with indeﬁnite kernels. Analysis and Applications , 17(06):
+947–975, 2019.
+Steve Smale and Ding-Xuan Zhou. Learning theory estimates via integral operators and
+their approximations. Constructive Approximation, 26:153–172, 2007.
+Ingo Steinwart, Don R Hush, and Clint Scovel. Optimal rates for regularized least squares
+regression. In COLT, 2009.
+Hongwei Sun and Qiang Wu. Application of integral operator for regularized least-square
+regression. Mathematical and Computer Modelling , 49(1):276–285, 2009a.
+Hongwei Sun and Qiang Wu. A note on application of integral operator in learning theory.
+Applied and Computational Harmonic Analysis , 26(3):416–421, 2009b.
+Zolt´ an Szab´ o, Bharath K Sriperumbudur, Barnab´ as P´ oczos, and Arthur Gretton. Learning
+theory for distribution regression. The Journal of Machine Learning Research , 17(1):
+5272–5311, 2016.
+Qiang Wu. Bias corrected regularization kernel network and its applications. In Interna-
+tional Joint Conference on Neural Networks (IJCNN) , pages 1072–1079, 2017.
+33
+
+
+--- Page 34 ---
+Sun and Wu
+Qiang Wu, Yiming Ying, and Ding-Xuan Zhou. Learning rates of least-square regularized
+regression. Foundations of Computational Mathematics , 6(2):171–192, 2006.
+Ganggang Xu, Zuofeng Shang, and Guang Cheng. Optimal tuning for divide-and-conquer
+kernel ridge regression with massive data. In Proceedings of the 35th International Con-
+ference on Machine Learning, 2018.
+Tong Zhang. Leave-one-out bounds for kernel methods. Neural Computation, 15(6):1397–
+1437, 2003.
+Yuchen Zhang, John C Duchi, and Martin J Wainwright. Divide and conquer kernel ridge
+regression: a distributed algorithm with minimax optimal rates. Journal of Machine
+Learning Research, 16:3299–3340, 2015.
+34

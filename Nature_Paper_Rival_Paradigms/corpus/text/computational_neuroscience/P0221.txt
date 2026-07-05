@@ -1,0 +1,1126 @@
+--- Page 1 ---
+TYPE Original Research
+PUBLISHED /zero.tnum/five.tnum January /two.tnum/zero.tnum/two.tnum/four.tnum
+DOI /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+OPEN ACCESS
+EDITED BY
+Honggang Qi,
+University of Chinese Academy of Sciences,
+China
+REVIEWED BY
+Tao Zhou,
+Nanjing University of Science and T echnology,
+China
+Yi-Jing Zhang,
+Shanghai Jiao T ong University, China
+*CORRESPONDENCE
+Qingdu Li
+liqd@usst.edu.cn
+RECEIVED /one.tnum/nine.tnum September /two.tnum/zero.tnum/two.tnum/three.tnum
+ACCEPTED /three.tnum/one.tnum October /two.tnum/zero.tnum/two.tnum/three.tnum
+PUBLISHED /zero.tnum/five.tnum January /two.tnum/zero.tnum/two.tnum/four.tnum
+CITATION
+Liu N, Wang J, Zhu Y, Wan L and Li Q (/two.tnum/zero.tnum/two.tnum/four.tnum)
+Improving imbalance classiﬁcation via
+ensemble learning based on two-stage
+learning. Front. Comput. Neurosci. /one.tnum/seven.tnum:/one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum.
+doi: /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+COPYRIGHT
+© /two.tnum/zero.tnum/two.tnum/four.tnum Liu, Wang, Zhu, Wan and Li. This is an
+open-access article distributed under the terms
+of the
+Creative Commons Attribution License
+(CC BY). The use, distribution or reproduction
+in other forums is permitted, provided the
+original author(s) and the copyright owner(s)
+are credited and that the original publication in
+this journal is cited, in accordance with
+accepted academic practice. No use,
+distribution or reproduction is permitted which
+does not comply with these terms.
+Improving imbalance
+classiﬁcation via ensemble
+learning based on two-stage
+learning
+Na Liu/one.tnum, Jiaqi Wang /one.tnum, Yongtong Zhu/one.tnum, Lihong Wan /two.tnumand
+Qingdu Li/one.tnum*
+/one.tnumInstitute of Machine Intelligence, University of Shanghai for S cience and T echnology, Shanghai, China,
+/two.tnumOrigin Dynamics Intelligent Robot Co., Ltd., Zhengzhou, China
+The excellent performance of deep neural networks on image classiﬁ cation tasks
+depends on a large-scale high-quality dataset. However, the d atasets collected
+from the real world are typically biased in their distribution , which will lead to a
+sharp decline in model performance, mainly because an imbalanced dis tribution
+results in the prior shift and covariate shift. Recent studies have typically used
+a two-stage learning method consisting of two rebalancing strate gies to solve
+these problems, but the combination of partial rebalancing str ategies will damage
+the representational ability of the networks. In addition, the two-stage learning
+method is of little help in addressing the problem of covariate shift. T o solve
+the above two issues, we ﬁrst propose a sample logit-aware reweight ing method
+called (SLA), which can not only repair the weights of majority class har d samples
+and minority class samples but will also integrate with logit adj ustment to form a
+stable two-stage learning strategy. Second, to solve the covaria te shift problem,
+inspired by ensemble learning, we propose a multi-domain expe rt specialization
+model, which can achieve a more comprehensive decision by averaging expert
+classiﬁcation results from multiple diﬀerent domains. Finally , we combine SLA and
+logit adjustment into a two-stage learning method and apply our model to the
+CIFAR-LT and ImageNet-LT datasets. Compared with the most advanced methods,
+our experimental results show excellent performance.
+KEYWORDS
+imbalance, prior shift, covariate shift, reweighting, logit ad justment
+/one.tnum Introduction
+Beneﬁting from the development of computing resources in recent years, deep neural
+networks (DNNs) have been widely used in image classiﬁcation ( He et al., 2016 ), image
+segmentation ( Zhou et al., 2019 ), object detection ( Tian et al., 2019 ), etc. These successful
+application cases usually require large-scale high-quality labeled data, such as ImageNet
+(
+Russakovsky et al., 2015 ) and COCO ( Lin et al., 2014 ), in which the sample distribution in
+the training and test dataset is almost consistent. However, training datasets collected from
+the real world generally have a biased distribution, i.e., the number of samples of each class
+varies greatly. Models trained by biased datasets will not only cause minority class samples to
+be misidentiﬁed as majority class samples but also confuse minority class samples with hard
+samples from the majority class, eventually leading to a sharp drop in network performance.
+The prior shift and covariate shift resulting from an imbalanced distribution are the
+primary causes of the decline in network performance. Prior shift refers to the phenomenon
+Frontiers in Computational Neuroscience /zero.tnum/one.tnum frontiersin.org
+
+
+--- Page 2 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+that the label distribution of one class in the training dataset
+and test dataset is inconsistent. Covariate shift mainly refers to
+the phenomenon that the data distribution of one class in the
+training dataset and test dataset is inconsistent. These shifts make
+the network parameters overﬁt to some majority class samples,
+resulting in the model’s overconﬁdence in these examples and poor
+performance on the test dataset. For a long time, many studies
+have concentrated on developing rebalancing strategies to alleviate
+this overﬁtting, such as reweighting for the loss function (
+Ren
+et al., 2018 ; Cui et al., 2019 ), resampling for the training sample
+(Pouyanfar et al., 2018 ; Zhou et al., 2020 ), and logit adjustment for
+output logit ( Menon et al., 2021 ; Xu et al., 2021 ). These strategies
+provide some good ideas for solving the problems caused by
+the imbalanced distribution. However, although reweighting and
+resampling can address class imbalance issues to some extent, the
+direct application of these methods will damage the deep feature
+representation ability of the network, making it diﬃcult for the
+network parameters to reach their theoretical optimal solution
+(
+Zhou et al., 2020).
+Adopting a two-stage learning strategy, typically using two
+separate rebalancing strategies in two training stages to decouple
+network feature representation learning and classiﬁer learning,
+is a common way to overcome the issues mentioned above.
+However, some rebalancing strategies are incompatible, e.g.,
+using resampling in the ﬁrst stage and reweighting in the
+second stage. Reweighting promotes classiﬁer learning, which
+encourages the classiﬁer’s decision boundary to move in the
+direction of classifying the minority classes as correctly as
+possible. Resampling ensures that the label distribution of the
+mini-batches sampled from the training dataset is consistent
+with the label distribution of the test dataset. Owing to the
+undersampling of the majority class samples and the oversampling
+of the minority class samples, some samples are not involved in
+the training process, resulting in a negative impact on feature
+representation learning. It is diﬃcult to use the reweighting
+method to optimize the classiﬁer when the separability of the
+feature is weak (
+Zhou et al., 2020 ). Based on the above analysis,
+we propose to use data augmentation instead of resampling
+in the ﬁrst stage to maximize the representation ability of the
+network.
+Our goal in this work is to design an eﬃcient and useful
+two-stage learning method using currently available rebalancing
+strategies. Owing to the conﬂict between reweighting and
+resampling, we investigate the eﬀects of the combination of
+logit adjustment and reweighting on DNNs. We discover that
+the network performance will be degraded when combining the
+existing classic reweighting methods with logit adjustment. This is
+because both logit adjustment and reweighting try to give minority
+class samples more attention while giving the majority class samples
+less attention, ultimately making the performance of the majority
+class drastically deteriorate. Additionally, because the conﬁdence of
+majority class hard samples and minority class samples is extremely
+similar, the sample conﬁdence-based reweighting method [such as
+focal loss (
+Lin et al., 2017 )] will unfairly assign weights to these
+samples, which will increase the expected calibration error of the
+network (
+Guo et al., 2017 ). To this end, we propose a logit-aware
+reweighting method (called SLA) that could use the sample with
+the largest logit of each class as the benchmark sample to assign
+appropriate weights to the remaining samples (
+Figure 1).
+Furthermore, two-stage learning methods are ineﬀective at
+dealing with the covariate shift problem, which is an unavoidable
+but easily neglected issue in imbalanced image classiﬁcation.
+It is hard to ensure that the distribution of the training and
+test dataset is entirely consistent. The minority class may have
+dramatically diﬀerent numbers on the training and test datasets
+when the distribution of the training dataset is imbalanced,
+which exacerbates the inconsistency between the training data
+distribution and testing data distribution. In this situation, it is
+diﬃcult to train a model with good generalizability using just a two-
+stage learning method. Inspired by ensemble learning, we propose
+a multi-domain expert specialization model to enhance the feature
+extract ability in a speciﬁc data distribution. In particular, in the
+ﬁrst training stage, three diﬀerent levels of data augmentation were
+employed to specialize the original data distribution into three
+distinct data distributions. Additionally, mixup was used to blend
+the original smaller feature distribution space into a larger feature
+space, thereby enhancing the model’s feature extraction ability. At
+the same time, the model also includes a two-stage training loss
+strategy, which can promote the classiﬁer to learn a more reliable
+decision boundary. Under the guidance of the two-stage learning
+method, our proposed model demonstrated excellent performance
+on existing imbalanced datasets.
+In summary, our main contributions are as follows:
+(1) For two-stage learning methods, we indicate that the
+combination of existing reweighting methods and logit
+adjustment will lead to performance degradation for the
+majority class or cause signiﬁcant calibration errors.
+(2) We propose a new reweighting method that can repair the
+weight of the majority of hard samples and minority samples
+calculated by the sample conﬁdence-based reweighting method
+without signiﬁcantly reducing the majority accuracy.
+(3) We propose a new ensemble learning framework that provides
+three deep specialized feature extractors for three diﬀerent
+levels of data augmentation, which can signiﬁcantly improve
+the representation ability of the network. Under the guidance of
+our proposed two-stage training loss strategy, it can signiﬁcantly
+increase classiﬁcation accuracy and reduce expected calibration
+error.
+/two.tnum Related Work
+/two.tnum./one.tnum Reweighting
+The reweighting method assigns weights to each class or
+sample to alleviate the model performance degradation caused by
+imbalanced data. A weighting function that maps the loss function
+(or gradient) to each sample can be used to determine the weight.
+Through artiﬁcial prior knowledge or a simple neural network, the
+weighting function could be easily estimated.
+Initially,
+Huang et al. (2016, 2019) used the reciprocal of class
+frequency as a weighting factor applied to class loss ( Wang et al.,
+2017). Subsequently, Lin et al. (2017) extended the class frequency
+Frontiers in Computational Neuroscience /zero.tnum/two.tnum frontiersin.org
+
+
+--- Page 3 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+FIGURE /one.tnum
+In the process of reweighting based on probability, some hard samp les from the majority class will have similar weights to the sampl es from the
+minority class. As shown in the curve on the right of the above ﬁgure, our method can eﬀectively focus on the hard sample of each class, a nd the
+loss of our proposed method rapidly decays in the low probability are as.
+from a ﬁxed prior to an adjustable parameter version. Khan et al.
+(2019) further extended the weighting method from the class level
+to the instance level ( Cui et al., 2019 ). Although this approach is
+eﬀective, the complex parameter adjustment rules are tedious and
+not universal. In addition, hard samples from the majority class
+are frequently weighted improperly because they share a lot of
+similarities with minority class samples in terms of loss values. To
+solve this problem,
+Ren et al. (2018) and Shu et al. (2019) proposed a
+robust weighted function mapping from samples to instance losses
+based on the meta-learner. However, it is diﬃcult to estimate the
+parameters of the weighting network in the meta-learning method.
+The meta-learning method requires nested training, which costs
+a lot of time. Also, meta learners need a meta dataset that is
+close to the distribution of test dataset (
+Finn et al., 2017 ; Shu
+et al., 2019 ; Jamal et al., 2020 ; Li et al., 2021 ). Zhang and Pﬁster
+(2021) adjusted the process of meta-learning, which greatly reduced
+the training cost of meta-learning and alleviated the excessive
+dependence on metadata distribution. Although meta-learning is
+currently the best reweighting method for speciﬁc datasets, its
+demanding prerequisites and high training cost precluded us from
+using it to search for a weighting function.
+/two.tnum./two.tnum Logit adjustment
+The idea of logit adjustment was expressed earlier as margin
+loss. The essence of margin loss is to apply margin to logits of a
+speciﬁc class to obtain a greater classiﬁcation interval (
+Liu et al.,
+2016, 2017; Wang et al., 2018 ). To address the imbalance image
+classiﬁcation task, LDAM (Cao et al., 2019 ), EQL (Tan et al., 2020),
+and BALMS ( Ren et al., 2020 ) suggest that minority classes need
+a large margin while majority classes need a small margin, and
+the margin is determined by an optimal trade-oﬀ boundary (
+Cao
+et al., 2019 ) or by using a meta learner ( Jamal et al., 2020 ; Ren
+et al., 2020). Menon et al. (2021) summarizes the previous margin-
+based method and proposes the concept of logit adjustment. To ﬁnd
+a suitable logit adjustment method more eﬀectively and quickly,
+adding label distribution as prior information to the logit has
+become a stable improvement method (
+Hong et al., 2021 ; Menon
+et al., 2021; Xu et al., 2021; Aimar et al., 2022).
+/two.tnum./three.tnum Two-stage learning
+The two-stage training method usually defers the use of the
+rebalancing strategy, such as reweighting or resampling, to the
+second stage (
+Hong et al., 2021 ). By using a smaller learning rate,
+the classiﬁer of the model can obtain a better decision boundary
+on the feature extracted by the feature extractor. Although the
+two-stage learning method can achieve decoupling training and
+improve the generalization performance of the model, combining
+two conﬂicting rebalancing strategies will lead to a decrease in
+model performance (
+Zhou et al., 2020 ). Therefore, it is important
+to carefully select and evaluate diﬀerent rebalancing strategies to
+ensure that they are compatible with each other and can lead
+to improved overall performance. In this study, we found that
+the combination of logit adjustment and the existing reweighting
+method causes conﬂicts, making it diﬃcult for the model to
+converge to the optimal solution. Based on the above ﬁndings, we
+propose a new reweighting method to address this issue.
+/three.tnum Analysis
+For a multi-class classiﬁcation task, we assume a dataset with
+N samples, in which X = { x1, x2, ..., xN} denotes the samples
+and Y = { y1, y2, ..., yN} denotes the labels. The dataset can be
+deﬁned as D = { (xi, yi), 1 ≤ i ≤ N}, where xi denotes the i-
+th sample and yi ∈ {0, 1}c is a c dimension vector. Our goal is
+to train a network that can minimize the misclassiﬁcation error,
+i.e., min ∑N
+i= 1 P(yi̸= arg max pyi (xi)), where pyi (xi) represents the
+probability of xi belonging to class yi. In general, we use the softmax
+cross-entropy (CE) to represent this error,
+ℓ (yi, f (xi))=− log exp(fyi (xi))
+∑c
+j= 1 exp(fyj (xi)) (1)
+where fyi (xi) and fyj (xi) represent the output logit of xj belonging to
+classes yi and yj. For the class imbalance problem, the direct use of
+the CE loss function may lead to the bias toward majority classes
+during the training process and neglect the learning of minority
+classes, resulting in some minority class samples being mistakenly
+classiﬁed as the majority classes during the testing phase. To address
+Frontiers in Computational Neuroscience /zero.tnum/three.tnum frontiersin.org
+
+
+--- Page 4 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+TABLE /one.tnumTop-/one.tnum accuracy (%) and ECE (%) from the diﬀerent combinations
+of logit adjustment and diﬀerent reweighting methods.
+Method Many Medium Few All
+LA 64.9 50.3 29.5 49.5/3.8
+LA + RW 30.8 39.5 23.7 31.8/36.9
+LA + CB 44.8 44.1 42.0 43.8/4.4
+LA + FL 62.5 49.9 32.8 49.5/3.2
+We used the mixupα = 0.4 on the CIFAR-100-LT dataset (ρ = 100).
+this issue, most reweighting methods usually apply a learnable or
+pre-designed weighting factor w to modulate the CE loss function,
+which can improve the contribution of minority classes to the
+average loss and make network learning more focused on minority
+classes. The reweighting loss function can be expressed by the
+following equation,
+ℓ (yi, f (xi))=− wi log exp(fyi (xi))
+∑c
+j= 1 exp(fyj (xi)) (2)
+However, it is challenging to derive an explicit reweighting
+function without prior knowledge. In most reweighting methods,
+the weighting factor is naturally deﬁned as a small weight for the
+majority class and a large weight for the minority class. Although
+this logical viewpoint is empirically correct, it does not consider the
+imbalanced distribution within the class; the samples of the same
+class can also be divided into the common sample and rare sample.
+/three.tnum./one.tnum Compensation training classiﬁer
+From the perspective of data distribution, we can rapidly
+identify why the model trained from the training dataset often
+performs poorly in the test phase in imbalance image classiﬁcation
+tasks. The training and test objectives can be expressed by the
+following probability,
+Ps(y|x)∝ Ps(x, y)
+Ps(x) ∝ Ps(x|y)Ps(y) (3)
+Pt(y|x)∝ Pt(x, y)
+Pt(x) ∝ Pt(x|y)Pt(y) (4)
+where s represents the source domain (training dataset) and t
+represents the target domain (test dataset). According to Equations
+(3) and (4), we can further express it as a form of measuring the
+diﬀerence between the training and testing object (
+Jamal et al.,
+2020),
+Ps(y|x)= Pt(y|x) Ps(x|y)Ps(y)
+Pt(x|y)Pt(y) (5)
+Ps(x|y)⊖ Pt(x|y)  
+Covariate shift
+and Pt(y)⊖ Ps(y)  
+Prior shift
+(6)
+Covariate shift is a common issue in deep learning tasks that
+refers to the situation in which the input data or feature distribution
+diﬀers between the training dataset and test dataset, leading to a
+poor generalization performance of the trained model on the test
+dataset. The network will inevitably suﬀer from this damage during
+training. For the imbalance image classiﬁcation task, this damage
+will become more serious (
+Jamal et al., 2020 ). Prior shift refers
+to a common problem that arises when there is some diﬀerence
+in the label distribution between the training and test datasets.
+Speciﬁcally, it is caused by the diﬀerence in the distribution of
+the number of samples per class between the training and test
+datasets (
+Menon et al., 2021 ). This makes the algorithm learn a
+biased representation, resulting in decreased performance when
+applied in the test phase. Owing to the diﬃculty in estimating
+covariate shift, we will discuss strategies for mitigating this problem
+in Section 4.2, but temporarily ignore its impact here. In previous
+training processes, the softmax classiﬁer was typically used for both
+training and testing. However, as indicated by Equation (
+6), two
+shifts between the training and test objectives exist. To address
+these problems, we can adjust the training loss as follows:
+ℓ (yi, f (xi))=− log exp(fyi (xi)+ logµi)
+∑c
+j= 1 exp(fyj (xi)+ logµj) (7)
+whereµi= Ptrain(yi)
+Ptest(yi) ,µ is a factor to measure the label distribution
+diﬀerence between the training and test datasets. Furthermore,
+Equation (
+7) can be expressed as follows:
+ℓ (yi, f (xi))=− log
+
+ 1+
+∑
+j̸= i
+µj
+µi
+exp(fyj (xi)− fyi (xi))
+
+ (8)
+If yi represents the majority classes and µj <µ i, the loss value
+calculated based on Equation (
+8) will decrease compared with CE.
+This will make the network tend to learn from minority classes
+during parameter updates, reducing the attention to majority
+classes, thereby improving the performance of the network. For
+convenience, we will use logit adjustment (LA) to represent the
+above training losses.
+/three.tnum./two.tnum Mixed reweighting and LA
+Compensating the output logit can eﬀectively alleviate the
+learning bias caused by imbalanced data distribution. To further
+improve the eﬀectiveness of boundary correction, we combine
+reweighting with LA into a new paradigm and explore eﬀective
+combination strategies. Speciﬁcally, we conduct experiments using
+ResNet-32 trained on the CIFAR-100-LT dataset with diﬀerent
+combinations of reweighting and LA. The reweighting methods,
+which include reweight (RW) (
+Wang et al., 2017 ), class-balanced
+loss (CB) ( Cui et al., 2019 ), and focal loss (FL) ( Lin et al., 2017 ),
+were introduced in the 180th epoch (out of a total of 200 epochs)
+for ResNet-32.
+Table 1 presents the results obtained from the aforementioned
+settings. We can infer that (1) the combination of existing
+reweighting methods and LA will lead to a decline in overall
+accuracy, especially in the majority classes. This indicates that there
+is a conﬂict between the existing reweighting and LA, and there is
+an overlap between providing large margins and large weights for
+Frontiers in Computational Neuroscience /zero.tnum/four.tnum frontiersin.org
+
+
+--- Page 5 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+the minority classes, which ultimately leads to a signiﬁcant decline
+in the performance of the majority classes. (2) Although focal loss
+can maintain the accuracy of the majority classes to a certain extent,
+it is expected that the calibration error is still large. This is because
+focal loss assigns similar weights to the hard samples from majority
+classes and the samples from minority classes.
+/four.tnum Method
+/four.tnum./one.tnum Sample logit-aware reweighting
+The purpose of the two-stage training method is to focus on
+obtaining a powerful feature extractor and classiﬁer in the ﬁrst stage
+and reduce the diﬀerence between the sample conﬁdence and the
+overall class conﬁdence in the second stage. From the perspective
+of sample conﬁdence, assigning higher weights to samples with
+low conﬁdence is an eﬀective solution. However, when it comes
+to hard samples in the majority classes, their conﬁdence levels are
+often indistinguishable from the samples in the minority classes. To
+overcome this issue, we propose a sample logit-aware reweighting
+method (called SLA in this study) that reduces the gap between the
+single sample conﬁdence and the overall class average conﬁdence,
+without signiﬁcantly sacriﬁcing accuracy. The sample conﬁdence
+can be calculated as follows:
+pi= exp(fyi (xi)+ logµi)
+∑c
+j= 1 exp(fyj (xi)+ logµj) (9)
+where pi represents the predicted probability that sample xi belongs
+to the correct label after adjusting for the output logit. In addition,
+based on the idea of SLA, to make the weighting factor wi pay more
+attention to hard samples based on the probability reweighting
+method, we use the sample with the maximum logit of each class
+to guide the learning of the remaining samples. The sample weight
+can be expressed as follows:
+wi= (1− pi)γ exp(fyi (x∗)− fyi (xi)) (10)
+where x∗ is the sample with the largest logit in all training samples
+belonging to yi, and γ is a weighted rate adjustment factor.
+FIGURE /two.tnum
+(A) The hard samples from the majority class and some samples
+from the minority class are very close between the decision
+boundary. (B) SLA can allow these samples to converge toward their
+class center, thereby improving accuracy and reducing ECE.
+Commonly, fyi (xi)= Wyi zi, W is the weight matrix of the linear
+layer and zi is the feature embedding of xi. To obtain more stable
+sample weights, we calculate the cosine value by standardizing Wyi
+and zyi .
+cosθ (yi)=
+WT
+yi
+∥Wyi∥· zi
+∥zi∥ (11)
+Therefore, after transforming the logit into the corresponding
+cosine representation (Figure 2), the ﬁnal SLA reweighting formula
+can be expressed as follows:
+wi= (1− pi)γ exp(τ cosθ y∗− τ cosθ yi ) (12)
+where θ yi corresponds to the angle between zi and Wyi , θ y∗
+corresponds to the z∗ and Wyi , andτ is a hyperparameter.
+/four.tnum./two.tnum Multi-domain expert specialization
+model
+The main objective of the ﬁrst stage of training in the two-
+stage method is to enhance the feature extraction capability of
+the network. However, it is challenging for a single-channel
+feature extractor to learn robust parameters when the data
+distribution is extremely imbalanced, particularly when complex
+data augmentation techniques are applied. To address this problem,
+we propose a multi-domain expert specialization model for
+augmenting data across multiple domains (
+Algorithm 1).
+/four.tnum./two.tnum./one.tnum Multiple data augment header with mixup
+Before inputting data into the network, multiple data
+augmentation techniques (including mixup) should be applied to
+the data. The purpose of data augmentation is to expand the
+domain boundary of the source domain data as much as possible
+Input: Training data D={ (xi, yi)}N
+i= 1, batch size n.
+Output: Optimized network parameters θ.
+1: Initialization for θ
+2: while t <= MaxEpoch do
+3: {(xi, yi)}n
+i= 1 ← Sample a minibatch from D.
+4: Getting {(˜xi, ˜yi)} using Equation (14)
+5: Getting each expert loss using Equation (16)
+6: Calculate total loss using Equation (18)
+7: if t == SwitchEpoch then
+8: Create a list S to store cosθ y∗ of each class.
+9: end if
+10: if t > SwitchEpoch then
+11: Find the sample with the largest logit score
+for each class and calculate cosθ y∗ using Equation
+(11)
+12: Update the list St→ St+ 1.
+13: end if
+14: Use SGD to update network parameters θ;
+15: end while
+Algorithm /one.tnum. The training process of our proposed method.
+Frontiers in Computational Neuroscience /zero.tnum/five.tnum frontiersin.org
+
+
+--- Page 6 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+FIGURE /three.tnum
+An overview of our proposed two-stage learning method is as follows: in the ﬁrst stage, we employ LA to train a robust feature extractor by learning
+feature representations of each class on a larger feature space that is guided by the mixup technique. In the second stage, we int roduce the SLA
+reweighting method and remove augmentation and mixup to optimize t he decision boundary of the classiﬁer.
+(Figure 3), thereby alleviating the severe covariate shift caused by
+the imbalanced distribution.
+Tk(xi)=
+{
+mixup(Augk(xi)) if 1-stage
+Augk(xi) if 2-stage
+(13)
+where Tk represents the result of applying the k-th data
+augmentation function (Aug) to input xi. To make better use of
+data augmentation, we apply the mixup strategy based on the
+augmented data during the ﬁrst stage of training. By using mixup,
+the resulting data can be represented as if it was sampled from a
+new sampling space: Dl={ (˜xi, ˜yi)}, 1≤ i≤ N′. After combining
+two augmented samples using mixup, the newly generated sample
+{˜x,˜y}can be expressed as follows:
+˜x= ǫ T(xi)+ (1− ǫ )T(xj)
+˜y= ǫ yi+ (1− ǫ )yj
+(14)
+where ǫ ∼ Beta(α ,α ) with α ∈ (0, 1), which allows for ﬂexible
+adjustment of the mixing ratio during training. By introducing this
+sampling procedure, the model can be trained on a new sample
+space that comprises mixtures of the original augmented inputs,
+allowing it to learn more robust representations and improve its
+ability to generalize to new samples.
+/four.tnum./two.tnum./two.tnum Early shared and deep special feature
+extractor
+During the feature extraction process in the early layers of
+CNN, the network tends to learn low-level features such as points
+and lines. As a result, we opt for utilizing the same early shared
+feature extractor for diﬀerent enhanced data during the ﬁrst stage.
+However, during deep feature extraction, the varying enhancement
+of three levels of data augmentation requires specialized deep
+feature extractors to extract professional features. To achieve this
+goal, we employ three distinct deep feature extractors, with their
+outputs expressed as
+f k(xi)= ψ θ k (ϕθ (Tk(xi))) (15)
+where k∈ [1, 3], f k(xi) represents the output logit after xi passes
+through the early shared feature extractor ϕθ and k-th deep special
+feature extractorψ θ k .
+/four.tnum./two.tnum./three.tnum Two-stage training loss strategy
+As analyzed in Section 3.1, the two-stage training method
+requires training a better feature extractor in the ﬁrst stage.
+Therefore, we only compensate the classiﬁer and do not use any
+reweighting method during the ﬁrst stage of training. Hence, the
+model should use a reweighting method in the following training
+process to optimize the decision boundary of the classiﬁer to reduce
+ECE.
+Lk(yi, f k(xi))=− wk
+i log
+exp(f k
+yi (xi)+ logµi)
+∑c
+j= 1 exp(f kyj (xi)+ logµj) (16)
+Equation (
+16) represents the loss function Lk for the k-th expert,
+and wk
+i can be expressed in the following form:
+wk
+i=
+{
+1 if 1-stage
+(1− pk
+i )γ exp(τ cosθ y∗− τ cosθ yi ) if 2-stage
+(17)
+Here, γ and τ are hyperparameters, pk
+i is the predicted
+probability of the k-th expert of the sample xi belonging to its true
+class after compensating the out logit, and f k
+yi (xi) is the output from
+the k-th expert belongs to yi class from the k-th expert. Thus, the
+ﬁnal loss function can be expressed as the weighted sum of losses
+obtained by three experts. We use ǫ k to indicate the degree of
+attention given to the k experts; increasingǫ k can make the model
+more inclined to learn from expert k-th. To make the results of
+other ensemble learning methods more comparable and ensure the
+fairness of the comparison, we set ǫ k to 1 in all the experiments
+Frontiers in Computational Neuroscience /zero.tnum/six.tnum frontiersin.org
+
+
+--- Page 7 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+conducted in this study. The ﬁnal expression for the total loss
+function is represented by Equation (18).
+Ltotal= ǫ 1L1+ ǫ 2L2+ ǫ 3L3 (18)
+/four.tnum./two.tnum./four.tnum Test time prediction
+Considering we used a loss function in the training stage that
+was the weighted sum of individual losses from multiple experts,
+we employ the weighted average logit output of three experts during
+the test process as our ﬁnal prediction to minimize empirical risk.
+The probability that xi belongs to a certain class can be calculated
+using the following formula:
+ˆpi= arg max{1
+3
+3∑
+k= 1
+ǫ k
+exp(f k
+yi (xi))
+∑c
+j= 1 exp(f kyj (xj)) , i∈ [1, c]} (19)/five.tnum Experiments
+/five.tnum./one.tnum Datasets
+/five.tnum./one.tnum./one.tnum CIFAR-/one.tnum/zero.tnum-LT and CIFAR-/one.tnum/zero.tnum/zero.tnum-LT
+The CIFAR-10 and CIFAR-100 datasets are common image
+classiﬁcation datasets that contain 50,000 training images and
+10,000 test images with 10 or 100 classes (
+Krizhevsky et al., 2009 ).
+Following Cao et al. (2019), we create the long-tailed distribution
+version by randomly removing training samples and keeping the
+distribution of the test dataset balanced. We use the imbalance
+ratio ρ to represent the imbalance degree of the dataset, where
+ρ = Nmax/ Nmin, Nmax(Nmin) is the number of the most (least)
+frequent class. In this study, we used the imbalance ratio of 10, 50,
+100, and 200 to carry out experiments.
+/five.tnum./one.tnum./two.tnum ImageNet-LT
+ImageNet (
+Russakovsky et al., 2015 ) is a large-scale dataset for
+object classiﬁcation. Based on this,Liu et al. (2019) made ImageNet-
+LT by sampling a subset following the Pareto distribution with
+power value α = 0.6 from ImageNet, which contains ∼ 115.8K
+images with 1,000 classes. This choice is crucial because it controls
+the proportion of frequent and infrequent categories in the long-
+tailed distribution. In addition, the Pareto distribution has a
+characteristic long tail, which is desirable as it can generate more
+extreme long-tail datasets that are closer to real-world scenarios.
+The number of samples for the most frequent class is 1,280 images,
+whereas the number of samples for the least frequent class is only
+ﬁve images, i.e., the imbalance ratio ρ = 256.
+/five.tnum./two.tnum Evaluation protocol
+/five.tnum./two.tnum./one.tnum Expected calibration error
+The purpose of model calibration is to ensure that the predictive
+conﬁdence of the model for one sample is consistent with the
+true empirical risk probability. Therefore, we use the expected
+calibration error (ECE) to measure the calibration degree of the
+network. To compute ECE, we group all N predictions into B
+interval bins of equal size. The ECE can be deﬁned as:
+ECE=
+B∑
+b= 1
+|Tb|
+N |acc(Tb)− conf (Tb)| (20)
+where Tb is the set of samples with a network prediction belonging
+to Bin- b, acc(·) is the accuracy of Tb, and conf (·) is the predicted
+conﬁdence of Tb.
+/five.tnum./three.tnum Implementation details
+For CIFAR-10-LT and CIFAR-100-LT datasets, we used ResNet-
+32 as the benchmark network. We used three diﬀerent levels of
+data augmentation; the speciﬁc details are shown in
+Appendix.
+Following most practices, we set the batch size as 128 and the
+weight decay as 5e-4. We used the SGD optimizer, and the initial
+learning rate was 0.1. For all experiments on the main result, the
+hyperparameter α was set to 0.2, and τ was set to 1. For a fair
+comparison, we trained 200 and 400 epochs, respectively, based on
+the above settings. During the training of 200 epochs, the learning
+rate was decreased by a factor 10 at epochs 160 and 180. During the
+training of 400 epochs, the learning rate was decreased by a factor
+10 at epochs 320 and 360. The 1/2 stage switching time was set to
+epochs 160 and 320.
+For ImageNet-LT , we adopted ResNet-50 and ResNetx-50 as the
+benchmark networks. As with CIFAR-LT , three diﬀerent levels of
+data augmentation were employed. The batch size was set to 128
+for ResNet-50 and 64 for ResNetx-50 with the weight decay as 5e-
+4. We used the SGD optimizer, and the initial learning rate was
+set at 0.025. We used a cosine annealing learning rate schedule.
+For all experiments on the main result, the parameter α was set
+to 0.1, and τ was set to 1. During the training of 180 epochs, the
+learning rate changed periodically according to the law of the cosine
+annealing learning rate schedule. The 1/2 stage switching time was
+set to epoch 160.
+/five.tnum./four.tnum Main results
+/five.tnum./four.tnum./one.tnum Result for CIFAR-LT
+Table 2 presents a comparison of the results obtained by our
+proposed method and other various methods on CIFAR-LT. All
+experiments trained for 200 epochs. First, we observed that our
+method outperformed existing methods across all class imbalance
+ratios. Speciﬁcally, our proposed method achieved improvements
+of 4.7, 4.3, 3.2, and 1.4% on CIFAR-10-LT , and 3.9, 4.2, 4.2, and
+4.1% on CIFAR-100-LT for imbalance ratios of 200, 100, 50, and
+10, respectively, when compared with the state-of-the-art method.
+Second, it is worth noting that our method maintained a signiﬁcant
+performance gap compared with other methods regardless of the
+class imbalance ratio, which demonstrates the eﬀectiveness of our
+method. Furthermore, we observed that, compared with existing
+multi-expert methods, the accuracy gap between our proposed
+method and theirs gradually decreased with a decrease in the
+imbalance ratio. This phenomenon can be explained by the fact that
+when the imbalance ratio is small, data from the minority classes
+Frontiers in Computational Neuroscience /zero.tnum/seven.tnum frontiersin.org
+
+
+--- Page 8 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+TABLE /two.tnumTest accuracy (%) on CIFAR-/one.tnum/zero.tnum/zero.tnum-LT for various methods with diﬀerent imbalance ratios ρ.
+Method Dataset CIFAR-/one.tnum/zero.tnum-LTCIFAR-/one.tnum/zero.tnum/zero.tnum-LT
+Backbone ResNet-/three.tnum/two.tnumResNet-/three.tnum/two.tnum
+Imbalance ratio /two.tnum/zero.tnum/zero.tnum/one.tnum/zero.tnum/zero.tnum/five.tnum/zero.tnum/one.tnum/zero.tnum/two.tnum/zero.tnum/zero.tnum/one.tnum/zero.tnum/zero.tnum/five.tnum/zero.tnum/one.tnum/zero.tnum
+CE 65.7 70.4 74.8 83.4 38.3 38.2 43.9 56.9
+CB-Focal (Cao et al., 2019) – 74.6 79.2 86.8 – 39.6 45.2 58.0
+MW-NET (Shu et al., 2019) – 75.2 80.0 87.8 – 42.1 46.7 58.4
+LDAM + DRW (Cao et al., 2019) – 77.0 81.2 88.2 – 42.0 46.6 58.7
+BBN (Zhou et al., 2020) – 79.8 82.4 88.1 – 42.5 47.2 59.4
+LA (Menon et al., 2021) – 79.9 83.4 89.3 – 43.9 49.8 59.8
+Mixup (Zhang et al., 2018) – 73.3 77.6 87.2 – 39.6 45.1 58.4
+Remix + DRW (Chou et al., 2020) – 79.8 – 89.1 – 46.8 – 61.3
+MiSLAS (Zhong et al., 2021) – 82.1 85.7 90.0 – 47.0 52.3 63.2
+RIDE (Zhang et al., 2018) 77.9 81.5 83.4 85.9 44.8 48.5 51.0 57.8
+ACE (Cai et al., 2021) – 81.2 84.3 – – 49.4 50.7 –
+SADE (Zhang et al., 2022) 78.6 82.4 85.6 90.5 46.2 50.4 54.2 63.8
+Ours 83.3 86.7 88.9 91.9 50.1 54.6 58.4 67.9
+All experiments used ResNet-32 as the backbone and trained for 200 epochs.
+FIGURE /four.tnum
+T est accuracy (%) and ECE (%) of diﬀerent methods trained for /two.tnum/zero.tnum/zero.tnum epochs on CIFAR-/one.tnum/zero.tnum/zero.tnum-LT (ρ = /one.tnum/zero.tnum/zero.tnum), including the contrastive learning method
+PaCo and the ensemble learning methods RIDE, SADE, and ours.
+already cover a large data distribution space in the training dataset,
+thus weakening the eﬀect of data augmentation on alleviating
+covariate shift caused by an imbalanced distribution. At the same
+time, we compared the SLA of diﬀerent methods and the results
+showed that our proposed method achieved lowest SLA in addition
+to achieving considerable accuracy (
+Figure 4).
+At the same time, we performed long-term training for 400
+epochs on CIFAR-100-LT ( ρ = 100), and the corresponding
+results are presented in Table 3. Compared with those in Table 2,
+our proposed method demonstrated continued improvement in
+accuracy beyond 200 epochs. This is attributed to the inclusion of
+multiple data augmentation headers in our network architecture,
+which signiﬁcantly enhances the representation ability of the
+network’s feature extractor and mitigates the representation
+diﬃculties introduced by covariate shift, leading to enhanced
+overall accuracy. More importantly, the performance of our
+proposed method in the few classes is far better than that of
+other methods. This is because we have assigned a specialized
+feature extractor for each level of data augmentation, which can
+prevent the representation coupling caused by diﬀerent levels of
+data augmentation.
+/five.tnum./four.tnum./two.tnum Result for ImageNet-LT
+Tables 4, 5 present the comparison results between our
+proposed method and existing methods on the long-tailed dataset
+ImageNet-LT. Compared with the multi-expert model RIDE
+(
+Wang et al., 2021 ) and SADE ( Zhang et al., 2022 ), our method
+introduces a multiple data augmentation header with mixup based
+on the deep specialized feature extractor, leading to an improved
+performance on minority classes by eﬀectively maintaining the
+Frontiers in Computational Neuroscience /zero.tnum/eight.tnum frontiersin.org
+
+
+--- Page 9 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+TABLE /three.tnumTest accuracy (%) on CIFAR-/one.tnum/zero.tnum/zero.tnum-LT (ρ = /one.tnum/zero.tnum/zero.tnum) for diﬀerent
+methods.
+Methods Many Medium Tail All ECE
+BALMS (Ren et al.,
+2020)
+– – – 50.8 –
+PaCo (Cui et al.,
+2021)
+62.9 53.5 35.6 51.7 9.3
+BCL (Zhu et al.,
+2022)
+69.7 53.8 35.5 53.9 –
+RIDE (Wang et al.,
+2021)
+66.8 53.6 23.5 49.6 34.8
+SADE (Zhang et al.,
+2022)
+66.4 51.7 29.0 50.4 17.9
+Ours 69.3 55.5 39.3 55.4 1.4
+All experiments used ResNet-32 as the backbone and trained for 400 epochs.
+TABLE /four.tnumTest accuracy (%) on ImageNet-LT on ResNet-/five.tnum/zero.tnum and
+ResNetx-/five.tnum/zero.tnum for various methods.
+Backbone ResNet-/five.tnum/zero.tnumResNetx-/five.tnum/zero.tnum
+CE 47.1 48.2
+MiSLAS (Zhong et al., 2021) 52.7 –
+UniMix (Xu et al., 2021) 48.4 –
+PaCo (Cui et al., 2021) 57.0 58.2
+BCL (Zhu et al., 2022) 56.0 57.1
+LA (Menon et al., 2021) 51.2 –
+RIDE (Wang et al., 2021) 54.9 56.4
+ACE (Cai et al., 2021) 54.8 56.5
+SADE (Zhang et al., 2022) – 58.8
+Ours 57.8 59.9
+model’s strong representation ability from the ﬁrst stage to the
+second stage via our proposed two-stage adjustment strategy. In
+contrast to other methods based on contrastive learning, such
+as PaCo (
+Cui et al., 2021 ) and BCL ( Zhu et al., 2022 ), we all
+use various data augmentation methods. However, our proposed
+multi-channel deep feature extraction strategy can learn the
+optimal representation of diﬀerent degrees of data augmentation
+to maximize their eﬀectiveness. This is the main diﬀerence between
+our approach and others. By exploiting the diﬀerent levels of data
+augmentation, we achieve better performance.
+To further verify the eﬀectiveness of our proposed reweighting
+method, we report the test accuracy (%) and ECE (%) on
+the combination of LA and diﬀerent reweighting methods on
+ImageNet-LT using ResNet-50. All experiments used the same
+model structure and experimental settings as the multi-domain
+expert specialization model we proposed.
+Table 6 presents the
+results of our experiments, which demonstrate that our reweighting
+method outperformed other reweighting techniques in the
+minority classes, while only slightly compromising performance
+in the majority classes. The results suggest that appropriate
+reweighting methods can alleviate the overﬁtting of model
+parameters to most classes caused by the long-tailed distribution.
+TABLE /five.tnumTest accuracy (%) on ImageNet-LT on ResNetx-/five.tnum/zero.tnum for various
+methods.
+Methods Many Medium Few ALL
+LADE (Hong et al., 2021) 65.1 48.9 33.4 53.0
+BL Softmax (Ren et al., 2020) 65.8 53.2 34.1 55.4
+PaCo (Cui et al., 2021) 64.4 55.7 33.7 56.0
+BCL (Zhu et al., 2022) 67.9 54.2 36.6 57.1
+RIDE (Wang et al., 2021) 68.0 52.9 35.1 56.3
+SADE (Zhang et al., 2022) 67.0 56.4 42.6 58.7
+Ours 67.1 54.7 56.5 59.9
+TABLE /six.tnumTest accuracy (%) and ECE (%) on ImageNet-LT on ResNet-/five.tnum/zero.tnum for
+diﬀerent reweighting methods.
+Methods Many Medium Tail ALL ECE
+LA + RW 69.3 54.1 32.7 53.4 5.2
+LA + CB 35.2 44.1 51.5 43.1 6.6
+LA + FL 60.7 53.9 42.8 53.1 3.8
+LA + Ours 65.4 52.2 54.8 57.8 3.3
+On the other hand, inappropriate reweighting methods will lead to
+biased models or signiﬁcant performance decreases in the majority
+classes.
+/five.tnum./five.tnum Feature distribution
+To gain further insights into the eﬀectiveness of our proposed
+method, we visualized the extracted features using t-SNE. As
+depicted in
+Figure 5, feature-1 and feature-2 correspond to the
+features obtained after dimensionality reduction. We observed that
+strong data augmentation could enhance feature separability but
+at the expense of increasing intraclass distance. By leveraging the
+domain expertise of three diﬀerent experts and averaging their
+augmented features, we were able to obtain distinctive features
+that preserve intraclass similarity while improving interclass
+discrimination. This allowed us to achieve a clear decision
+boundary between diﬀerent classes, even when using a simple linear
+classiﬁer.
+/five.tnum./six.tnum Ablation study
+/five.tnum./six.tnum./one.tnum The eﬀect of diﬀerent mixup parametersα
+To study the inﬂuence of the change of mixup parameters
+(α ) on our proposed method, we conducted a thorough ablation
+experiment on CIFAR-LT with ρ = 100 to ﬁnd out the optimal
+parameter range.
+Figure 6 shows the result. We observed that (1)
+when α is > 0.4, the accuracy of the tail class ﬂuctuates greatly;
+this phenomenon is obvious when the number of classes is small.
+The main reason for this is that with the increase in α , the value
+of u tends to be uniformly distributed due to the drastic change in
+mixing degree between diﬀerent epochs and the lack of tail class
+Frontiers in Computational Neuroscience /zero.tnum/nine.tnum frontiersin.org
+
+
+--- Page 10 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+FIGURE /five.tnum
+Feature distribution of the test set on CIFAR-/one.tnum/zero.tnum/zero.tnum-LT (IR = /one.tnum/zero.tnum/zero.tnum). We demonstrate the distribution feature maps of t-SNE for some m ajority and
+minority classes. (A–C) T-SNE on three experts performing diﬀerent data augmentations. (D) T-SNE on the mean of three experts.
+FIGURE /six.tnum
+T est accuracy (%) of a ResNet-/three.tnum/two.tnum trained on CIFAR/one.tnum/zero.tnum-LT and CIFAR-/one.tnum/zero.tnum/zero.tnum-LT withρ = /one.tnum/zero.tnum/zero.tnum. We used a diﬀerent mixup parameter,α , to conduct our
+experiments. (Left) Accuracy on CIFAR-/one.tnum/zero.tnum-LT.(Middle) Accuracy on CIFAR-/one.tnum/zero.tnum/zero.tnum-LT.(Right) ECE (%) on CIFAR-/one.tnum/zero.tnum-LT and CIFAR-/one.tnum/zero.tnum/zero.tnum-LT.
+data; this large randomness destroys the stability training of the tail
+class. (2) With an increase in α , the ECE of the results shows an
+increasing trend, which indicates that adjusting parameterα in our
+proposed method plays a crucial role in reducing the ECE of the
+model.
+/five.tnum./six.tnum./two.tnum The eﬀect of the diﬀerent hyperparameterτ
+As reported in
+Table 7, we explored how hyperparameter τ
+inﬂuences the model. We can easily ﬁnd that when the imbalance
+factor is ﬁxed, the accuracy and ECE will decrease as theτ increases.
+The main reason for this phenomenon is that increasingτ enhances
+Frontiers in Computational Neuroscience /one.tnum/zero.tnum frontiersin.org
+
+
+--- Page 11 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+TABLE /seven.tnumAblation study of diﬀerent imbalance ratios and τ .
+1/τ
+Dataset Imbalance ratio /one.tnum /zero.tnum./nine.tnum/zero.tnum./eight.tnum/zero.tnum./seven.tnum/zero.tnum./six.tnum/zero.tnum./five.tnum
+CIFAR-10-LT 200 83.3/1.4 83.2/1.3 83.6/1.2 83.3/1.2 83.2/0.9 83.0/0.8
+100 86.7/1.9 86.5/1.8 86.4/1.2 86.3/1.7 86.0/1.2 86.0/1.3
+50 88.9/2.4 88.3/1.9 88.6/2.5 88.4/2.0 88.8/2.2 88.5/2.0
+10 91.9/2.0 91.7/1.8 91.7/1.9 91.9/1.8 92.2/2.0 91.5/1.7
+CIFAR-100-LT 200 50.1/1.8 50.1/1.6 49.9/1.6 50.2/1.4 50.1/1.2 50.0/1.0
+100 54.6/1.8 54.0/2.0 54.0/1.7 54.6/1.6 54.2/1.6 54.0/1.5
+50 58.4/1.7 58.7/2.1 58.5/1.9 58.8/1.7 58.6/1.6 58.0/1.6
+10 67.9/2.4 67.6/2.1 67.0/2.1 67.7/2.0 67.3/2.0 67.0/1.8
+We chose several values from 1 to 0.5 for 1/τ to perform our ablation experiment.
+TABLE /eight.tnumAblation study of various combinations of the module to verify t he eﬀectiveness of diﬀerent modules.
+Module CIFAR-/one.tnum/zero.tnum-LT CIFAR-/one.tnum/zero.tnum/zero.tnum-LT
+MU SLA TL /one.tnum/zero.tnum/zero.tnum/five.tnum/zero.tnum/one.tnum/zero.tnum/one.tnum/zero.tnum/zero.tnum/five.tnum/zero.tnum/one.tnum/zero.tnum
+✓ 84.8/5.6 87.7/3.9 91.6/3.2 53.2/6.5 58.0/6.3 67.0/4.0
+✓ ✓ 84.7/5.4 88.2/3.4 91.5/2.8 54.1/4.0 59.2/3.0 67.3/2.8
+✓ ✓ 86.4/3.2 88.3/1.3 91.7/1.2 53.6/3.3 58.2/1.7 66.9/1.2
+✓ ✓ ✓ 86.7/1.9 88.9/2.4 91.9/2.0 54.6/1.8 58.4/1.7 67.9/2.4
+We conducted a thorough ablation experiment. MU, using mixup in the ﬁrst stage of learning; SLA, using SLA in the second stage of learning; TL, using the two-stage learning method.
+the eﬀect of SLA, which changes the decision boundary while
+reducing intraclass spacing. As the decision boundary no longer
+tends to reduce overall empirical risk, this will reduce some of the
+model’s performance.
+/five.tnum./six.tnum./three.tnum The eﬀect of diﬀerent modules
+Table 8 present the results of our ablation investigation into
+the use of mixup in the ﬁrst stage (MU), reweighting in second-
+stage learning (SLA), and two-stage learning (TL). As expected,
+we observed a decrease in accuracy and an increase in ECE
+for all datasets as the imbalance ratio increased. Combining
+MU or SLA modules with TLs consistently led to improved
+accuracy and reduced ECE. Notably, our proposed SLA method
+demonstrated a more positive impact on TL than MU under multi-
+data augmentations, thereby proving its eﬀectiveness. Additionally,
+when all three modules were combined, our proposed algorithm
+maximized the model’s generation ability while maintaining low
+ECE, despite not being optimal.
+/six.tnum Conclusion
+In this study, we addressed the problem of poor model
+performance due to prior shift and covariate shift caused by
+imbalanced distribution. To investigate the impact of logit
+adjustment and reweighting on model performance, we employed
+the two-stage learning method, which is currently a popular
+research direction. Our analysis revealed that combining existing
+reweighting methods and logit adjustment not only reduces
+model performance but also increases ECE. Therefore, we
+proposed a sample logit-aware reweighting method that assigns
+more suitable weights to hard samples from majority classes
+and samples from minority classes. Additionally, to tackle
+the covariate shift problem, we introduced a multi-domain
+expert specialization model designed to enhance the feature
+extraction ability of the model. Through experiments conducted
+on various datasets, we demonstrated the eﬀectiveness of our
+proposed method. Furthermore, ablation experiments reinforced
+our ﬁndings and emphasized that our proposed model outperforms
+current state-of-the-art methods. Overall, our study highlights the
+necessity of addressing prior and covariate shift in imbalanced
+datasets and provides an eﬀective solution to improve model
+performance.
+Data availability statement
+Publicly available datasets were analyzed in this study. This
+data can be found here: https://www.cs.toronto.edu/~kriz/cifar-10-
+python.tar.gz; https://www.cs.toronto.edu/~kriz/cifar-100-python.
+tar.gz; https://image-net.org/.
+Author contributions
+NL: Formal analysis, Software, Writing—original draft. JW:
+Writing—review & editing. YZ: Data curation, Writing—review &
+editing. LW: Writing—review & editing. QL: Funding acquisition,
+Supervision, Writing—review & editing.
+Frontiers in Computational Neuroscience /one.tnum/one.tnum frontiersin.org
+
+
+--- Page 12 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+Funding
+The author(s) declare that ﬁnancial support was received for
+the research, authorship, and/or publication of this article. This
+study was supported by the National Natural Science Foundation
+of China under grant 92048205.
+Conﬂict of interest
+LW was employed by Origin Dynamics Intelligent Robot Co.,
+Ltd.
+The remaining authors declare that the research was
+conducted in the absence of any commercial or ﬁnancial
+relationships that could be construed as a potential conﬂict
+of interest.
+Publisher’s note
+All claims expressed in this article are solely those
+of the authors and do not necessarily represent those of
+their aﬃliated organizations, or those of the publisher,
+the editors and the reviewers. Any product that may be
+evaluated in this article, or claim that may be made by
+its manufacturer, is not guaranteed or endorsed by the
+publisher.
+References
+Aimar, E. S., Jonnarth, A., Felsberg, M., and Kuhlmann, M. (202 2).
+Balanced product of experts for long-tailed recognition. arXiv [preprint].
+doi: 10.1109/CVPR52729.2023.01912
+Cai, J., Wang, Y., and Hwang, J.-N. (2021). “Ace: ally complement ary experts for
+solving long-tailed recognition in one-shot, ” inICCV (Piscataway, NJ).
+Cao, K., Wei, C., Gaidon, A., Arechiga, N., and Ma, T. (2019).“Learning imbalanced
+datasets with label-distribution-aware margin loss, ” inNeuIPS (Cambridge).
+Chen, T., Kornblith, S., Norouzi, M., and Hinton, G. (2020). “A simple framework
+for contrastive learning of visual representations. In Inter national conference on
+machine learning, ” inPMLR (New York, NY), 1597–1607.
+Chou, H.-P., Chang, S.-C., Pan, J.-Y., Wei, W., and Juan, D.- C. (2020). “Remix:
+rebalanced mixup, ” inECCV (Berlin).
+Cubuk, E. D., Zoph, B., Mane, D., V asudevan, V., and Le, Q. V. (2 018).
+Autoaugment: learning augmentation policies from data. arXiv [preprint].
+doi: 10.1109/CVPR.2019.00020
+Cui, J., Zhong, Z., Liu, S., Yu, B., and Jia, J. (2021). “Parametric contrastive learning, ”
+in ICCV (Piscataway, NJ).
+Cui, Y., Jia, M., Lin, T.-Y., Song, Y., and Belongie, S. (2019) . “Class-balanced loss
+based on eﬀective number of samples, ” inCVPR (Piscataway, NJ).
+Finn, C., Abbeel, P., and Levine, S. (2017). “Model-agnostic m eta-learning for fast
+adaptation of deep networks, ” inICML (New York, NY).
+Guo, C., Pleiss, G., Sun, Y., and Weinberger, K. Q. (2017). “On calibration of modern
+neural networks, ” inICML (New York, NY).
+He, K., Zhang, X., Ren, S., and Sun, J. (2016). “Deep residual learning for image
+recognition, ” in Proceedings of the IEEE Conference on Computer Vision and Pattern
+Recognition (Piscataway, NJ), 770–778.
+Hong, Y., Han, S., Choi, K., Seo, S., Kim, B., and Chang, B. (20 21). “Disentangling
+label distribution for long-tailed visual recognition, ” inCVPR (Piscataway, NJ: IEEE).
+Huang, C., Li, Y., Loy, C. C., and Tang, X. (2016). “Learning deep representation for
+imbalanced classiﬁcation, ” inCVPR (Piscataway, NJ).
+Huang, C., Li, Y., Loy, C. C., and Tang, X. (2019). Deep imbalan ced learning
+for face recognition and attribute prediction. IEEE Transact. Patt. Anal. Mach. intell .
+doi: 10.1109/TPAMI.2019.2914680
+Jamal, M. A., Brown, M., Y ang, M.-H., Wang, L., and Gong, B. (202 0). “Rethinking
+class-balanced methods for long-tailed visual recognition fro m a domain adaptation
+perspective, ” inCVPR (Piscataway, NJ).
+Khan, S., Hayat, M., Zamir, S. W., Shen, J., and Shao, L. (2019 ). “Striking the right
+balance with uncertainty, ” inCVPR (Piscataway, NJ).
+Krizhevsky, A., Sutskever, I., and Hinton, G., (2009). Learning Multiple Layers of
+Features From Tiny Images. Toronto, ON.
+Li, S., Gong, K., Liu, C. H., Wang, Y., Qiao, F., and Cheng, X. (2 021). “Metasaug:
+meta semantic augmentation for long-tailed visual recogniti on, ” inCVPR (Piscataway,
+NJ).
+Lin, T.-Y., Goyal, P., Girshick, R., He, K., and Doll´’ar, P. (2017). “Focal loss for dense
+object detection, ” inICCV (Piscataway, NJ).
+Lin, T.-Y., Maire, M., Belongie, S., Hays, J., Perona, P., Ram anan, D., et al. (2014).
+“Microsoft coco: common objects in context, ” inECCV (Berlin).
+Liu, W., Wen, Y., Yu, Z., Li, M., Raj, B., and Song, L. (2017). “ Sphereface: deep
+hypersphere embedding for face recognition, ” in IEEE Conference on Computer Vision
+and Pattern Recognition (Piscataway, NJ).
+Liu, W., Wen, Y., Yu, Z., and Y ang, M. (2016). “Large-margin s oftmax loss for
+convolutional neural networks, ” inICML (New York, NY).
+Liu, Z., Miao, Z., Zhan, X., Wang, J., Gong, B., and Yu, S. X. (20 19). “Large-scale
+long-tailed recognition in an open world, ” inCVPR (Piscataway, NJ).
+Menon, A. K., Jayasumana, S., Rawat, A. S., Jain, H., Veit, A. , and Kumar, S. (2021).
+“Long-tail learning via logit adjustment, ” inICLR (Washington, DC).
+Pouyanfar, S., Tao, Y., Mohan, A., Tian, H., Kaseb, A. S., Gau en, K., et al.
+(2018). “Dynamic sampling in convolutional neural networks fo r imbalanced data
+classiﬁcation, ” in 2018 IEEE Conference on Multimedia Information Processing and
+rEtrieval (MIPR) (IEEE), 112–117.
+Ren, J., Yu, C., Ma, X., Zhao, H., Yi, S., Li, H. (2020). “Balanc ed meta-softmax for
+long-tailed visual recognition, ” inNeuIPS (Cambridge).
+Ren, M., Zeng, W., Y ang, B., and Urtasun, R. (2018). “Learning to reweight examples
+for robust deep learning, ” inICML (New York, NY).
+Russakovsky, O., Deng, J., Su, H., Krause, J., Satheesh, S., Ma, S., et al. (2015).
+Imagenet large scale visual recognition challenge. Int. J. Comp. Vis . 115, 211–252.
+doi: 10.1007/s11263-015-0816-y
+Shu, J., Xie, Q., Yi, L., Zhao, Q., Zhou, S., Xu, Z., et al. (2019 ). “Meta-weight-net:
+learning an explicit mapping for sample weighting, ” inNeurIPS (Cambridge).
+Tan, J., Wang, C., Li, B., Li, Q., Ouyang, W., Yin, C., et al. (20 20). “Equalization loss
+for long-tailed object recognition, ” inCVPR (Piscataway, NJ).
+Tian, Y., Y ang, G., Wang, Z., Wang, H., Li, E., and Liang, Z. (2019). Apple detection
+during diﬀerent growth stages in orchards using the improved yolo-v3 model. Comp.
+Electron. Agric. 157, 417–426. doi: 10.1016/j.compag.2019.01.012
+Wang, F., Cheng, J., Liu, W., and Liu, H. (2018). Additive mar gin softmax for face
+veriﬁcation. IEEE Sign. Process. Lett. doi: 10.1109/LSP.2018.2822810
+Wang, X., Lian, L., Miao, Z., Liu, Z., and Yu, S. X. (2021). “Lo ng-tailed recognition
+by routing diverse distribution-aware experts, ” inICLR (Washington, DC).
+Wang, Y.-X., Ramanan, D., and Hebert, M. (2017). “Learning t o model the tail, ” in
+NeuIPS (Cambridge).
+Xu, Z., Chai, Z., and Yuan, C. (2021). “Towards calibrated mod el for long-tailed
+visual recognition from prior perspective, ” inNeuIPS (Cambridge).
+Zhang, H., Cisse, M., Dauphin, Y. N., and Lopez-Paz, D. (2018). mixup: Beyond
+Empirical Risk Minimization. V ancouver, BC: Washington DC.
+Zhang, Y., Hooi, B., Lanqing, H., and Feng, J. (2022). “Self-su pervised aggregation
+of diverse experts for test-agnostic long-tailed recognition , ” in Advances in Neural
+Information Processing Systems . eds S. Koyejo, S. Mohamed, A. Agarwal, D. Belgrave,
+K. Cho, and A. Oh (Curran Associates, Inc.).
+Zhang, Z., and Pﬁster, T. (2021). “Learning fast sample re-weighting without reward
+data, ” inICCV (Piscataway, NJ).
+Zhong, Z., Cui, J., Liu, S., and Jia, J. (2021). “Improving cali bration for long-tailed
+recognition, ” inCVPR (Piscataway, NJ: IEEE).
+Zhou, B., Cui, Q., Wei, X.-S., and Chen, Z.-M. (2020). “Bbn: b ilateral-branch
+network with cumulative learning for long-tailed visual recogn ition, ” in CVPR
+(Piscataway, NJ).
+Zhou, Z., Siddiquee, M. M. R., Tajbakhsh, N., and Liang, J. (20 19). Unet++:
+redesigning skip connections to exploit multiscale features in image segmentation.
+IEEE Transact. Med. Imaging 39, 1856–1867. doi: 10.1109/TMI.2019.2959609
+Zhu, J., Wang, Z., Chen, J., Chen, Y.-P. P., and Jiang, Y.-G. (2 022). “Balanced
+contrastive learning for long-tailed visual recognition, ” inCVPR (Piscataway, NJ).
+Frontiers in Computational Neuroscience /one.tnum/two.tnum frontiersin.org
+
+
+--- Page 13 ---
+Liu et al. /one.tnum/zero.tnum./three.tnum/three.tnum/eight.tnum/nine.tnum/fncom./two.tnum/zero.tnum/two.tnum/three.tnum./one.tnum/two.tnum/nine.tnum/six.tnum/eight.tnum/nine.tnum/seven.tnum
+Appendix
+Three diﬀerent image augmentations
+CIFAR-LT: For small augmentation, we used random crop
+(which randomly crops 32 × 32 pixels in the image) with a
+padding of four pixels and a random horizontal ﬂip. For medium
+augmentation, we used RandomResizedCrop (the crop size of
+which is the same as random crop) with scale (0, 2, 1), random
+horizontal ﬂip, and the same setting with SimCLR (
+Chen et al.,
+2020), which includes random gray, random GaussianBlur, and
+random ColorJitter. For strong augmentation, we used random
+crop (which randomly crops 32 × 32 pixels in the image) with a
+padding of four pixels, random horizontal ﬂip, and CIFAR-Policy
+(
+Cubuk et al., 2018).
+ImageNet-LT: For small augmentation, we used
+RandomResizedCrop (which randomly crop the image and
+resized it to 224 × 224 pixels in the image), random horizontal
+ﬂip, and random ColorJitter. For medium augmentation,
+we used RandomResizedCrop, random horizontal ﬂip, and
+the same setting with SimCLR (
+Chen et al., 2020 ). For
+strong augmentation, we used RandomResizedCrop and
+random horizontal ﬂip with ImageNet-Policy (
+Cubuk et al.,
+2018).
+Frontiers in Computational Neuroscience /one.tnum/three.tnum frontiersin.org

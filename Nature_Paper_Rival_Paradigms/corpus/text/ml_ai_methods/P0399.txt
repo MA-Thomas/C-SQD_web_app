@@ -1,0 +1,1711 @@
+--- Page 1 ---
+Journal of Machine Learning Research 20 (2019) 1-30 Submitted 5/18; Published 3/19
+Learning Unfaithful K-separable Gaussian Graphical Models
+De Wen Soh sohdw@ihpc.a-star.edu.sg
+Institute of High Performance Computing
+1 Fusionopolis Way, #16-16 Connexis
+Singapore, 138632
+Sekhar Tatikonda sekhar.tatikonda@yale.edu
+Department of Electrical Engineering
+Yale University
+New Haven, CT 06511, USA
+Editor: Alexander Ihler
+Abstract
+The global Markov property for Gaussian graphical models ensures graph separation im-
+plies conditional independence. Speciﬁcally if a node set S graph separates nodes u and v
+then Xu is conditionally independent of Xv givenXS. The opposite direction need not be
+true, that is,Xu⊥Xv|XS need not implyS is a node separator ofu andv. When it does,
+the relation Xu⊥Xv|XS is called faithful. In this paper we provide a characterization of
+faithful relations and then provide an algorithm to test faithfulness based only on knowledge
+of other conditional relations of the form Xi⊥Xj|XS. We study two classes of separable
+Gaussian graphical models, namely, weakly K-separable and strongly K-separable Gaus-
+sian graphical models. Using the above test for faithfulness, we introduce algorithms to
+learn the topologies of weakly K-separable and strongly K-separable Gaussian graphical
+models with Ω(K logp) sample complexity. For strongly K-separable Gaussian graphical
+models, we additionally provide a method with error bounds for learning the oﬀ-diagonal
+precision matrix entries.
+Keywords: Gaussian graphical model selection, separable graphs, high-dimensional sta-
+tistical learning, faithful conditional independence relations, structural consistency
+1. Introduction
+Graphical models (Pearl (1988); Lauritzen (1996); Whittaker (1990); Wainwright and Jor-
+dan (2008)) are a popular and important means of representing certain conditional inde-
+pendence relations between random variables. In particular, the Gaussian graphical model
+is a popular model with applications to many areas such as object recognition and track-
+ing (Sudderth (2006)), protein sequencing (Durbin et al. (1999)), pyschological modeling
+(Epskamp et al. (2018)), gene networks (Mohan et al. (2012); van Wieringen et al. (2018)),
+computer vision (Isard (2003)) and neuroimaging (Ryali et al. (2012); Belilovskym et al.
+(2016)). In a Gaussian graphical model, each variable is associated with a node in a graph,
+and any two nodes are connected by an undirected edge if and only if their two corre-
+sponding variables are dependent conditioned on the rest of the variables. An edge between
+two nodes therefore corresponds directly to the non-zero entries of the precision matrix
+Ω = Σ−1, where Σ is the covariance matrix of the multivariate Gaussian distribution in
+c⃝2019 De Wen Soh and Sekhar Tatikonda.
+License: CC-BY 4.0, see https://creativecommons.org/licenses/by/4.0/. Attribution requirements are provided
+at http://jmlr.org/papers/v20/18-329.html.
+
+
+--- Page 2 ---
+Soh and Tatikonda
+question. With the graphical model deﬁned in this way, the Gaussian distribution satisﬁes
+the global Markov property: for any pair of nodes i and j, if all paths between the two
+pass through a set of nodes S, then the variables associated with i and j are conditionally
+independent given the variables associated with S.
+The converse of the global Markov property does not always hold. When it does hold for
+a conditional independence relation, that relation is called faithful. If it holds for all relations
+in a model, that model is faithful. Faithfulness is important for the use of conditional
+independence relations in structural estimation of graphical models, that is, identifying the
+zeros of Ω. It can be challenging to simply invert Σ. With faithfulness, to determine an
+edge between nodes i and j, one could run through all possible separator sets S and test
+for conditional independence (Liang et al. (2015); Koldanov et al. (2017)). If S is small, the
+computation becomes more accurate. In the work of (Meinshausen and B¨ uhlmann (2006);
+Ravikumar et al. (2011); Anandkumar et al. (2012); Wu et al. (2013)), diﬀerent assumptions
+are used to bound S to this end.
+The main problem of faithfulness in graphical models is one of identiﬁability. Can
+we distinguish between a faithful graphical model and an unfaithful one? The idea of
+faithfulness was ﬁrst explored for conditional independence relations that were satisﬁed in a
+family of graphs, using the notion of θ-Markov perfectness (Frydenberg (1990); Kauermann
+(1996)). For Gaussian graphical models with a tree topology the the distribution has been
+shown to be faithful (Becker et al. (2005); Malouche and Rajaratnam (2009)). In directed
+graphical models, the class of unfaithful distributions has been studied in (Spirites et al.
+(1993); Meek (1995)). In more recent work, a notion of strong-faithfulness as a means
+of relaxing the conditions of faithfulness was deﬁned (Uhler et al. (2013); Lin et al., and
+some answers were given as to whether a faithful graph representation existed for a given
+probability distribution (Sadeghi (2017)).
+Being able to distinguish between faithful and unfaithful relations is the ﬁrst step. Our
+main goal is to learn the structure of the graphical model. Many literature (Meinshausen
+and B¨ uhlmann (2006); Ravikumar et al. (2011); Ren et al. (2015); Dalal and Rajaratnam
+(2017)) involve a form of sparsity to make learning of the graphical model easier. This
+sparsity comes in the form of node degree, so that a graph is sparse if the node degree is
+small. However, in studying the use of conditional independence relations, another form of
+sparsity may prove to be more useful. This form of sparsity is the size of the set S that
+we are conditioning upon. We can make the set S small, by limiting the number of vertex
+disjoint paths between any two nodes in a graph that are not neighbors. Graphs that exhibit
+this property are what is known as K-separable graphs (Cicalese and Melani˘ c (2012)). It
+is natural therefore to study these kinds of graphs. We will examine graph learning for this
+graph class in this paper.
+In our paper, we make the following contributions:
+• We propose an algorithm to test the faithfulness of a conditional independence re-
+lation of the form Xu⊥ Xv|XS, where Xu,Xv and XS are the random variables
+associated with the nodes u, v and the node set S. This algorithm uses other condi-
+tional independence relations of the form Xi⊥Xj|XS, where i,j /∈S to determine
+this. The faithfulness test does not require any assumption on the population version
+of covariance matrix Σ and can be applied to any Gaussian graphical model. To
+the best of our knowledge, this is the ﬁrst algorithm that uses local information of
+2
+
+
+--- Page 3 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+a matrix to test for the faithfulness of a conditional independence relation. We also
+provide sample complexity bounds for this algorithm.
+• We propose a structure learning algorithm for weaklyK-separable Gaussian graphical
+models. The quantityK controls the size ofS that we need to condition on to learn the
+graph. This algorithm searches through diﬀerent possible node sets S and makes use
+of the faithfulness test to identify when a conditional independence relation implies
+that there is no edge between two nodes in the topology of the graphical model.
+There is no particular assumption on how small K needs to be, except that K scales
+according to O(n/ logp) where n is the number of samples and p is the dimension of
+the multivariate Gaussian distribution. There are two main novelties of this algorithm.
+The ﬁrst is that we make no assumption on the model of the graph other than it is
+weakly K-separable. Therefore, we do not require assumptions for the graph to be
+faithful or to satisfy certain irrepresentability conditions, which tend to be hard to
+verﬁy. The second novelty is that the weakly K-separable condition subsumes other
+known degree bound (sparsity) assumptions. This means that our algorithm caters
+to a larger class of Gaussian graphical models.
+• We propose a precision matrix learning algorithm for strongly K-separable Gaussian
+graphical models. This algorithm not only learns the structure of the graph, it learns
+the entries of the precision matrix (edge weights) as well. Of course, to do so we can
+simply invert the matrix. However, with smallK, we can get better sample complexity
+in the high-dimensional setting. The algorithm is similar to the weakly K-separable
+learning algorithm in the sense that it again runs through diﬀerent node sets S to
+condition on. However, it uses the faithfulness test somewhat diﬀerently to identify
+separator nodes S. The goal is, for any pair of nodes i and j, to ﬁnd S such that
+all paths from i to j that is of edge length greater than one must pass through some
+node in S. This gives us a nice expression for the precision matrix entries Ωij.
+This paper is structured as follows: In Section 2, we discuss some preliminaries about
+Gaussian graphical models. In Section 3, we state our algorithm for testing the faithfulness
+of a conditional independence relation and the theoretical guarantees of the algorithm. In
+Section 4, we lay out an algorithm that learns the structure of a weakly K-separable Gaus-
+sian graphical model. In Section 5, we introduce our algorithm for learning the structure
+and precision matrix entries of a stronglyK-separable Gaussian graphical model. In Section
+6, we look at some examples where our algorithm can perform structural estimation while
+others that rely on sparsity cannot.
+1.1. Related Work
+The use of conditional independence relations to infer graph structure in the high dimen-
+sional setting was ﬁrst introduced in Anandkumar et al. (2012). The authors in this work
+also use a search algorithm to search through diﬀerent node sets S for every node pair i
+and j so as to determine whether an edge exists between i and j. They consider walk-
+summable Gaussian graphical models that satisfy a separability condition known as the
+local separability property. Because conditional independence relations are used to imply
+something about the topology of the graphical model, the problem of unfaithful conditional
+3
+
+
+--- Page 4 ---
+Soh and Tatikonda
+independence relations needed to be dealt with. An assumption on the precision matrix
+(Assumption A4) restricts their models to faithful graphical models. We also note here that
+this assumption along with a minimum precision matrix entry assumption (Assumption A1)
+implies that the maximum node degree of the graph is O(
+√
+n/ logp).
+Another class of papers that work on high-dimensional Gaussian graphical models struc-
+tural estimation are those that make use of convex optimization on sparse precision matrices
+(Meinshausen and B¨ uhlmann (2006); Ravikumar et al. (2011); Ren et al. (2015)). These
+papers make use of optimization procedures such as ℓ1-regularization to learn the structure
+of the graphical model. These techniques exploit the sparsity of the precision matrix of the
+graphical model, which takes the form of bounded node degree. The order of the maximum
+node degree is diﬀerent for diﬀerent papers, and we discuss this later when we compare our
+results to theirs. Besides the sparsity element, the optimization methods (Meinshausen and
+B¨ uhlmann (2006); Ravikumar et al. (2011)) also require some assumptions on the preci-
+sion matrix that are hard to verify in general, which are the incoherence assumptions and
+neighborhood stability assumptions. Part of the motivation of our work was to overcome
+the need for such assumptions.
+2. Preliminaries
+2.1. Linear Algebra
+We ﬁrst deﬁne some linear algebra notation. For a matrix M, letMT denote its transpose
+and let|M| denote its determinant. If I is a subset of its row indices and J a subset of its
+column indices, then we deﬁne the submatrix MIJ as the |I|×| J| matrix with elements
+with both row and column indices from I andJ respectively. If I =J, we use the notation
+MI for convenience. In the same way, for a vector v, we deﬁnevI to be the subvector of v
+with indices from I. Let the spectral norm of M be denoted by∥M∥2, and let the trace of
+M be denoted by tr(M). For a square matrix M, we denote its maximum and minimum
+eigenvalues by λmax(M) and λmin(M). In this paper, we will often refer to the p by p
+covariance matrix Σ, so we will use the shorthand λmax =λmax(Σ) and λmin =λmin(Σ).
+Let M ∈ Rp×p and let W ={1,...,p } be the index set of M. Let S⊂W and let
+Sc =W\ S. The matrix M has the block structure
+M =
+[ MS MSSc
+MScS MSc
+]
+. (1)
+The Schur complement of MS inM is deﬁned by
+MSc|S =MSc−MScSM−1
+S MSSc. (2)
+Using the Schur complement, we can write the inverse of M−1 in the form
+M−1 =
+[
+M−1
+S|Sc −M−1
+S|ScMScSM−1
+S
+−M−1
+S MSScM−1
+S|Sc M−1
+S +M−1
+S MSScM−1
+S|ScMScSM−1
+S
+]
+. (3)
+2.2. Graph Theory
+LetG = (W,E) be an undirected graph, where W ={1,...,p } is the set of nodes and
+E is the set of edges, namely, a subset of the set of all unordered pairs {(u,v )| u,v ∈
+4
+
+
+--- Page 5 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+W}. In our paper, we are dealing with graphs that have no self-loops and no multiple
+edges between the same pair of nodes. For I⊆W , we denote the induced subgraph on
+nodes I byGI. For two distinct nodes u and v, a path of length t from u to v is a series
+{(u,w 1), (w1,w 2),..., (wt−2,wt−1), (wt−1,v )} of edges inE, where w1,...,w k−1∈W .
+Let S⊆W\{ u,v}. We say that the node set S is a node separator of u and v if all
+paths from u to v must pass through some node in S. The graph G is connected if for any
+distinct nodes u,v ∈W , there is at least one path from u to v. Otherwise, the graph G
+is disjoint. A connected component of G is a subgraph of G that is connected. A disjoint
+graph can be divided into a number of connected components, where nodes from distinct
+connected components are not connected by a path. Therefore, S is a node separator of u
+and v if and only ifGSc is a disjoint graph with u and v in distinct connected components.
+Deﬁnition 1 A graphG = (W,E) is weaklyK-separable if for every (u,v ) /∈E , there exists
+a node set S⊂W\{ u,v},|S|≤ K, such that S separates nodesi and j inG.
+Deﬁnition 2 A graph G = (W,E) is strongly K-separable if for any two nodes u and v,
+there exists a node set S⊂W\{ u,v},|S|≤ K, such that every path from u to v consisting
+of more than two nodes must contain a node in S.
+For any two nodes, let G−(u,v) be the resulting graph with the edge ( u,v ) deleted from
+G. This means that G−(u,v) =G if and only if ( u,v ) /∈E . The following proposition is an
+equivalent deﬁnition for a strongly K-separable graph.
+Proposition 3 LetG be an undirected graph. G is strongly K-separable if and only if for
+any two nodesu andv, there exists a node set S⊂W\{ u,v},|S|≤ K, such that (G−(u,v))Sc
+is a disjoint graph with nodes u and v in distinct connected components.
+A graph that is strongly K-separable graph is weakly K-separable as well.
+Example 1 (Tree Graphs) A tree graph is a weakly 1-separable graph, since any two
+nodes on a tree graph that are not neighbors are connected by one unique path (there are no
+cycles), so any node on that unique path would separate the two nodes. A tree graph is also
+trivially strongly 1-separable, since any two nodes connected by an edge is separated in the
+resultant graph where that particular edge is removed.
+Example 2 (Degree Bounded Graphs) A graph G where the degree of each node is
+bounded by K is a weakly K-separable graph. For any pair of non-neighboring nodes u and
+v, the neighborhood of u separatesu fromv. Since this neighborhood size is bounded by K,
+so the graph must also be a weakly K-separable graph. This degree bounded graph is also a
+stronglyK-separable graph as well, by the same logic. Let v be a neighbor node of u, that is,
+they are connected by the edge (u,v ). Then the rest of the neighbors of u must separate u
+andv inG−(u,v). This fact, along with the fact that the graph is already weakly K-separable,
+makesG stronglyK-separable as well. It is important to note here that weakly K-separable
+graphs are not degree bounded graphs. A star graph of arbitrary degree is a tree and is thus
+a weakly 1-separable graph. However, it is not degree bounded.
+5
+
+
+--- Page 6 ---
+Soh and Tatikonda
+Example 3 (Locally Separated Graphs) In Anandkumar et al. (2012), the notion of
+local separability was introduced. Let G be a graph with p nodes. For any two nodes u,v ,
+we say that the number of hops required to reach v fromu is the minimum number of edges
+in a path from u to v. If v is a neighbor of u, then v is 1-hop from u. For any i∈W ,
+let Bγ(i) be the set of all nodes that are k-hop from i, including the node i, where k≤ γ.
+LetGBγ(u)∪Bγ(v) be the induced subgraph of G on the node set Bγ(u)∪Bγ(v). The graph
+satisﬁes the (η,γ )-local separation property if for any two non-neighboring nodes u and v,
+the minimum number of nodes required to separate u and v inGBγ(u)∪Bγ(v) is less than or
+equal to η. Of course, any graph satisﬁes the local separation property with the appropriate
+η and γ values. Let S be such a local separator node set for nodes u and v in the induced
+subgraphGBγ(u)∪Bγ(v). Then any path in G fromu to v that does not pass through S must
+have at least 2γ number of edges. Using the pigeonhole principle, it is easy to see that
+the graph is also weakly K-separable, where K = η + p−η
+2γ . The graph may not be strongly
+K-separable however.
+Example 4 (Weakly K-separable Graphs that are not Strongly K-separable) There
+are many examples of graphs that are weakly K-separable but not strongly K-separable. A
+simple example is the complete graph, with number of nodes p>K + 2. Because each node
+is a neighbor of every other node, it is trivially weakly K-separable. However, there are at
+least p− 2 vertex disjoint paths from u to v inG−(u,v), namely, the paths of length 2 that
+go from u to any other node in G, excluding u and v, to v. By Menger’s theorem, at least
+p− 2 nodes are required to separateu and v inG−(u,v), thus making the complete graph not
+stronglyK-separable for K <p− 2.
+2.3. Gaussian Graphical Model
+LetX = (X1,...,X p) be a multivariate Gaussian distribution with mean µ and covariance
+matrix Σ. For the rest of this paper, we will only consider zero mean Gaussian distributions,
+that is, µ = 0. Let Ω = Σ−1 be the precision or concentration matrix of the graph. The
+random variableX has the distribution function
+fX(x) = 1√
+(2π)p|Σ|
+exp
+{
+−1
+2(x−µ)TΩ(x−µ)
+}
+. (4)
+For any set S⊂W , we deﬁne XS ={Xi| i∈ S}. We note here that Σuv = 0 if and
+only if Xu is independent of Xv, which we denote by Xu ⊥ Xv. If Xu is independent
+of Xv conditioned on some random variable Z, we denote this independence relation by
+Xu⊥Xv|Z. Note that Ωuv = 0 if and only if Xu⊥Xv|XW\{u,v}.
+For any set S ⊆ W, the conditional distribution of XSc given XS = xS follows a
+multivariate Gaussian distribution with conditional mean µSc− ΣScSΣ−1
+S (xS−µS) and
+conditional covariance matrix
+ΣSc|S = ΣSc− ΣScSΣ−1
+S ΣSSc. (5)
+Observe that the conditional covariance is the Schur complement of ΣS in Σ. For distinct
+nodes u,v∈W and S⊆W\{ u,v}, we have
+(ΣSc|S)uv = Σuv− ΣuSΣ−1
+S ΣSv. (6)
+6
+
+
+--- Page 7 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+The following property easily follows.
+Proposition 4 Xu⊥Xv|XS if and only if (ΣSc|S)uv = 0 .
+To denote conditional covariance, we use the notations Σ(u,v | S) and ( ΣSc|S)uv inter-
+changeably.
+The concentration graph GΣ = (W,E) of a multivariate Gaussian distribution X is
+deﬁned as follows: We have node set W ={1,...,p }, with random variable Xu associated
+with node u, and edge set E where unordered pair ( u,v ) is in E if and only if Ωuv̸= 0.
+The multivariate Gaussian distribution, along with its concentration graph, is also known
+as a Gaussian graphical model. Any Gaussian graphical model satisﬁes the global Markov
+property, which is the following.
+Proposition 5 (Global Markov Property) If S is a node separator of nodes u and v
+inGΣ, then Xu⊥Xv|XS.
+The converse, however, is not necessarily true. Therefore, this motivates us to deﬁne faith-
+fulness in a graphical model.
+Deﬁnition 6 The conditional independence relation Xu⊥Xv|XS is said to be faithful if
+S is a node separator of u and v in the concentration graphGΣ. Otherwise, it is unfaithful.
+A multivariate Gaussian distribution is faithful if all its conditional independence relations
+are faithful. The distribution is unfaithful if it is not faithful.
+Example 5 (Example of an unfaithful Gaussian distribution) Consider the multi-
+variate Gaussian distribution X = (X1,X 2,X 3,X 4) with zero mean and positive deﬁnite
+covariance matrix
+Σ =
+
+
+3 2 1 2
+2 4 2 1
+1 2 7 1
+2 1 1 6
+
+. (7)
+By Proposition 4, we have X1⊥X3|X2 since Σ13 = Σ12Σ−1
+22 Σ23. However, the precision
+matrix Ω = Σ−1 has no zero entries, so the concentration graph is a complete graph. This
+means that node 2 is not a node separator of nodes 1 and 3. The independence relation
+X1⊥X3|X2 is thus not faithful and the distribution X is not faithful as well.
+We can think of the submatrix ΣS∪{u,v} as a local patch of the covariance matrix Σ.
+When Xu⊥ Xv|XS, nodes u and v are not connected by an edge in the concentration
+graph of the local patch ΣS∪{u,v}, that is, we have ( Σ−1
+S∪{u,v})uv = 0. This does not imply
+thatu andv are not connected in the concentration graphGΣ. If Xu⊥Xv|XS is faithful,
+then the implication follows. If Xu⊥Xv|XS is unfaithful, thenu andv may be connected
+inGΣ (See Figure 1).
+Faithfulness is important in structural estimation, especially in high-dimensional set-
+tings. If we assume faithfulness, then ﬁnding a node set S such that Xu⊥Xv|XS would
+imply that there is no edge between u and v in the concentration graph. When we have
+access only to the sample covariance instead of the population covariance matrix, if the
+size of S is small compared to n, the error of computing Xu⊥Xv|XS is much less than
+7
+
+
+--- Page 8 ---
+Soh and Tatikonda
+Figure 1: Even though ΣS∪{u,v} is a submatrix of Σ,GΣS∪{u,v} need not be a subgraph
+ofGΣ. Edge properties do not translate as well. That means the local patch
+ΣS∪{u,v} need not reﬂect the edge properties of the global graph structure of Σ.
+the error of inverting the entire covariance matrix. This method of searching through all
+possible node separator sets of a certain size is employed in Anandkumar et al. (2012); Wu
+et al. (2013). As mentioned before, these authors impose other restrictions on their models
+to overcome the problem of unfaithfulness. We do not place any restriction on the Gaussian
+models.
+2.4. Sample Covariance
+Letx(1),..., x(n)∈ Rp be n samples of the random variable X with distributionN (0, Σ).
+The scatter matrix S is deﬁned as
+S =
+n∑
+i=1
+x(i)(x(i))T. (8)
+The sample covariance matrix determined by these n samples is deﬁned as
+ˆΣ = 1
+nS. (9)
+In determining the sample conditional covariances, we will make use of the scatter matrix
+S instead of ˆΣ. Let u andv be distinct elements ofW and let S⊆W\{ u,v}. The sample
+conditional covariance of Xu and Xv givenXS is denoted by
+ˆΣ(u,v|S) = 1
+n−|S|
+(
+Suv−SuSS−1
+S SSv
+)
+. (10)
+In our algorithms, we usually have to decide whether a conditional independence relation
+holds. We have to determine whether Xu⊥Xv|XS or Xu̸⊥Xv|XS. To do so with the
+sample covariance matrix, we need to deﬁne a conditional independence threshold α >0,
+such that if
+|ˆΣ(u,v|S)|<α, (11)
+we will decide that Xu⊥ Xv| XS. Otherwise, we decide that Xu̸⊥ Xv| XS. In our
+analysis, α will scale depending on p,n and|S|.
+8
+
+
+--- Page 9 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+3. Testing Conditional Independence Relations
+In this section, we will describe a novel algorithm for testing faithfulness of a conditional
+independence relation Xu⊥Xv|XS. Our main goal is to decide if a conditional indepen-
+dence relation Xu⊥Xv|XS is faithful or not. For convenience, we will denote GΣ simply
+byG = (W,E) for the rest of this paper. Now let us suppose that it is faithful; S is a node
+separator for u and v inG. Then we should not be able to ﬁnd a path from u to v in the
+induced subgraphGSc. The main idea therefore is to search for a path between u and v in
+GSc. If this fails, then we know that the conditional independence relation is faithful.
+By the global Markov property, for any two distinct nodes i,j ∈ Sc, if Xi̸⊥ Xj|XS,
+then we know that there is a path between i and j inGSc. Thus, if we ﬁnd some w∈
+W\ (S∪{i,j}) such that Xu̸⊥ Xw| XS and Xv̸⊥ Xw| XS, then a path exists from
+u to w and another exists from v to w, so u and v are connected in GSc. This would
+imply that Xu ⊥ Xv | XS is unfaithful. However, testing for paths this way does not
+necessarily rule out all possible paths in GSc. The problem is that some paths may be
+obscured by other unfaithful conditional independence relations. There may be some w
+wherebyXu̸⊥Xw|XS andXv⊥Xw|XS, but the latter relation is unfaithful. This path
+from u to v through w is thus not detected by these two independence relations.
+We will show however, that if there is no path from u to v inGSc, then we cannot ﬁnd
+a series of distinct nodes w1,...,w t∈W\ (S∪{u,v}) for some natural number t> 0 such
+that Xu̸⊥ Xw1|XS, Xw1̸⊥ Xw2|XS, ... , Xwt−1̸⊥ Xwt|XS, Xwt̸⊥ Xv|XS. This
+is to be expected because of the global Markov property. What is more surprising about
+our result is that the converse is true. If we cannot ﬁnd such nodes w1,...,w t, then u and
+v are not connected by a path in GSc. This means that if there is a path from u to v in
+GSc, even though it may be hidden by some unfaithful conditional independence relations,
+ultimately there are enough conditional dependence relations to reveal that u and v are
+connected by a path inGSc. This gives us an equivalent condition for faithfulness that is in
+terms of conditional independence relations.
+This is the backbone of our algorithm to test for the faithfulness of a conditional inde-
+pendence relation. We deﬁne a new graph ¯G = ( ¯W, ¯E), where ¯W =Sc, and (i,j )∈ ¯E if and
+only ifXi̸⊥Xj|XS. The algorithm seeks to ﬁnd a path from u tov in ¯G. If there exists a
+path, then Xu⊥Xj|XS is unfaithful. Otherwise, it is faithful. If we consider each test of
+whether two nodes are conditionally independent given XS as one step, the running time
+of the algorithm is the that of the algorithm used to determine set U. If a breadth-ﬁrst
+search is used, the running time is O(|Sc|2).
+Theorem 7 SupposeXu⊥Xv|XS. If S is a node separator of u and v in the concentra-
+tion graph, then Algorithm 1 will classify Xu⊥Xv|XS as faithful. Otherwise, Algorithm
+1 will classify Xu⊥Xv|XS as unfaithful.
+Example 6 (Testing an Unfaithful Distribution (1)) Let us take a look again at the
+4-dimensional Gaussian distribution in Example 5. Suppose we want to test if X1⊥X3|X2
+is faithful or not. From its covariance matrix, we have Σ14− Σ12Σ−1
+2 Σ24 = 2− 2· 1/4 =
+3/2̸= 0, so this implies that X1̸⊥ X4| X2. Similarly, X3̸⊥ X4| X2. So there exists a
+path fromX1 to X3 inG{1,3,4} that passes through node 4. Indeed there is such a path since
+the concentration graph is complete. Therefore, the relation X1⊥X3|X2 is unfaithful.
+9
+
+
+--- Page 10 ---
+Soh and Tatikonda
+Algorithm 1: Testing Faithfulness of Relation Xu⊥Xv|XS
+Input: Covariance matrix Σ.
+1. Generate set U to be the set of all nodes in ¯W that are connected to u by a path in
+¯G, including u. (A breadth-ﬁrst search could be used.)
+2. If v∈U, there exists a path from u to v in ¯G, output Xu⊥Xv|XS as unfaithful.
+3. If v /∈U, let V = ¯W\U. Output Xu⊥Xv|XS as faithful.
+Figure 2: The concentration graph of the distribution in Example 8.
+Example 7 (Testing an Unfaithful Distribution (2)) Consider a 6-dimensional Gaus-
+sian distribution X = (X1,...,X 6) that has the covariance matrix
+Σ =
+
+
+7 1 2 2 3 4
+1 8 2 1 2 .25 3
+2 2 10 4 3 8
+2 1 4 9 1 6
+3 2 .25 3 1 11 9
+4 3 8 6 9 12
+
+
+. (12)
+We want to test if the relation X1⊥ X2| X6 is faithful or unfaithful. Working out the
+necessary conditional independence relations to obtain ¯G with S ={6}, we observed that
+(1, 3), (3, 5), (5, 4), (4, 2)∈ ¯E This means that 2 is reachable from 1 inG, so the relation is
+unfaithful. In fact, the concentration graph is the complete graph K6, and 6 is not a node
+separator of 1 and 2.
+Example 8 (Testing a Faithful Distribution) We consider a 6-dimensional Gaussian
+distribution X = (X1,...,X 6) that has a covariance matrix which is similar to the distri-
+bution in Example 7,
+Σ =
+
+
+7 1 2 2 3 4
+1 8 2 1 2 .25 3
+2 2 10 4 6 8
+2 1 4 9 1 6
+3 2 .25 6 1 11 9
+4 3 8 6 9 12
+
+
+. (13)
+Observe that only Σ35 is changed. We again test the relation X1⊥X2|X6. Running the
+algorithm produces a viable partition with U ={1, 3} and V ={2, 4, 5}. This agrees with
+the concentration graph, as shown in Figure 2.
+10
+
+
+--- Page 11 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+The proof of Theorem 7 reﬂects another interesting property of the graph ¯G, which is
+that the connected components of ¯G are exactly the same connected components of GSc.
+Suppose ¯G is a disjoint graph. Then the node set Sc can be partitioned into sets S1,...,S k,
+for some k≥ 2, such that ¯GSi is connected for all i = 1,...,k , and there are no edges in
+¯E between nodes belonging to diﬀerent partitions. This also implies that the graph GSc is
+disjoint in the same manner, in that (GSc)Si is connected for all i = 1,...,k , and there are
+no edges inE between nodes belonging to diﬀerent partitions.
+So far, we have not placed any assumption on the multivariate Gaussian distribution.
+Given the exact covariance matrix Σ, for any general Gaussian graphical model, we can
+determine whether a node set S is a separator of two nodes u and v using conditional
+independence relationships to test for faithfulness. If the node set S is indeed a separator
+set of i andj, we can then conclude that there is no edge between nodes i andj. The next
+step therefore is to learn the entire structure of the graphical model.
+3.1. Faithfulness Test Using Sample Conditional Covariances
+Suppose now instead of the true covariance matrix Σ, we only have access to n samples
+x(1),..., x(n)∈ Rp of the p-dimensional multivariate Gaussian distributionN (0, Σ). Since
+the faithfulness test only considers conditional relationships between pairs of nodes, we
+make use of the scatter matrix S to calculate the conditional covariances, according to
+Section 2.4.
+Theorem 8 LetS be used according to (10) to determine the sample conditional covari-
+ances in Algorithm 1 for testing the faithfulness of a conditional independence relation
+Xu⊥Xv|XS. Let β = minXi̸⊥Xj|XS|Σ(i,j |S)|, and let α =β/2. Let Υ be the event in
+which:
+• UsingS, Algorithm 1 correctly outputs whether or not Xu is conditional independent
+of Xv givenXS.
+• If Xu⊥Xv|XS, Algorithm 1 correctly outputs whether or not it is faithful using S.
+Then,
+P (Υ)≥ 1−ϵ. (14)
+for n = Ω
+(
+λ2
+max+βλmax
+β2
+(
+log(p−|S|) + log(ϵ−1)
+)
++|S|
+)
+.
+Some remarks:
+• The algorithm to test the faithfulness of a conditional independent relation requires
+no assumption on the true covariance matrix Σ. We only require that the distribution
+be multivariate Gaussian.
+• The threshold α is used to decide if two variables are conditionally dependent or
+independent. If |ˆΣ(i,j |S)|<α , then we decide Xi⊥Xj|XS, otherwise Xi̸⊥Xj|
+XS. Since we are using α to decide whether Σ(i,j |S) is zero or not, it is natural to
+set α =β/2 where β = minXi̸⊥Xj|XS|Σ(i,j |S)|.
+11
+
+
+--- Page 12 ---
+Soh and Tatikonda
+• Using the conditional independence test to determine faithfulness, we see that the
+sample complexity, if the dimension p is much larger than separator size|S|, then the
+log(p−|S|) term dominates. In this case, the separator size |S| behaves like a kind of
+sparsity measure of the graph. However, as |S| increases and gets closer to p, we see
+that the term|S| dominates in the sample complexity. This is to be expected because
+when|S| tends towards p− 2, we get closer to inverting almost the entire matrix.
+Of course, when |S| = p− 2, there is no faithfulness test needed to be done since
+Xu⊥ Xv|XW\{i,j} implies that there is no edge between nodes u and v. However
+the sample complexity needed is larger. Therefore, the faithfulness test allows us to
+reduce the size of |S| and with that the sample complexity, even though there are
+more conditional relations to test between variables in Sc.
+• The quantity β = minXi̸⊥Xj|XS|Σ(i,j | S)| measures how far away the conditional
+covariance is from zero when it isn’t zero. When this term is close to zero, more
+samples are required to test whether the conditional covariance is zero or non-zero for
+a pair of random variables. The relationship between β and the entries of precision
+matrix will be discussed later when we compare our recovery results with some of the
+other literature. Intuitively, it makes sense that this entry plays a role in the testing
+for faithfulness because the foundation of the algorithm is the testing for whether a
+pair of random variables are conditionally independent or not.
+4. Weakly K-separable Gaussian graphical models
+In the process of using conditional independence relationships to infer the structure of a
+Gaussian graphical model, if we let the separator size |S| be p− 2, then we do not have
+to use any faithfulness test to determine whether any two nodes i and j are connected by
+an edge. Therefore, the true value of the faithfulness test is in the case where |S| is small
+compared to the number of nodes p.
+The main idea of this section is to learn the structure of a weakly K-separable Gaussian
+graphical model. For two nodes i and j that are not connected by an edge, there exists a
+node set S with|S|≤ K, such that S separates i and j. Thus, the variable K places a
+bound on the minimal node separator size for a node set that separates i and j. Conse-
+quently,K aﬀects directly the sample complexity required for structural estimation. For
+K signiﬁcantly smaller than p, the sample complexity involved in computing each of the
+conditional independence relationsXi⊥Xj|XS is also signiﬁcantly smaller than inverting
+the entire covariance matrix. Using the faithfulness test described in Algorithm 1 of the
+previous section, Algorithm 2 is able to learn the structure of a weakly K-separable graph,
+that is, it can estimate the edge set E.
+Again, considering a computation of a conditional independence relation as one step, the
+running time of the algorithm is O(pK+4). This comes from exhaustively checking through
+all
+(p−2
+K
+)
+possible separation sets S for each of the
+(p
+2
+)
+(i,j ) pairs. Each time there is a
+conditional independence relation, we have to check for faithfulness using Algorithm 1, and
+the running time for that is O(p2). The novelty of the algorithm is in its ability to learn
+graphical models that are unfaithful.
+12
+
+
+--- Page 13 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+Algorithm 2: Learning topology of weakly K-separable GGM
+Input: Covariance matrix Σ.
+1. For each node pair ( i,j ):
+• Let F ={S⊂W\{ i,j} :|S| =K,Xi⊥Xj|XS, and it is faithful}.
+• If F̸=φ, output (i,j ) /∈E . If F =φ, output (i,j )∈ ˆE.
+2. Output ˆE.
+Theorem 9 For a weaklyK-separable Gaussian graphical model, given the exact covariance
+matrix Σ as the input in Algorithm 2, the corresponding output will be the correct edge set
+E.
+Theorem 10 LetG be a weakly K-separable graph. Let S be used according to (10) to
+determine the sample conditional covariances in Algorithm 2, instead of the true covariance
+matrix Σ. Let β≤ min|S|=K,Xi̸⊥Xj|XS|Σ(i,j |S)|, and let α =β/2. Then,
+P
+(
+ˆE =E
+)
+≥ 1−ϵ, (15)
+for n = Ω(λ2
+max+βλmax
+β2 (K logp + log(ϵ−1)) +K).
+4.1. Comparisons to existing work
+We compare this graph recovery algorithm to ones in existing work in the following aspects:
+• Faithfulness Assumptions : In our result, we make no assumptions about the condi-
+tional independence relations having to be faithful. The purpose of Algorithm 1 is
+speciﬁcally to test for the faithfulness or unfaithfulness of a conditional independence
+relation. In Anandkumar et al. (2012), the authors make use of conditional covariances
+in the same way to test whether nodes are neighbors or not. Because they are using
+conditional covariances to infer graph structure, they naturally have to overcome the
+hurdle of unfaithful conditional independence relations. This is done by assumption
+A4 of their paper, which is an assumption on the covariance matrix Σ ensuring that
+pairs of nodes which are not neighbors and not separated by a set S will not have
+small conditional covariances when conditioned on the variables XS. This assump-
+tion is strong; together with Assumption A1, it implies that the node degree of the
+graph is bounded by O(
+√
+n/ logp). Our algorithm is novel in the sense that we can
+test for faithfulness and unfaithfulness using only conditional independence relations.
+Thus, we do not need an assumption like that of Assumption A4, that prevents the
+conditional independence relations from being unfaithful.
+• Degree Bounds : The only assumption placed on the graph structure is that it is
+weakly K-separable. According to Theorem 10, for consistent structural estimation,
+13
+
+
+--- Page 14 ---
+Soh and Tatikonda
+we require
+K =O
+( n
+logp
+)
+. (16)
+This subsumes all graphs that have bounded node degree K. Degree boundedness is
+one of the main type of sparsity constraint in other high-dimensional Gaussian graph-
+ical model learning. In Anandkumar et al. (2012), even though the main structural
+assumption is the local separation property, their assumptions A1 and A4 imply that
+their graphs have node degree bounded by O(
+√
+n/ logp). In Ravikumar et al. (2011),
+the degree of each node is bounded by the same order as well. In Ren et al. (2015);
+Meinshausen and B¨ uhlmann (2006), the degree bound required isO(n/ logp). Thus,
+the weakly K-separable assumption subsumes all the assumptions on degree bounds,
+and Algorithm 2 caters to a wider class of graphical models.
+• General Gaussian Graphs : Besides requiring the graph to be weakly K-separable, we
+place no other assumptions on the Gaussian graphical model. In Anandkumar et al.
+(2012), the authors require the model to be walk-summable, so that the normalized
+covariance matrix can be written using the Neumann series for matrix inverses. They
+also require assumption A4 to hold, which is a restriction on the entries of the precision
+matrix with respect to its corresponding row entries. In Ravikumar et al. (2011) and
+other works using ℓ-1 minimization, certain incoherence conditions need to hold, and
+these incoherence conditions are a restriction on the precision matrix and are hard to
+check in general. In Meinshausen and B¨ uhlmann (2006), they place assumptions on
+neighborhood stability that allows them to do support recovery. The neighborhood
+stability assumption is hard to verify and the precision matrices that satisfy form a
+subset of diagonally dominant matrices.
+5. Strongly K-separable Gaussian graphical models
+In this section, we impose an additional assumption on the graphical model so that we can
+not only learn the topology of the graph, but learn the entries of the precision matrix as
+well. We can think of the precision matrix as the matrix of edge weights, where Ωij is the
+weight of edge (i,j ). If the edge weight is zero, it means that there is no edge between the
+corresponding two nodes.
+The additional assumption is that the graphical model must not only be weakly K-
+separable, but it must be strongly K-separable as well. This means that even for edges
+(i,j ) that belong to E, there is a node set S⊂W\{ i,j},|S|≤ K, such that the removal
+of edge (i,j ) fromG results in a graph where S separates nodes i and j. This separation
+property is exactly where we can apply our faithfulness test. If we can remove the edge
+(i,j ) from the graph and use our faithfulness test to ﬁnd a node separator S of i and j
+in the resultant graph G−(i,j), we can deduce the precision matrix entry Ωij. As shown in
+the following algorithm, if we can ﬁnd such an S, the entry Ωij can be calculated from the
+conditional covariance of Xi and Xj, and the conditional variances of Xi and of Xj, all of
+which are conditioned on XS.
+The main idea behind the algorithm is to ﬁnd such a node separatorS, by appropriately
+“removing” the edge (i,j ). We cannot simply condition on XS, because, if (i,j ) is inE, we
+14
+
+
+--- Page 15 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+will have the condition dependence relation Xi̸⊥Xj|XS. We could remove the inﬂuence
+of the edge ( i,j ) in the graph by conditioning on XS∪{i,j}, however this does not ensure
+that i and j are separated by S inG−(i,j).
+To overcome this problem, we condition on both XS∪{i} and XS∪{j}. We use the
+conditional independence relations given these random variables to deduce that S is a node
+separator of i and j inG−(i,j). Running through node subsets S⊂W\{ i,j} of size k, we
+ﬁrst condition on XS∪{j} to see how S separatesGSc\{j}. We then condition on XS∪{i} to
+see how S separatesGSc\{i}. Using these two pieces of information, we can infer whether S
+separates i and j inG−(i,j).
+In the faithfulness test for a relation Xu⊥Xv|XS in Section 3.1, we deﬁned the graph
+of conditional dependences, ¯G. The connectivity of ¯G reﬂects the connectivity ofGSc, which
+further implies whether S separates u and v. Here, we need to deﬁne ¯G for diﬀerent node
+subsets S. For any subset S⊂W , we denote the graph ¯GSc
+= (Sc, ¯ESc
+), where (i,j )∈ ¯ESc
+if and only if Xi̸⊥Xj|XS. For a node h∈Sc, let the connected node set component of
+¯GSc containingh be denoted by ¯USc(h). Therefore ¯USc(h) is the set of nodes in Sc that are
+connected to h by a path in ¯GSc, including h.
+For any node i∈W , we denote the set
+Γ(i,j) ={S⊂W\{ i,j} :|S|≤ K}. (17)
+of all possible node subsets S of size K inW\{ i,j}. We deﬁne a subset of this set, which
+is
+Γi|j ={S∈ Γ(i,j) : ∃h∈Sc\{i,j} s.t. Σ(i,h|S∪{j}) = 0 and is faithful}. (18)
+This quantity encompasses the diﬀerent setsS such thatGS∪{j} is a disjoint graph. However,
+this set does not subsume all possible S that separate i andj inG−(i,j). To include all such
+possible node sets S, we specify a subset of Γ i|j, namely,
+Ψi|j ={S∈ Γ(i,j) : |S|≤ K, Σ(i,h|S∪{j}) = 0, ∀h∈Sc\{i,j}}. (19)
+These quantities allow us to bring deﬁnition to Λ1, Λ2 and Λ3, which are given in Algorithm
+3. Basically, all S in Λ1∪ Λ2∪ Λ3 are node sets that separate i and j inG−(i,j). The set
+Λ1∪ Λ2∪ Λ3 also has to be non-empty, which we prove in the appendix.
+We only need to ﬁnd one element of the set Λ 1∪ Λ2∪ Λ3. It is easy to test if S is an
+element of the set Ψ i|j or Ψj|i. Finding an element of Ψ i|j or Ψj|i is a special case of the
+test for faithfulness. To do so, in the case of Ψ i|j, run through the subsets S of size K, and
+determine if Σ(i,h|S∪{j}) = 0 for all h∈Sc\{i,j}.
+To test ifS belongs to Γi|j, we have to run through theK +1 node set of S∪{h}, where
+h∈Sc\{i,j}. For each node set S∪{h}, we employ Algorithm 1, the faithfulness test, to
+test whether Σ(i,h|S∪{j}) is zero and is a faithful conditional independence relation. If
+we can ﬁnd such a node set S∪{h}, then S belongs to Γi|j. If there is no h∈ Sc\{i,j}
+whereby Σ(i,h|S∪{j}) is zero and faithful, then S belongs to Γ (i,j)\ Γi|j.
+In this way, using Algorithm 1, we can determine whether S belongs to the set Λ 1∪
+Λ2∪Λ3. Let each computation of a conditional independence relation be one step. For each
+(i,j ) pair, there are
+(p−2
+K
+)
+possible sets S. For each S, there are p− 2−K possible nodes
+h∈ Sc\{i,j} to pick from, with each h possibly require a faithfulness test, of which the
+running time is O(p2). Therefore, Algorithm 3 has a running time of O(pK+5).
+15
+
+
+--- Page 16 ---
+Soh and Tatikonda
+Algorithm 3: Learning the precision matrix of strongly K-separable GGM
+Input: Covariance matrix Σ
+1. For each pair (i,j ):
+• Let Λ1 =
+{
+S∈ Γi|j∩ Γj|i : ¯USc\{i}(j)⊆
+(
+Sc\ ¯USc\{j}(i)
+)}
+.
+• Let Λ2 = Ψj|i.
+• Let Λ3 = Ψi|j.
+• Choose a set S∗∈ Λ1∪ Λ2∪ Λ3.
+• Let ˆΩij =−Σ(i,j |S∗)/
+[
+Σ(i,i|S∗)Σ(j,j |S∗)− Σ(i,j |S∗)2]
+.
+2. Output ˆΩ.
+Theorem 11 For a strongly K-separable Gaussian graphical model, given the exact co-
+variance matrix Σ as the input in Algorithm 3, the corresponding output will be the correct
+precision matrix Ω.
+For each node pair i,j , we deﬁne
+Λ0(i,j ) ={S∈ Γ(i,j),S separates i and j inG−(i,j)}. (20)
+Theorem 12 Let K≤ p− 2. Let G be a strongly K-separable graph, and let S be used
+according to (10) to determine the sample conditional covariances in Algorithm 3, instead
+of the true covariance matrix Σ. Let L be a constant such that 0<L< 1. Let
+C1 = Lλ2
+min + 2λmax(1 + 2λmax)
+(1−L)Lλ4
+min
+. (21)
+Then, for
+ϵ∈
+(
+0,C 1· min
+{
+1, Lλ2
+min
+2(1 + 2λmax)
+}]
+, (22)
+we have
+P
+
+ max
+i,j∈W,i̸=j,
+S∈Λ0(i,j)
+|ˆΩij− Ωij|≥ ϵ
+
+≤ 4pK+2 exp
+{
+− (n−K)ϵ2
+6C2
+1λ2max + 4C1ϵλmax
+}
+. (23)
+Again, when we use the scatter matrix S to determine ˆΩij, we get
+ˆΩij =−
+ˆΣ(i,j |S∗)
+ˆΣ(i,i|S∗)ˆΣ(j,j |S∗)−ˆΣ(i,j |S∗)2, (24)
+where the sample conditional covariance are derived from S using (10).
+Some remarks:
+16
+
+
+--- Page 17 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+• Similar to the weakly K-separable case, we make no faithfulness assumptions about
+the model and we also do not make other assumptions besides the graph being strongly
+K-separable.
+• Structural Estimation of a strongly K-separable graph using samples depends on
+accurately identifying the conditional independence relations. Therefore, the sample
+complexity required to estimate the structure of a strongly K-separable graph is the
+same as that of a weakly K-separable graph.
+• The bounded degree assumption of other work is still subsumed under the strongly
+K-separable assumption. A K bounded degree graph is a stronglyK-separable graph.
+As such, this algorithm learns a broader variety of Gaussian graphical models.
+6. Discussion
+So far, in both the weakly and strongly K-separable cases, the graphs with bounded degree
+can be learned as well. In this section, we will examine some graphs without bounded
+degree that our recovery algorithms can learn.
+The complete graph: The complete graph on p nodes, as shown before, is a weakly K-
+separable graph, for any K≥ 1. In particular, it is weakly 1-separable graph. However, the
+node degree is the maximum possible, which is p− 1. In this dense graph, our algorithm for
+weaklyK-separable graphs can be used to learn the structure of the complete graph. We can
+learn the structure of the complete graph in O(p3), since every conditional independence
+in a weakly 1-separable graph is faithful. Edge estimation methods that require degree
+bounds will fail in this case. In fact, a weakly K-separable graph can contain many cliques
+of arbitrary size (). The presence of a large clique in a graph would render these methods
+inaccurate. For example, consider the p node graph with p− 1 of its nodes forming a clique
+and the last node is connected to only one of the other p− 1 nodes. This graph is weakly 1-
+separable as well. Therefore, our algorithm is able to deal with graphs that have arbitrarily
+large cliques in them. These graphs do not have bounded degree. However, the complete
+graph and graphs with large cliques are not strongly K-separable.
+The star graph: Consider the star graph onp nodes. One node has degree p−1 and every
+other node has degree 1. This graph is weakly 1-separable and it is strongly 1-separable as
+well. Using Algorithm 3, we can learn the precision matrix entries of the star graph with
+low sample complexity. This algorithm has a running time of O(p4) in order to recover the
+structure of the graph, since all conditional independence relations in strongly K-separable
+graph are faithful. The precision matrix entries can then be derived according to 3. The
+ensemble of star graphs, however, clearly do not fall under the bounded degree regime.
+The star graph, in its essence, describes other graphs that are strongly K-separable, but
+not degree bounded. For example, as long as there is a node that is connected to a large
+number of degree 1 nodes, the graph is no longer degree bounded. However, in this case,
+the graph is still strongly K-separable, and we can use our algorithm to retrieve the graph
+structure and the entries of the precision matrix.
+17
+
+
+--- Page 18 ---
+Soh and Tatikonda
+7. Conclusion
+We have presented an equivalence condition for faithfulness in Gaussian graphical models
+and an algorithm to test whether a conditional independence relation is faithful or not.
+Gaussian distributions are special because its conditional independence relations depend
+on its covariance matrix, whose inverse, the precision matrix, provides us with a graph
+structure. The question of faithfulness in other Markov random ﬁelds, like Ising models,
+is an area of study that has much to be explored. The same questions can be asked,
+such as when unfaithful conditional independence relations occur, and whether they can
+be identiﬁed. Being able to test faithfulness allows us to learn a wider class of Gaussian
+graphical models, such as the weakly and strongK-separable graphs. In the future, we plan
+to extend some of these results to other Markov random ﬁelds.
+Acknowledgments
+This work was partially supported by the National Science Foundation under Grant CNS-
+0963989 and Grant CCF-1217023.
+Appendix A. Correctness of Algorithms based on exact covariance
+matrix Σ
+A.1 Proof of Theorem 7
+Proof Suppose Algorithm 1 decides that Xu⊥Xv|XS is unfaithful. It does so by ﬁnding
+a series of distinct nodes w1,...,w t∈Sc\{u,v} for some natural number t> 0 such that
+Xu̸⊥Xw1|XS, Xw1̸⊥Xw2|XS, ... , Xwt−1̸⊥Xwt|XS, Xwt̸⊥Xv|XS. By the global
+Markov property, this means that u is connected to w1 by a path in GSc, wi is connected
+to wi+1 a path inGSc for i = 1,...,t − 1, and wt is connected to v by a path in GSc. This
+impliesu is connected to v by a path inGSc, so Xu⊥Xv|XS is unfaithful and Algorithm
+1 has correctly deduced that it is so.
+Now suppose Algorithm 1 decides that Xu⊥ Xv | XS is faithful. That means that
+there is no path from u to v in ¯G. Thus, ¯G is a disjoint graph with u and v in separate
+distinct components. The graph ¯GU is the connected component that contains u. By the
+way we deﬁned ¯G, it follows that Xi⊥Xj|XS for all i∈U and j∈V . Equivalently, by
+Proposition 4,
+(ΣSc|S)ij = 0, ∀i∈U, j∈V. (25)
+The matrix ΣSc|S therefore has a block diagonal structure, with
+(ΣSc|S)UV = (ΣSc|S)T
+VU = 0. (26)
+From (5) and (3), it follows that
+(ΣSc|S)−1 = (ΣSc− ΣScSΣ−1
+S ΣSSc)−1 = ΩSc. (27)
+Since the inverse of a block diagonal matrix is also block diagonal, it follows that
+(ΩSc)UV = ΩUV = 0. (28)
+18
+
+
+--- Page 19 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+As the non-zero entries of ΩSc reﬂect the edges between the nodes inGSc, the last equation
+implies that for any i∈U and j∈V , the edge (i,j ) is not in the edge set E. This means
+u is not connected to v by a path in GSc, which further implies that S is a separator of
+u and v inG. Thus, Algorithm 1 has correctly deduced that Xu⊥ Xv|XS is a faithful
+conditional independence relation.
+A.2 Proof of Theorem 9
+Proof If F̸=φ, F is non-empty so there exists an S such that Xi⊥Xj|XS is faithful.
+Therefore, S separates i andj inG and (i,j ) /∈E . If F =φ, then for any S⊆W ,|S|≤ K,
+we have either Xi̸⊥Xj|XS or Xi⊥Xj|XS but it is unfaithful. In both cases, S does
+not separate i and j inG, for any S⊆W ,|S|≤ K. By the assumption on the graphical
+model, (i,j ) must be in E. This shows that Algorithm 2 will correctly output the edges of
+G.
+A.3 Conditional covariance in terms of the precision matrix
+We establish some properties of the covariance matrix in terms of the precision matrix. In
+most of the work in this paper, we are trying to learn properties of the precision matrix,
+such as the support or the entries of the matrix, using conditional independence relations.
+These conditional independence relations are reﬂected by entries of the covariance matrix.
+Here, in this section, we further describe some of the relationship between the covariance
+matrix Σ and the precision matrix Ω.
+Leti,j be two elements of the index set W ={1,...,p } of the square matrix Σ and let
+Q ={i,j}. Let S be a subset of W\ Q. Let Sc =W\ S and let T = Sc\Q. Consider
+the matrix ΩSc. Computing the Schur complement of ΩSc\Q with respect to ΩSc and using
+(3), we get
+[(Ω−1
+Sc )Q]−1 = ΩQ− ΩQTΩ−1
+T ΩTQ. (29)
+Using (27), we get
+[(ΣSc|S)Q]−1 = ΩQ− ΩQTΩ−1
+T ΩTQ. (30)
+Now (ΣSc|S)Q has the form
+(ΣSc|S)Q =
+[Σ(i,i|S) Σ(i,j |S)
+Σ(i,j |S) Σ(j,j |S)
+]
+. (31)
+Therefore, comparing oﬀ-diagonal entries in (30), we get
+−Σ(i,j |S)
+Σ(i,i|S)Σ(j,j |S)− Σ(i,j |S)2 = Ωij− ΩiTΩ−1
+T ΩTj. (32)
+We will make use of this last equation to learn the entries of the precision matrix for a
+strongly K-separable graph.
+19
+
+
+--- Page 20 ---
+Soh and Tatikonda
+A.4 Proof of Theorem 11
+Proof If S∗ separates i and j in the edge-truncated graph G−(i,j), this means that there
+exists node sets Ti,Tj⊂W\ S∗, such that
+• Ti∪Tj =W\ S∗ and Ti∩Tj =φ;
+• i∈Ti, j∈Tj;
+• Ωh1h2 = 0, for all h1∈Ti,h 2∈Tj, (h1,h 2)̸= (i,j ).
+This implies that
+ΩiTΩ−1
+T ΩTj =
+[
+ΩiTi 0
+][ΩTi 0
+0 Ω Tj
+]−1[
+0 Ω Tjj
+]
+=
+[
+ΩiTi 0
+]
+[
+Ω−1
+Ti 0
+0 Ω −1
+Tj
+]
+[
+0 Ω Tjj
+]
+= 0 . (33)
+This reduces (32) to
+Ωij = −Σ(i,j |S)
+Σ(i,i|S)Σ(j,j |S)− Σ(i,j |S)2, (34)
+which is the correct output that we want from the algorithm.
+To complete the proof, we need to show that the set Λ 1∪ Λ2∪ Λ3 is non-empty for any
+pair of nodes i andj, and that any element of Λ1∪ Λ2∪ Λ3 separatesi andj inG−(i,j). Let
+Λ0 ={S∈ Γ(i,j) :S separates i and j inG−(i,j)}. (35)
+If Λ 0 = Λ 1∪ Λ2∪ Λ3, by the deﬁnition of a strongly K-separable graph, there exists
+a set S∈ Γi,j such that S separates i and j inG−(i,j). This means that Λ 0 is non-empty,
+and by association, Λ 1∪ Λ2∪ Λ3 is non-empty as well. It also follows that any element of
+Λ1∪ Λ2∪ Λ3 separates i and j inG−(i,j).
+Therefore, it remains to show that Λ 0 = Λ1∪ Λ2∪ Λ3. Suppose S∈ Λ0, that is, S∈ Γi,j
+that separates i and j inG−(i,j). If i is an isolated node in (G−(i,j))Sc, then S∈ Λ3. If j is
+an isolated node in (G−(i,j))Sc, then S∈ Λ2. Suppose i and j are both not isolated nodes.
+Let Ui∈Sc be the set of nodes connected to i by some path in (G−(i,j))Sc including i, and
+letUj∈Sc be the set of nodes connected to j by some path in (G−(i,j))Sc includingj. Since
+i and j are not isolated nodes, both Ui and Uj contains at least two elements. Let h∈Ui
+such that h̸=i. Then Σ(j,h|S∪{i}) = 0 and is faithful since S∪{j} separates h and j
+inG. This implies that S∈ Γj|i. Similarly, S∈ Γi|j. Observe also that
+¯USc\{i}(j)⊆Uj⊆ (Sc\Ui)⊆
+(
+Sc\ ¯USc\{j}(i)
+)
+. (36)
+The ﬁrst relation follows from the fact that ¯USc\{i}(j) contains only the nodes from Uj that
+are connected to j by some path in ( G−(i,j))Sc that does not pass through node i. The
+last relation also follows from a similar argument. The middle relation follows because S
+separates i and j inG−(i,j). This implies that S∈ Λ1. Therefore Λ 0⊆ Λ1∪ Λ2∪ Λ3.
+Now, letS∈ Λ1. For the sake of contradiction, suppose that there is a path in (G−(i,j))Sc
+from i to j. This implies that there is a node h such that
+20
+
+
+--- Page 21 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+• i is connect by a path to h in (G−(i,j))Sc that does not pass through j;
+• j is connect by a path to h in (G−(i,j))Sc that does not pass through i.
+The ﬁrst property is equivalent to there being a path fromi toh in (G−(i,j))Sc\{j}, which is if
+and only if h∈ ¯USc\{j}(i). Similarly, h∈ ¯USc\{i}(j). This implies that h /∈ (Sc\ ¯USc\{j}(i)),
+which means that ¯USc\{i}(j)̸⊆ (Sc\ ¯USc\{j}(i)), which contradictsS∈ Λ1. Therefore, there
+is no path in (G−(i,j))Sc from i to j, which implies that S is a node separator of i and j in
+G−(i,j), that is, S∈ Λ0.
+Next, let S∈ Λ2. This means that S∈ Ψj|i. Suppose that j is connected by a path to
+i in (G−(i,j))Sc. Then there exists a node h on this path such that j is connected to h by
+a path in (G−(i,j))Sc\i that does not pass through i. Therefore, Σ(i,h|S∪{i}) cannot be
+zero and faithful at the same time. This contradicts S∈ Ψj|i, by deﬁnition. Therefore, j is
+not connected by a path to i in (G−(i,j))Sc, which also means that S∈ Λ0. Thus Λ 2⊆ Λ0.
+Similarly, by symmetry Λ3⊆ Λ0. Therefore, Λ 0 = Λ1cupΛ2∪ Λ3.
+Appendix B. Sample Analysis
+B.1 Wishart Distribution
+LetX = (X1,...,X p)∼N (0, Σ). Let x(1),..., x(n) be n independent samples of X. The
+random scatter matrix S follows a Wishart distribution, which depends on parameters Σ,
+p and n. We denote the Wishart distribution by W (Σ,p,n ). For convenience, we denote
+An,Σ = 1
+n∥Σ∥2 (tr(Σ) +∥Σ∥2), (37)
+Bn,Σ = 2
+ntr(Σ). (38)
+We will make use of the following proposition from Zhu (2012) in our sample analysis.
+Proposition 13 LetS∼W (Σ,p,n ). The following inequality
+P
+(
+1
+nS− Σ
+
+2
+≥ϵ
+)
+≤ 2p exp
+{
+− ϵ2
+2An,Σ + 2ϵBn,Σ
+}
+. (39)
+holds for all ϵ≥ 0.
+We can simplify the above proposition to the following form.
+Lemma 14 LetS∼W (Σ,p,n ). Then,
+P
+(
+1
+nS− Σ
+
+2
+≥ϵ
+)
+≤ 2p exp
+{
+− nϵ2
+(2 +C)(p + 1)∥Σ∥2
+2
+}
+. (40)
+for all ϵ∈
+[
+0, C∥Σ∥2
+4
+(
+1 +∥Σ∥2
+tr(Σ)
+)]
+, where C >0 is a constant.
+21
+
+
+--- Page 22 ---
+Soh and Tatikonda
+Proof
+Forϵ∈
+[
+0, C∥Σ∥2
+4
+(
+1 +∥Σ∥2
+tr(Σ)
+)]
+, we have
+2ϵBn,Σ≤ 2Bn,Σ· C∥Σ∥2
+4
+(
+1 +∥Σ∥2
+tr(Σ
+)
+=CAn,Σ. (41)
+Also, since
+tr(Σ)≤p∥Σ∥2, (42)
+we have
+An,Σ≤ 1
+n(p + 1)∥Σ∥2
+2. (43)
+Therefore, applying both (41) and (43), we get
+exp
+{
+− ϵ2
+2An,Σ + 2ϵBn,Σ
+}
+≤ exp
+{
+− ϵ2
+(C + 2)An,Σ
+}
+≤ exp
+{
+− nϵ2
+(2 +C)(p + 1)∥Σ∥2
+2
+}
+, (44)
+as required.
+This inequality provides a bound for the spectral norm of the sample covariance matrix
+with respect to the actual covariance matrix. We however want an entry-wise bound for
+the sample conditional covariance matrix, conditioned on XS, where S⊆{ 1,...,p } =W.
+To do so, we make use of the following proposition from Eaton (2007), which gives us the
+distribution of the sample conditional covariance matrix. Let Sc =W\ S. We deﬁne ˆΣ
+|S
+to be the p−|S| byp−|S| matrix, where
+ˆΣ
+|S
+ij = ˆΣ(i,j |S), (45)
+with ˆΣ(i,j |S) deﬁned by (10).
+Proposition 15 (Eaton (2007)) The conditonal covariance matrixSSc|S follows a Wishart
+distribution with parameters ΣSc|S,p−|S| andn−|S|, that is, SSc|S∼W (ΣSc|S,p−|S|,n−
+|S|).
+Using this fact, we can now provide an element-wise bound for the sample conditional
+covariance.
+Lemma 16 For any i,j ∈W\ S, the sample conditional covariance satisﬁes
+P
+(⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐≥ϵ
+)
+≤ 4 exp
+{
+− (n−|S|)ϵ2
+6λ2max + 4ϵλmax
+}
+, (46)
+for all ϵ≥ 0.
+22
+
+
+--- Page 23 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+Proof The submatrixSS∪{i,j} of the scatter matrix S follows a Wishart distribution with
+parameters ΣS∪{i,j},|S|+2 andn, that is,SS∪{i,j}∼W (ΣS∪{i,j},|S|+2,n ). Let Q ={i,j},
+and let
+ΣQ|S = ΣQ− ΣQSΣ−1
+S ΣSQ. (47)
+By Proposition 15, we have SQ|S∼W (ΣQ|S, 2,n−|S|), where
+SQ|S =SQ−SQSS−1
+S SSQ. (48)
+Applying Proposition ?? toSQ|S, we get
+P
+(
+1
+n−|S|SQ|S− ΣQ|S
+
+2
+≥ϵ
+)
+≤ 4 exp
+{
+− (n−|S|)ϵ2
+2∥ΣQ|S∥2
+(
+tr(ΣQ|S) +∥ΣQ|S∥2
+)
++ 4ϵ(tr(ΣQ|S))
+}
+. (49)
+for all ϵ≥ 0. Using the eigenvalue interlacing properties for the Schur complement and
+submatrices Smith (1992), we have
+λ2
+min≤λ2
+min(ΣQ∪S)≤∥ ΣQ|S∥2
+2≤∥ ΣQ∪S∥2
+2≤∥ Σ∥2
+2 =λmax. (50)
+Also, we have
+tr(ΣQ|S)≤ 2λmax(ΣQ|S)≤ 2λmax. (51)
+This give us the probabilistic bound
+P
+(
+1
+n−|S|SQ|S− ΣQ|S
+
+2
+≥ϵ
+)
+≤ 4 exp
+{
+− (n−|S|)ϵ2
+6λ2max + 4ϵλmax
+}
+. (52)
+for all ϵ≥ 0.
+For any matrix, the maximum of the absolute value of its entries is bounded above by
+the spectral norm. Since ˆΣ(i,j |S) = 1
+n−|S|(SQ|S)ij, we have
+⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐≤
+
+1
+n−|S|SQ|S− ΣQ|S
+
+2
+. (53)
+This gives us,
+P
+(⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐≥ϵ
+)
+≤ P
+(
+1
+n−|S|SQ|S− ΣQ|S
+
+2
+≥ϵ
+)
+, (54)
+which completes the proof.
+Using Lemma 16, we prove the following two useful corollaries.
+Corollary 17 LetS⊂W , with|S|≤ p− 2. Then
+P
+(
+max
+i,j∈Sc
+⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐≥ϵ
+)
+≤ 4(p−|S|)2 exp
+{
+− (n−|S|)ϵ2
+6λ2max + 4ϵλmax
+}
+, (55)
+for all ϵ≥ 0.
+23
+
+
+--- Page 24 ---
+Soh and Tatikonda
+Proof Let Ai,j be the event
+{⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐≥ϵ
+}
+. Then,
+P
+(
+max
+i,j∈Sc
+⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐≥ϵ
+)
+= P
+
+ ⋃
+i,j∈Sc
+Ai,j
+
+. (56)
+Applying the union bound, we get
+P
+
+ ⋃
+i,j∈Sc
+Ai,j
+
+≤
+∑
+i,j∈Sc
+P (Ai,j)≤ 4(p−|S|)2 exp
+{
+− (n−|S|)ϵ2
+6λ2max + 4ϵλmax
+}
+, (57)
+since there are
+(p−|S|
+2
+)
+possible choices of{i,j}.
+Corollary 18 LetK <p− 2. The following inequality
+P
+
+ max
+S⊂W,|S|=K,
+i,j∈Sc
+⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐≥ϵ
+
+≤ 4pK+2 exp
+{
+− (n−K)ϵ2
+6λ2max + 4ϵλmax
+}
+, (58)
+holds for all ϵ≥ 0.
+Proof The proof follows that of Corollary 17, except that the union bound now runs over
+all diﬀerent choices ofi,j , andS, with|S| =K. There are altogether
+(p
+2
+)(p−2
+K
+)
+such choices,
+which gives us the resulting inequality.
+B.2 Proof of Theorem 8
+Proof Instead of the event Υ, we deﬁne a subset of event Υ that is more useful. Let ξ
+be the event that, using S, Algorithm 1 correctly identiﬁes, for all i,j ∈Sc, whether Xi is
+conditionally independent ofXj or not givenXS. If each of these
+(p−|S|
+2
+)
+pairs of conditional
+independence relations are identiﬁed correctly, Algorithm 1 will be able to correctly identify
+whether or not Xu⊥Xv|XS is faithful. Thus, if ξ occurs, Υ occurs as well.
+There are two types of events that occurs in the complement event spaceξc ofξ. The ﬁrst
+event or error, is when Xi⊥Xj|XS, but Algorithm 1 outputs this relation conditionally
+dependent. We name this event ξ(1)
+ij . Thus, the event ξ(1)
+ij occurs when Σ(i,j |S) = 0 but
+|ˆΣ(i,j | S)|≥ α, where ˆΣ(i,j | S) is deﬁned according to (10). The second type of error
+occurs whenXi̸⊥Xj|XS but Algorithm 1 outputs this relation conditionally independent.
+Let this event be ξ(2)
+ij . Event xi(2)
+ij occurs when Σ(i,j |S)̸= 0, but|ˆΣ(i,j |S)|≤ α.
+As a result, we have
+P (ξc) = P
+
+ ⋃
+i,j∈Sc,Xi⊥Xj|XS
+ξ(1)
+ij
+
+ + P
+
+ ⋃
+i,j∈Sc,Xi̸⊥Xj|XS
+ξ(2)
+ij
+
+. (59)
+24
+
+
+--- Page 25 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+We bound the ﬁrst term of the expression on the right hand side of the equation. When
+ξ(1)
+ij occurs for some i and j, we immediately have
+⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐ =
+⏐⏐⏐ˆΣ(i,j |S)
+⏐⏐⏐≥α. (60)
+This gives us the upper bound on the probability
+P
+
+ ⋃
+i,j∈Sc,Xi⊥Xj|XS
+ξ(1)
+ij
+
+≤ P
+(
+max
+i,j∈Sc
+⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐≥α
+)
+. (61)
+Applying Corollary 17, we have
+P
+
+ ⋃
+i,j∈Sc,Xi⊥Xj|XS
+ξ(1)
+ij
+
+≤ 4(p−|S|)2 exp
+{
+− (n−|S|)α2
+6λ2max + 4αλmax
+}
+, (62)
+Since α =β/2, for
+n≥ 24λ2
+max + 8βλmax
+β2
+(
+log 8 + 2 log(p−|S|) + log 1
+ϵ
+)
++|S|, (63)
+we have
+P
+
+ ⋃
+i,j∈Sc,Xi⊥Xj|XS
+ξ(1)
+ij
+
+≤ ϵ
+2. (64)
+The second term is bounded similarly. Since |Σ(i,j |S)|≥ β when Σ(i,j |S)̸= 0, we have
+P
+
+ ⋃
+i,j∈Sc,Xi̸⊥Xj|XS
+ξ(2)
+ij
+
+≤ P
+(
+max
+i,j∈Sc
+⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐≥β−α
+)
+. (65)
+Since β−α =β/2, we again have
+P
+
+ ⋃
+i,j∈Sc,Xi̸⊥Xj|XS
+ξ(2)
+ij
+
+≤ ϵ
+2, (66)
+for n satisfying (63). Substituting equations (64) and (66) into (59), we get
+P (Υ)≥ P (ξ)≥ 1−ϵ, (67)
+as required.
+25
+
+
+--- Page 26 ---
+Soh and Tatikonda
+B.3 Proof of Theorem 10
+Proof The proof follows closely the proof of Theorem 8. In the proof of Theorem 8, the
+separator set S is ﬁxed, and the success of the algorithm is based on correctly deciding
+whether each of the conditional relation betweenXi andXj givenXS is dependent or inde-
+pendent for all i,j ∈Sc. In learning the structure of a weakly K-separable graph however,
+we have to run through various separator sets S and apply our faithfulness algorithm on
+it. This means that if we correctly decide whether Xi and Xj givenXS is conditionally
+dependent or independent for all possible i,j and S, that is suﬃcient for us to correctly
+determineE.
+Instead of applying Corollary 17, we apply Corollary 18, which gives us
+P
+(
+ˆE̸ =E
+)
+≤ϵ, (68)
+for
+n≥ 24λ2
+max + 8βλmax
+β2
+(
+log 8 + (K + 2) logp + log 1
+ϵ
+)
++K. (69)
+B.4 Proof of Theorem 12
+Lemma 19 Let i and j be separate nodes in W and let S separatei and j in the graph
+G−(i,j). Let L< 1 be a positive constant, and let
+ϵ∈
+(
+0,Lλ2
+min + 2λmax(1 + 2λmax)
+(1−L)Lλ4
+min
+· min
+{
+1, Lλ2
+min
+2(1 + 2λmax)
+}]
+. (70)
+Also, deﬁne
+δ = (1−L)Lλ4
+min
+Lλ2
+min + 2λmax(1 + 2λmax)·ϵ. (71)
+If we have
+⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐,
+⏐⏐⏐ˆΣ(i,i|S)− Σ(i,i|S)
+⏐⏐⏐,
+⏐⏐⏐ˆΣ(j,j |S)− Σ(j,j |S)
+⏐⏐⏐≤δ, (72)
+then ⏐⏐⏐ˆΩij− Ωij
+⏐⏐⏐≤ϵ. (73)
+Proof For convenience, we denote Σ(i,j | S), Σ(i,i | S), and Σ(j,j | S) by a,b, and c.
+We will also denote ˆΣ(i,j | S),ˆΣ(i,i | S), and ˆΣ(j,j | S) by ˆa,ˆb, and ˆc. Let D be the
+determinantbc−a2 and let ˆD = ˆbˆc− ˆa2. Rewriting (72), we have
+max
+{
+|ˆa−a|,|ˆb−b|,|ˆc−c|
+}
+≤δ. (74)
+26
+
+
+--- Page 27 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+We ﬁrst bound| ˆD−D|. We have
+| ˆD−D| = |(ˆbˆc− ˆa2)− (bc−a2)|
+≤ |ˆbˆc−bc| +|ˆa2−a2| (75)
+The ﬁrst term is bounded by
+|ˆbˆc−bc| = |(ˆb−b)(ˆc−c) +c(ˆb−b) +b(ˆc−c)|
+≤ δ2 +|c|δ +|b|δ
+≤ δ(1 + 2λmax), (76)
+where in the last inequality, we make use of the condition that δ≤ 1, which is derived from
+(70) and (71), and the bound on the matrix entries
+max{|a|,|b|,|c|}≤∥ ΣQ|S∥2≤∥ Σ∥2 =λmax. (77)
+We can then bound the second term |ˆa−a| similarly, which gives us
+| ˆD−D|≤ 2δ(1 + 2λmax). (78)
+From (70), we have
+δ≤ Lλmin2
+2(1 + 2λmax), (79)
+which give us
+| ˆD|≥| D|− Lλ2
+min≥ (1−L)|D|, (80)
+where the last inequality follows from the fact that the two eigenvalues of ΣQ|S are both
+bounded below by λmin by the eigenvalue interlacing property.
+We are now ready to establish the upper bound for |ˆΩij− Ωij|. We have
+|ˆΩij− Ωij| =
+⏐⏐⏐⏐
+ˆa
+ˆD
+− a
+D
+⏐⏐⏐⏐
+= |ˆaD−a ˆD|
+| ˆD||D|
+≤ |D||ˆa−a| +|a|| ˆD−D|
+| ˆD||D|
+≤ 1
+(1−L)|D|
+(
+δ + |a|
+L|D|· 2δ(1 + 2λmax)
+)
+≤ 1
+(1−L)λ2
+min
+(
+δ + λmax
+Lλ2
+min
+· 2δ(1 + 2λmax)
+)
+. (81)
+Substituting δ from (70), we get
+|ˆΩij− Ωij|≤ ϵ, (82)
+which is the result of this lemma.
+27
+
+
+--- Page 28 ---
+Soh and Tatikonda
+We are now ready to prove Theorem 12.
+Proof We again deﬁne δ according to (71), which can be rewritten as
+δ = ϵ
+C1
+. (83)
+Applying Lemma 19, we have
+P
+
+ max
+i,j∈W,i̸=j,
+S∈Λ0(i,j)
+|ˆΩij− Ωij|≥ ϵ
+
+≤ P
+
+ max
+S⊂W,|S|=K,
+i,j∈Sc
+⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐≥δ
+
+, (84)
+for
+ϵ∈
+(
+0,C 1· min
+{
+1, Lλ2
+min
+2(1 + 2λmax)
+}]
+. (85)
+Using the result of Corollary 18, we have
+P
+
+ max
+S⊂W,|S|=K,
+i,j∈Sc
+⏐⏐⏐ˆΣ(i,j |S)− Σ(i,j |S)
+⏐⏐⏐≥δ
+
+≤ 4pK+2 exp
+{
+− (n−K)δ2
+6λ2max + 4δλmax
+}
+. (86)
+Combining the domains for ϵ, we get the result.
+References
+A. Anandkumar, V. Y. F. Tan, F. Huang, and A. S. Willsky. High-dimensional gaussian graphical
+model selection: walk-summability and local separation criterion. J. Machine Learning Research,
+13:2293–2337, Aug 2012.
+A. Becker, D. Geiger, and C. Meek. Perfect tree-like markovian distributions. Probability and
+Mathematical Statistics, 25(2):231–239, 2005.
+E. Belilovskym, G. Varoquaux, and M. B. Blaschko. Testing for diﬀerences in gaussian graphi-
+cal models: Applications to brain connectivity. In Advances in Neural Information Processing
+Systems, Dec 2016.
+F. Cicalese and M. Melani˘ c. Graphs of separability at most 2. Discrete Applied Mathematics , 160
+(6):685–696, April 2012.
+O. Dalal and B. Rajaratnam. Sparse gaussian graphical model estimation via alternating minimiza-
+tion. Biometrika, 104(2):379–395, 2017.
+R. Durbin, S. R. Eddy, A. Krogh, and G. Mitchison. Biological Sequence Analysis: Probabilistic
+Models of Proteins and Nucleic Acids . Cambridge University Press, 1999.
+M. L. Eaton. Multivariate Statistics: A Vector Space Approach . Wiley, 2007.
+S. Epskamp, L. J. Waldorp, R. M˜ ottus, and D. Borsboom. The gaussian graphical model in cross-
+sectional and time-series data. Multivariate Behavioral Research, pages 1–28, 2018.
+28
+
+
+--- Page 29 ---
+Learning Unfaithful K-separable Gaussian Graphical Models
+M. Frydenberg. Marginalisation and collapsibility in graphical interaction models. Annals of Statis-
+tics, 18:790–805, 1990.
+M. Isard. Pampas: real-valued graphical models for computer vision. In IEEE Computer Society
+Conference on Computer Vision and Pattern Recognition , Jun 2003.
+G. Kauermann. On a dualization of graphical gaussian models. Scandinavian Journal of Statistics ,
+23(1):105–116, 1996.
+P. Koldanov, A. Koldanov, V. Kalyagin, and P. Pardalos. Uniformly most powerful unbiased test
+for conditional independence in gaussian graphical model. Statistics and Probability Letters, 122:
+90–95, 2017.
+S. L. Lauritzen. Graphical models. Oxford University Press, New York, 1996.
+F. Liang, Q. Song, and P. Qiu. An equivalent measure of partial correlation coeﬃcients for high-
+dimensional gaussian graphical models. Journal of the American Statistical Association , 110:
+1248–1265, 2015.
+S. Lin, C. Uhler, B. Sturmfels, and P. B¨ uhlmann. Hypersurfaces and their singularities in partial
+correlation testing. Preprint.
+D. Malouche and B. Rajaratnam. Gaussian covariance faithful markov trees. Technical report,
+Department of Statistics, Stanford University , 2009.
+C. Meek. Strong completeness and faithfulness in bayesian networks. In Proceedings of the eleventh
+international conference on uncertainty in artiﬁcial intelligence , 1995.
+N. Meinshausen and P. B¨ uhlmann. High dimensional graphs and variable selection with the lasso.
+Annals of Statistics , 34(3):1436–1462, 2006.
+K. Mohan, M. J. Chung, S. Han, D. Witten, S. Lee, and M. Fazel. Structured learning of gaussian
+graphical models. In Advances in Neural Information Processing Systems , Dec 2012.
+J. Pearl. Probabilistic Reasoning in Intelligent Systems . Morgan Kaufmann, 1988.
+P. Ravikumar, M. J. Wainwright, G. Raskutti, and B. Yu. High dimensional covariance estimation by
+minimizingℓ-1 penalized log-determinant divergence. Electronic Journal in Statistics , 4:935–980,
+2011.
+Z. Ren, T. Sun, C. Zhang, and H. Zhou. Asymptotic normality and optimalities in estimation of
+large gaussian graphical model. Annals of Statistics , 43(3):991–1026, 2015.
+S. Ryali, T. Chen, K. Supekar, and V. Menon. Estimation of functional connectivity in fmri data
+using stability selection-based sparse partial correlation with elastic net penalty. Neuroimage, 59
+(4):3852–3861, February 2012.
+K. Sadeghi. Faithfulness of probability distributions and graphs. Journal of Machine Learning
+Research, 18(148):1–29, 2017.
+L. Smith. Some interlacing properties of schur complement of a hermitian matrix. Linear Algebra
+Appl., 177:137–144, 1992.
+P. Spirites, C. Glymore, and R. Scheines. Causation, prediction and search . Springer Verlag, New
+York, 1993.
+29
+
+
+--- Page 30 ---
+Soh and Tatikonda
+E. B. Sudderth. Graphical Models for Visual Object Recognition and Tracking . PhD thesis, Mas-
+sachusetts Institute of Technology. Dept. of Electrical Engineering and Computer Science, 2006.
+C. Uhler, G. Raskutti, P. B¨ uhlmann, and B. Yu. Geometry of faithfulness assumption in causal
+inference. Annals of Statistics , 41:436–463, 2013.
+W. N. van Wieringen, C. F. W. Peeters, R. X. de Menezes, and M. A. van de Wiel. Testing for
+pathway (in)activation by using gaussian graphical models. Journal of Royal Statistical Society ,
+2018.
+M. J. Wainwright and M. I. Jordan. Graphical models, exponential families, and variational infer-
+ence. Foundations and Trends in Machine Learning , 1(1-2):1–305, 2008.
+J. Whittaker. Graphical Models in Applied Multivariate Statistics . Wiley, 1990.
+R. Wu, R. Srikant, and J. Ni. Learning loosely connected markov random ﬁelds. Stochastic Systems,
+3, 2013.
+S. Zhu. A short note on the tail bound of wishart distribution. ArXiv e-prints , arXiv:1212.5860,
+2012.
+30

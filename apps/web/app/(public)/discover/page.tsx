@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { PublicWorkCard } from "../../components/public-work-card";
+import { WorkCard } from "../../components/work-card";
 import {
   browseProblemAreaWorks,
   getScholarlyObjects,
@@ -27,6 +27,7 @@ type PageProps = {
 const statusOptions = [
   ["", "Any audit status"],
   ["unaudited", "Unaudited"],
+  ["registered-for-audit", "Registered for audit"],
   ["elementreviews-submitted", "ElementReviews submitted"],
   ["in-synthesis", "In synthesis"],
   ["audit-report-available", "Audit report available"],
@@ -41,13 +42,16 @@ const sortOptions = [
   ["uptake", "Uptake"],
 ] as const;
 
+/// The consumption surface: search + criterion/status/sort filters over the
+/// registry card grid. Criterion filtering is domain-scoped (the active
+/// domain's CWE nodes), not hard-coded.
 export default async function DiscoverPage({ searchParams }: PageProps) {
   const { criterion, q, sort, status } = await searchParams;
   const query = q?.trim() ?? "";
   const criterionId = criterion?.trim() ?? "";
   const selectedStatus = status?.trim() ?? "";
   const selectedSort = sortOptions.some(([value]) => value === sort)
-    ? sort ?? "recent"
+    ? (sort ?? "recent")
     : "recent";
   const [cweNodes, objects] = await Promise.all([
     getAcademicCweNodes(),
@@ -64,126 +68,131 @@ export default async function DiscoverPage({ searchParams }: PageProps) {
       }
 
       return (
-        slug(publicAuditStatusLabel(group.primaryVersion, summaries.get(group.primaryVersion.id))) ===
-        selectedStatus
+        slug(
+          publicAuditStatusLabel(
+            group.primaryVersion,
+            summaries.get(group.primaryVersion.id),
+          ),
+        ) === selectedStatus
       );
     }),
     selectedSort,
     summaries,
   );
   const selectedNode = cweNodes.find((node) => node.id === criterionId) ?? null;
+  const withReports = filteredGroups.filter(
+    (group) =>
+      (summaries.get(group.primaryVersion.id)?.synthesisReviewCount ??
+        group.synthesisReviewCount) > 0,
+  ).length;
 
   return (
-          <section className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">Public Discover</p>
-            <h1>Discover Scholarly Works</h1>
-          </div>
-          <Link className="status-pill" href="/intake">
-            Search / register missing work
-          </Link>
-        </header>
+    <>
+      <header className="pub-page-head">
+        <div>
+          <p className="pub-kicker">Discover</p>
+          <h1>{query ? `Results for “${query}”` : "Discover Scholarly Works"}</h1>
+          <p>
+            Browse and search public audit subjects. Every result links to a
+            full audit record.
+          </p>
+        </div>
+        <Link className="secondary-action" href="/register">
+          Register a missing work
+        </Link>
+      </header>
 
-        <form className="retrieval-form discover-form" action="/discover">
-          <label htmlFor="discover-query">Search</label>
-          <div className="retrieval-controls">
-            <input
-              defaultValue={query}
-              id="discover-query"
-              name="q"
-              placeholder="Title, DOI, arXiv, PubMed, author, venue, or keyword"
-              type="search"
+      <form action="/discover" className="pub-filterbar">
+        <label>
+          Search
+          <input
+            defaultValue={query}
+            name="q"
+            placeholder="Title, DOI, arXiv, PubMed, author, venue, or keyword"
+            type="search"
+          />
+        </label>
+        <label>
+          Criterion
+          <select defaultValue={criterionId} name="criterion">
+            <option value="">Any criterion</option>
+            {cweNodes.map((node) => (
+              <option key={node.id} value={node.id}>
+                {node.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Audit status
+          <select defaultValue={selectedStatus} name="status">
+            {statusOptions.map(([value, label]) => (
+              <option key={value || "any"} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Sort by
+          <select defaultValue={selectedSort} name="sort">
+            {sortOptions.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit">Apply</button>
+        {selectedNode ? (
+          <p className="pub-filter-note">
+            Filtering by criterion: {selectedNode.label} —{" "}
+            <Link href="/criteria">about the criteria</Link>
+          </p>
+        ) : null}
+      </form>
+
+      <div className="pub-stat-strip" aria-label="Discover metrics">
+        <span>
+          <strong>{filteredGroups.length}</strong> matching works
+        </span>
+        <span>
+          <strong>{withReports}</strong> with public reports
+        </span>
+        <span>
+          <strong>{cweNodes.length}</strong> criteria in the active domain
+        </span>
+      </div>
+
+      {filteredGroups.length === 0 ? (
+        <div className="pub-empty">
+          <h3>No public audit subjects found</h3>
+          <p>
+            Try a broader query, clear the criterion filter, or{" "}
+            <Link href={`/register${query ? `?q=${encodeURIComponent(query)}` : ""}`}>
+              register a missing scholarly work
+            </Link>
+            .
+          </p>
+        </div>
+      ) : (
+        <div className="pub-grid">
+          {filteredGroups.map((group) => (
+            <WorkCard
+              group={group}
+              key={group.id}
+              summary={summaries.get(group.primaryVersion.id) ?? null}
             />
-            <button type="submit">Discover</button>
-          </div>
-          <div className="filter-grid">
-            <label htmlFor="criterion-filter">
-              <span>CRWE criterion</span>
-              <select defaultValue={criterionId} id="criterion-filter" name="criterion">
-                <option value="">Any criterion</option>
-                {cweNodes.map((node) => (
-                  <option key={node.id} value={node.id}>
-                    {node.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label htmlFor="status-filter">
-              <span>Audit status</span>
-              <select defaultValue={selectedStatus} id="status-filter" name="status">
-                {statusOptions.map(([value, label]) => (
-                  <option key={value || "any"} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label htmlFor="sort-filter">
-              <span>Sort by</span>
-              <select defaultValue={selectedSort} id="sort-filter" name="sort">
-                {sortOptions.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </form>
-
-        <section className="metric-grid" aria-label="Discover metrics">
-          <div className="metric">
-            <span>Matching works</span>
-            <strong>{filteredGroups.length}</strong>
-          </div>
-          <div className="metric">
-            <span>Selected CRWE</span>
-            <strong>{selectedNode ? "1" : cweNodes.length}</strong>
-          </div>
-          <div className="metric">
-            <span>With reports</span>
-            <strong>
-              {
-                filteredGroups.filter(
-                  (group) =>
-                    (summaries.get(group.primaryVersion.id)?.synthesisReviewCount ??
-                      group.synthesisReviewCount) > 0,
-                ).length
-              }
-            </strong>
-          </div>
-        </section>
-
-        <section className="object-list" aria-label="Discover results">
-          {filteredGroups.length === 0 ? (
-            <div className="empty-state">
-              <h2>No public audit subjects found</h2>
-              <p>
-                Try a broader query, clear the CRWE filter, or register a missing
-                scholarly work.
-              </p>
-            </div>
-          ) : (
-            filteredGroups.map((group) => (
-              <PublicWorkCard
-                group={group}
-                key={group.id}
-                summary={summaries.get(group.primaryVersion.id) ?? null}
-              />
-            ))
-          )}
-        </section>
-      </section>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 
 async function getDiscoverObjects(query: string, criterionId: string) {
   if (criterionId) {
-    const works = await browseProblemAreaWorks({
-      cweNodeId: criterionId,
-      query,
-    });
+    const works = await browseProblemAreaWorks({ cweNodeId: criterionId, query });
 
     return works.map((work) => work.scholarly_object);
   }
@@ -240,5 +249,8 @@ function latestActivityTime(value: string | undefined) {
 }
 
 function slug(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 }

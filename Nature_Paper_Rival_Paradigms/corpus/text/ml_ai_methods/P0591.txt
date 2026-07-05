@@ -1,0 +1,2382 @@
+Published in Transactions on Machine Learning Research (11/2022)
+An approximate sampler for energy-based models with di-
+vergence diagnostics
+Bryan Eikema∗ b.eikema@uva.nl
+University of Amsterdam
+Germán Kruzsewski german.kruzsewski@naverlabs.com
+NA VER Labs Europe
+Christopher Dance christopher.dance@naverlabs.com
+NA VER Labs Europe
+Hady Elsahar† hadyelsahar@meta.com
+Meta AI
+Marc Dymetman† marc.dymetman-contractor@naverlabs.com
+Independent researcher
+Reviewed on OpenReview: https: // openreview. net/ forum? id= VW4IrC0n0M
+Abstract
+Energy-based models (EBMs) allow flexible specifications of probability distributions. How-
+ever, sampling from EBMs is non-trivial, usually requiring approximate techniques such as
+Markov chain Monte Carlo (MCMC). A major downside of MCMC sampling is that it is
+often impossible to compute the divergence of the sampling distribution from the target
+distribution: therefore, the quality of the samples cannot be guaranteed. Here, we intro-
+duce quasi-rejection sampling (QRS), a simple extension of rejection sampling that performs
+approximate sampling, but, crucially, does providedivergence diagnostics (in terms off-
+divergences, such as KL divergence and total variation distance). We apply QRS to sampling
+from discrete EBMs over text for controlled generation. We show that we can sample from
+such EBMs with arbitrary precision in exchange for sampling efficiency and quantify the
+trade-off between the two by means of the aforementioned diagnostics.1
+1 Introduction
+Generating samples from a probabilistic model is a fundamental part of many machine learning tasks.
+Sometimes, the relation between the probabilistic model and the associated generative process is direct: for
+instance, in language modelling, an autoregressive model can both generate a sequence by ancestral sampling
+and compute its probability. However, the simplicity of sampling in such models often comes at the cost
+of expressivity. A family of models with much greater representational freedom is the family ofenergy-
+based models(EBMs) (LeCun et al., 2006). Such models map elementsx of the sample space to real-valued
+“energies” E(x), or, equivalently, to non-negative scoresP (x) = e−E(x) which can be seen as unnormalized
+probability distributions. However, EBMs can be difficult to sample from.
+∗Work done during an internship at NAVER Labs Europe.
+†Work done at NAVER Labs Europe.
+1To access the code for this work (scheduled for release in Jan. 2023) and for a short introductory video, please go to
+https://disco.europe.naverlabs.com/QRS.
+1
+Published in Transactions on Machine Learning Research (11/2022)
+x∼q
+accept
+reject
+P
+Pβ
+βq
+speed quality
+Figure 1: Quasi-rejection sam-
+pling (QRS) approximates a tar-
+get distributionP with a truncated
+distribution Pβ (the blue shaded
+area). This QRS distribution is de-
+fined in terms of a global proposal
+distribution q and a scalar param-
+eter β that controls the quality of
+the approximation.
+In this paper, we address the problem of sampling from EBMs (as in
+“obtaining samples” and not just computing expectations, which is an-
+other popular but different problem), with a particular focus on discrete
+spaces of sequences over a finite vocabulary, and study applications to
+text generation. A popular approach to sampling from complex, unnor-
+malized, probability distributions, such as EBMs, consists in applying
+Markov chain Monte Carlo (MCMC) techniques, which are guaranteed
+to converge to the target distribution in the limit, under mild regularity
+conditions (Robert and Casella, 2004). In practice, however, the length of
+the Markov chain is finite, in which case often onlyapproximate samples
+are obtained. In order to know whether the samples are representative
+of the target distribution, ideally, one shouldquantify the divergenceof
+the MCMC sampling distribution from the target distribution in terms of
+well-established metrics (e.g. total variation distance or KL divergence).
+Unfortunately, evaluating convergence is often challenging (Cowles and
+Carlin, 1996; Roy, 2020), especially if one makes no assumptions about the sample space. For instance, pop-
+ular convergence assessments such as effective sample size (ESS) (Gamerman and Lopes, 2006) orˆR (Gelman
+and Rubin, 1992; Vehtari et al., 2021) require Euclidean structure for computing variances and correlations
+of real-valued variables (or vectors in multivariate generalizations; Vats et al., 2019; Brooks and Gelman,
+1998), which are not intrinsically defined ondiscrete spaces only endowed with a probabilistic structure.
+For this reason, prior work on sampling from discrete sequence spaces often relies on proxy metrics (such
+as perplexity, diversity metrics and constraint satisfaction). Such proxies are typically insufficient to assess
+how representative the samples are of the target distribution, and can be misleading.
+In this paper, we introduce a simple approximate sampling technique, quasi-rejection sampling (QRS),
+which provides explicit estimates of the divergence from the target distribution for the general class off-
+divergences, which includes the total variation distance (TVD), forward and reverse KL, Jensen-Shannon,
+and χ2-divergence (Polyanskiy, 2019). This is possible because QRS associates explicit probabilityscores
+with samples: a property generally lacking in MCMC samplers. One may use such divergence estimates to
+tune the sampler, controlling the trade-off between efficiency (acceptance rate) and quality (divergence).
+QRS is a relaxation of rejection sampling that obtains approximate samples from a target distribution (see
+Fig. 1). This requires access to aglobal proposal distribution that, ideally, produces samples close to the
+target distribution. Traditionally, MCMC methods work with local proposals (conditional distributions
+defined around a given point, for instance a distribution defined by performing a set of local edits), since
+high-quality global proposals have been hard to construct. Fortunately, with the advent of powerful neural
+network training techniques, this situation is rapidly changing and obtaining powerful global proposals is
+now possible as we show in our experiments.
+We demonstrate the effectiveness of QRS on controlled text generation. Large pre-trained language models
+are becoming increasingly useful general purpose tools andgeneration is typically accomplished by sampling
+(Nadeem et al., 2020). Controlling the distribution of these language models to accommodate human prefer-
+ences can be difficult, but EBMs are a promising way to achieve this (Khalifa et al., 2021). However, sampling
+from EBMs defined over a discrete sequence space is non-trivial, making it a challenging task to benchmark
+QRS. In this paper, we experiment with EBMs resulting from restricting a GPT-2 language model (Radford
+et al., 2019) in some way: either the model is restricted to only generate sequences containing a specific term;
+or the model is restricted to have certain moments, for example debiasing a distribution over biographies to
+consist of 50% female biographies. We explore a variety of ways to construct proposal distributions for QRS.
+In particular, we explore prompting a pre-trained language model, as well as training an autoregressive model
+to approximate the EBM (Khalifa et al., 2021). In App. B, we also experiment with a paraphrase generation
+task in which we use off-the-shelf machine translation models as conditional proposal distributions. Results
+show that we are able to approximate the target distributions to any desired level in exchange for sampling
+efficiency. Finally, we include experimental comparisons with both local (random-walk) and global MCMC
+methods, showing that QRS performs comparably or better, while providing stronger guarantees.2
+2We will release the code for our experiments upon publication.
+2
+Published in Transactions on Machine Learning Research (11/2022)
+We summarize our main contributions as follows:
+• We introduce QRS, a relaxation of rejection sampling that produces approximate samples and, in
+contrast to most existing approximate sampling techniques, provides estimates of sampling quality
+in the form off-divergences.
+• We prove two theorems about QRS: one provides an upper bound on the TVD between the target
+and QRS distributions; the second shows thef-divergence is a monotonic function of QRS’s tuning
+parameter β. We also exploit the data-processing inequality to at least provide a lower bound on
+the divergence of MCMC samplers and compare it to the precise divergence estimate for QRS.
+• We show in experiments on text generation how QRS is able to approximate the target EBMs to
+any desired level of accuracy in exchange for sampling efficiency.
+• We show how to construct efficient global proposal distributions for text generation making use of
+recent advances in large language models: prompting, training objectives for approximating EBMs,
+and the widespread availability of pre-trained sequence models.
+• We compare QRS with both local and global variants of Metropolis-Hastings, and show that QRS
+outperforms local variants, while performing on par with global variants, according to proxy metrics.
+We show, however, how proxy metrics can fail to reliably estimate the divergence from the target
+EBM, a quantity typically not available to MCMC.
+2 Formal Approach
+Our general problem is the following. We consider a discrete (i.e. countable) sample spaceX. We are
+given a nonnegative real function — such as an EBM —P (x) over X, such that the partition function
+Z .= ∑
+x∈XP (x) is strictly positive and finite. We can then associate with P a normalized probability
+distribution p(x) .= P (x)/Z. Our goal is to define a “sampler”ω, that is a generator of elements fromX,
+such thatω produces a samplex with a probabilityω(x) as close as possible to our targetp(x), in terms
+of distance measures such as KL divergenceDKL(p,ω ) and total variation distanceTVD(p,ω ), and more
+generally the large family off-divergences (Liese and Vajda, 2006), which we discuss later. To help us
+achieve this goal, we assume that we have at our disposal aglobal proposal distributionq(x) such that i) we
+can effectively computeq(x) (i.e. scorex) for anyx∈X, ii) we can efficiently generate samples fromq, and
+iii)p is absolutely continuous relative toq (denoted byp≪q), in other words the support ofq includes the
+support ofp, i.e.p(x)> 0 ⇒ q(x)> 0.
+2.1 Quasi-rejection sampling (QRS)
+Our proposed sampling method, QRS, is given as Algorithm 1.
+Algorithm 1 QRS
+1: Require: TargetP, proposalq, parameterβ, number of required samplesN {0<β <∞}
+2: n← 0
+3: while n<N do
+4: x∼q
+5: rx← min (1,P (x)/(βq(x))) {Acceptance prob.}
+6: u∼U[0,1] {U[0,1] : unif. dist. over[0, 1]}
+7: if u≤rx then
+8: output x
+9: n←n + 1
+10: end if
+11: end while
+In addition toP and q, QRS requires the input of a finite positive numberβ. For a given β, the QRS
+sampler, which we will denote bypβ, produces an independent and identically distributed (i.i.d.) sequence of
+3
+Published in Transactions on Machine Learning Research (11/2022)
+valuesx (line 8), with a probability mass function that we denote bypβ(x).3 Ifβ is a global upper bound on
+P (x)/q(x), then the behaviour of the QRS algorithm is identical of that of the classical rejection sampling
+(RS) algorithm (von Neumann, 1963).However, QRS does not requireβ to be an upper bound, and the
+acceptance probabilityrx in line 5 is an extension of that used in RS to situations whereP (x)>βq (x). In
+such situations, the samplex is always accepted at line 7.
+QRS has crucial practical advantages over RS. It is well known that for rejection sampling, withβ a finite
+global upper bound, we havepβ =p: in other words, rejection sampling is aperfect sampler forp (Robert
+and Casella, 2004). This is of course a major advantage, however it comes with serious theoretical and
+practical limitations: there may not exist such a finite upper bound, and even if one exists, its value may
+not be known. Furthermore, even if such a bound could be found, the resulting sampler could be extremely
+inefficient: the “acceptance rate” of rejection sampling is proportional to1/β, which can be very small. By
+relaxing the requirement thatβ is a global upper bound, QRS sacrifices the identity betweenpβ and p.
+However, QRS becomes much more broadly applicable, and crucially, allows an explicit trade-off between
+the samplingefficiency of pβ and itsquality.
+2.2 Explicit f-divergence diagnostics for QRS
+Let f : (0,∞)→ R be a convex function such thatf(1) = 0, letf(0) .= limt↓0f(t), and letp1 and p2 be
+probability distributions over a discrete sample spaceX. Thef-divergence ofp1 fromp2 is defined as
+Df(p1,p 2) .= Ex∼p2f
+(p1(x)
+p2(x)
+)
++f′(∞) p1(p2 = 0), (1)
+where p1(p2 = 0) denotes thep1-mass of the set{x∈ X : p2(x) = 0}, and wheref′(∞) .= limt↓0t f(1/t).
+Here the convention is that ifp1(p2 = 0) = 0 , the product f′(∞) p1(p2 = 0) is taken to be equal to0,
+whatever the (possibly infinite) value off′(∞) (Polyanskiy, 2019).4
+Unless mentioned otherwise, we will always assume in the rest of the paper thatp1≪ p2, in other words
+that p1(p2 = 0) = 0, so that the previous definition simplifies to
+Df(p1,p 2) .= Ex∼p2f
+(p1(x)
+p2(x)
+)
+. (2)
+The family off-divergences enjoys a number of remarkable properties,5 and contains many standard methods
+for measuring differences between probability distributions (Polyanskiy, 2019; Liese and Vajda, 2006). In
+our experiments, we mainly work with the total variation distanceTVD(p1,p 2) .=∑
+x∈X|p1(x)−p2(x)|/2,
+obtained withf(x) =|1−x|/2, and KL divergenceDKL(p1,p 2) .=∑
+x∈Xp1(x) logp1(x)
+p2(x), which hasf(x) =
+x logx.
+Explicit form for pβ and f-divergence estimation Let Pβ(x) .= min(P (x),βq (x)), and let Zβ
+.=∑
+x∈XPβ(x) be the associated partition function. Also, define theacceptance rateARβ of the QRS sampler
+pβ as the proportion of samples fromq, in line 4 of the algorithm, that are accepted on line 7, a proportion
+that provides a measure of the efficiency of the algorithm. We then have the following properties, proved in
+App. D:
+pβ(x) = min(P (x),βq (x))/Zβ =Pβ(x)/Zβ, (3)
+ARβ = Ex∼q min(1,P (x)/(βq(x))) =Zβ/β. (4)
+Eq. 3 provides an explicit form forpβ as the normalized distribution associated withPβ, while Eq. 4 shows
+that the acceptance rate is a nonincreasing function of parameterβ.
+3This involves some abuse of notation, aspβ refers to both a sampler and a distribution that “scores” elements ofX.
+4Both f(0) .= limt↓0f(t) and f′(∞) .= limt↓0t f(1/t) can be shown to exist for a convex functionf with domain (0,∞), if
+we allow these limits to take the value+∞ (Hiriart-Urruty and Lemaréchal, 1996).
+5In particularDf (p1,p 2)≥ 0, and, forf strictly convex att = 1, Df (p1,p 2) = 0 iff p1 = p2. Also, we haveDf (p1,p 2) =
+D ˜f (p2,p 1), where ˜f(t) .= t f(1/t) is another convex function with ˜f(1) = 0 known as the perspective of f (Remark 7.2
+Polyanskiy, 2019).
+4
+Published in Transactions on Machine Learning Research (11/2022)
+This explicit form given in Eq. 3 enables us to directly compute empirical estimates of thef-divergence of
+the target frompβ. It is easy to see that, under our assumption at the beginning of the section thatp≪q,
+we have bothp≪pβ and pβ≪p and in particular we can write
+Df(p,pβ) = Ex∼pβf
+(p(x)
+pβ(x)
+)
+. (5)
+Crucially, to estimate this quantity given a collection of samples frompβ we need to compute (or at least
+approximate) the two valuesp(x) and pβ(x) for any givenx. And this is something that wecan do with
+QRS thanks to the explicit form ofpβ of Eq. 3 and given that we can estimate the partition functionsZ
+and Zβ — see Eqs. 6 and 7 below.
+The contrast here with a typical Markov chain based samplerω is striking: it is usually unfeasible to
+estimate the probabilityω(x) for a givenx (even one sampled fromω): to do so, one might estimate the
+chain’s transition matrix or kernel, and repeatedly multiply by it, but this matrix is usually huge, or even
+infinite. In other words, unlike QRS, these samplers are not “scorers”, making it impractical to estimate
+f-divergencesDf(p,ω ) as in Eq. 5.
+Divergence estimates via importance sampling Computing divergences as described above requires
+obtaining a different set of samples for every value ofβ. More conveniently, one can use asingle collection
+{x1,...,x N} of i.i.d. draws fromq and use importance sampling (IS) (Owen, 2013) to compute such quan-
+tities. Let h be a real-valued function onX, such that∑
+x∈Xh(x) is well defined (it may be infinite) and
+let q(x) = 0 ⇒ h(x) = 0. Then we can then rewrite∑
+x∈Xh(x) = ∑
+x∈X:q(x)>0q(x) h(x)
+q(x) = Ex∼q
+h(x)
+q(x) ≃
+N−1∑N
+i=1
+h(xi)
+q(xi), to compute:
+Z≃N−1
+N∑
+i=1
+P (xi)
+q(xi), Z β≃N−1
+N∑
+i=1
+Pβ(xi)
+q(xi) , (6)
+Df(p,pβ)≃N−1
+N∑
+i=1
+Pβ(xi)
+Zβq(xi) f
+(Zβ P (xi)
+Z Pβ(xi)
+)
+. (7)
+In Eq. 7, we exploit the fact thatPβ(x) = min(P (x),βq (x)) is known explicitly.
+More details are provided in App. E about how Eq. 7 specializes in the case of TVD and KL divergences,
+the measures we use in our experiments. There, we also describe the IS formulas we use for estimating the
+acceptance rate ARβ, the expected valueEx∼pβh(x) of a functionh expressing a constraint, as well as the
+probabilityp( ¯Aβ) (see next paragraph).
+Remark about partition function estimates As the sample mean is an unbiased estimator of the
+mean, the estimates in Eq. 6 are unbiased. These estimates converge (almost surely) to Z and Zβ for
+N→∞ , a consequence of the strong law of large numbers (Tao, 2008), whether or not the random variables
+(RVs) P(x)
+q(x) and Pβ(x)
+q(x) have finite variances. However, in order to provide guarantees about the accuracy of
+these estimates — e.g. in terms of confidence bounds — one would need to estimate these variances, or their
+(1 +α)-moment for someα >0 as discussed by Lugosi and Mendelson (2019, p. 8). Apractical approach
+consists in providingempirical variance estimates based on the sameN samples, and this is what we will
+do in several experiments (see Sec. 3), comforting us about thepractical accuracy of our estimates ofZ
+and Zβ. However, in theory, the empirical variance estimates could themselves be wrong, resulting in an
+estimation circularity. The only way to avoid this circularity, that we are aware of, consists in cases where
+the RVs P(x)
+q(x) and Pβ(x)
+q(x) can be bounded a priori, in which cases the variances of these RVs can also be
+formally bounded using Popoviciu’s inequality (Popoviciu, 1935) or, more aggressively, confidence intervals
+produced through Hoeffding’s inequality (Hoeffding, 1994), so that confidence bounds forZ and Zβ can be
+obtained. Interestingly, the random variablePβ(x)
+q(x) = min(P (x)/q(x),β )≤β appearing inZβ is boundedby
+construction, so that one can always provide formal guarantees about theZβ estimate. By contrast, in the
+case ofZ, while one can often find proposalsq for which a bound onP(x)
+q(x) is known, such proposals can be
+5
+Published in Transactions on Machine Learning Research (11/2022)
+unacceptably inefficient, while other proposals, closer to the target, are much more efficient in practice, but
+eschew strict formal guarantees. We provide details and compute such provable bounds onZ for some of
+the EBMs that we consider in our experiments in App. I.6
+2.3 Two theorems about QRS: bounding and monotonicity
+TVD bounds on QRS We first provide a simple upper bound on the TVD between the sampling and
+target distributions.
+Let ¯Aβ
+.={x∈X :P (x)/q(x)>β} be the set of “violators” of theβ bound. It is intuitive that the “fewer”
+violators there are, the closerpβ is to the targetp. The following theorem, proven in App. D, makes this
+statement precise, in terms of the actualp-mass of the violators:
+Theorem 2.1. TVD(p,pβ)≤p( ¯Aβ).
+As a corollary of this, observing thatlimβ→∞p( ¯Aβ)→ 0, one sees thatpβ converges top for β→∞ .7
+f-divergence monotonicity of QRSWhile the previous upper bound is specific to TVD, QRS enjoys an
+attractivemonotonicity property for allf-divergences. We provide two proofs of this result. The first proof,
+given in App. D.3, relies on fundamental “majorization” properties of convex functions, does not involve the
+differentiation of the divergence, and provides some graphical intuition in terms of gaps associated with
+Jensen’s inequality. The second proof,8 given in App. D.4, replaces a large part of the first proof by a
+much shorter calculus-based derivation that exploits an extension of the fundamental theorem of calculus
+not requiring differentiability, but only absolute continuity.
+Theorem 2.2. Let 0<β <β′ <∞. Then Df(p,pβ′)≤Df(p,pβ).
+Theorem 2.2 guarantees that increasing the value of parameterβ never increases thef-divergence of the
+target distribution from the QRS distribution. Moreover, in the light of footnote 5, increasing β never
+increases the divergence of the QRS distribution from the target distribution.
+3 Experiments
+3.1 Approximating a Poisson distribution and the quality-efficiency trade-off
+To demonstrate the usage of QRS we start with a toy setting using two Poissons. The goal is to
+sample from a target Poisson distribution p with rate λp = 11 using samples from a proposal Pois-
+son distribution q with rate λq = 10 . Rejection sampling is not possible in this setting as the ratio
+p(x)/q(x) = (e−1111x/x!)/(e−1010x/x!) = e−1 1.1x can take arbitrarily large values whenx increases, i.e.
+the ratio is unbounded. However, it is possible to use QRS here.
+We perform ten independent experiments in which we sample104 elements fromq that we use to compute
+the quality of the approximation by estimating:TVD(p,pβ) and its upper boundp( ¯Aβ). (See App. C.1 for
+additional results onDKL(p,pβ).) In all cases, we useβ values in the interval[0.5, 3.5]. Furthermore, we
+compute the sampler’s efficiency by estimating the acceptance rate (AR) for each value ofβ (Eq. 4). As
+described previously and detailed in App. E, we compute estimates for all these metrics using importance
+sampling. Results are displayed in Fig. 2. As shown, using higher values ofβ improves the TVD, even though
+6 In principle, it is possible to construct examples whereZ = Ex∼q
+P (x)
+q(x) is finite while the variance Varx∼q
+P (x)
+q(x) is infinite,
+see App. I. In practice, for text generation, we have not observed such situations. Note that all the EBMs of Sec. 3.2 are of the
+form P (x) = a(x)b(x), witha an autoregressive model andb(x) upper-bounded; therefore if one takesq =a, thenP (x)/q(x)
+is bounded so the variance is bounded, although the proposala can be inefficient.
+7One reviewer asked whether one could provide guarantees about the asymptotic speed of convergence top. When the
+support ofP is a finite set, the answer is easy and positive: there exists a valueβ0 such thatβ >β0 implies thatpβ is identical
+to p, by simply takingβ0 = max{P (x)/q(x) : x∈ Supp(P )}. However, when the support ofP is an infinite set, we prove in
+App. K the following negative result (Theorem K.1): for an arbitrarily slowly decreasing functiong(β) that converges to0, there
+exists some proposalq such thatTVD(p,pβ) converges even more slowly thang(β). In other words, if one plays “adversarially”,
+it is always possible to design an arbitrarily bad proposal in terms of asymptotic convergence rate.
+8We thank one of the reviewers for suggesting this proof.
+6
+Published in Transactions on Machine Learning Research (11/2022)
+(a)
+ (b)
+Figure 2: (a) Estimation of sampling quality asTVD(p,pβ), efficiency (acceptance rate), and the trade-off
+betweenthemforaQRSsamplerwhenusingaproposal q = Poisson(λ = 10)toapproximate p = Poisson(λ =
+11)computedin10independentexperimentsover 104 samples. (b)Differencesbetweenestimated TVD(p,pβ)
+and their true values forβ = 2, computed 1000 times for each different number of samples. The blue line is
+the mean and shaded areas represent one standard deviation.
+this comes at the cost of lower acceptance rate. In particular, withβ = 3.5, the TVD is tiny (≈ 10−4),
+yet the acceptance rate is moderate (0.3, i.e. 30% of proposal samples are accepted). Notably, we can ease
+the visualization of the trade-off between quality and efficiency by reparametrizing the divergence metrics in
+terms of the acceptance rate (last panel of Fig. 2a). A procedure to map acceptance rates to a corresponding
+β is outlined in App. F. We use this concise reparameterized representation to plot subsequent results.
+Empirical estimates of the divergence diagnostics In the previous and following experiments, we
+use a sufficiently large sample size to obtain accurate estimates of the divergence diagnostics. However, it
+is reasonable to wonder about the bias and variance of these estimators for smaller sample sizes. While
+it is not possible to provide a definite answer for all EBMs (cf. Sec. 2.2), we can investigate this question
+by exploiting the fact that we can compute with great precisionDf(p,pβ) when bothp and q are Poisson
+distributions (see App. H for a derivation). We compare this approximation to the true value with the
+estimators proposed in Sec. 2 using sample sizesn∈{ 102,..., 106} and repeating the process1000 times.
+Results for TVD are shown on Fig. 2b (see App. C.1 for results on KL). As it can be seen, there is some
+slight variance when only 100 samples are used for the estimation, and it quickly improves as more samples
+are used. In contrast, the estimation bias is tiny.
+3.2 Generation with distributional control
+The following experiments focus on the task of generation with distributional control, introduced by Khalifa
+et al. (2021), a task that requires sampling from an EBM over sequences of discrete tokens, making it an
+ideal test bed for QRS. Given a language modela(x), the goal of this task is to sample from a modelp(x)
+that, on the one hand, constrains the moments of a vector ofn pre-defined features ϕ(x) to match some
+desired value ¯µ (i.e. Ex∼pϕ(x) = ¯µ), while on the other hand minimizingDKL(p,a ), a generalized version
+(Csiszar, 1975; Kullback and Khairat, 1966) of the maximum entropy approach (Jaynes, 1957; Rosenfeld,
+1996). For example, one might want to debias a language model trained on a corpus of biographies to
+produce biographies only of scientists, 50% of which should be female. Thenϕ1(x) and ϕ2(x) would be
+binary classifiers assessing whether a sentence speaks about a scientist or a female respectively, and the
+desired moments would be set to¯µ = [1, 0.5].
+The authors show thatp can be expressed as an unnormalized EBMP (x) = a(x)b(x), and describe two
+choices ofb(x). On the one hand, they considerpointwise constraints, where ¯µ∈{ 0, 1}n. For instance, if
+there is a single binary feature for which we would like that∀x :ϕ(x) = 1, thenb takes the formb(x) =ϕ(x).
+Otherwise, in the case ofdistributional constraints in which¯µ∈ Rn, they show that there is a vectorλ∈ Rn
+such thatb(x) = exp(λ·ϕ(x))andp(x)∝a(x)b(x)fulfills the requirements of moment matching and minimal
+7
+Published in Transactions on Machine Learning Research (11/2022)
+prompt
+name
+prompt
+simple Wikileaks.
+multiple Wikileaks, Wikileaks, Wikileaks.
+knowledge Here is what I know about Wikileaks:
+jeopardy This medium was founded by Julian Assange in
+2006.
+news Here are the latest developments on Wikileaks:
+Figure 3: Comparing GPT-2, GPT-2 conditioned on various prompts, and a fine-tuned model (DPG) as
+proposals for generating sequences containing “Wikileaks”. Disconnected points in the upper-left corner
+indicate TVD(p,q ) for each proposal, while the curves showTVD(p,pβ) as a function of the acceptance rate.
+Standard deviation bootstrap estimates are shown as shaded regions for every proposal.
+KL divergence from the original model. The vectorλ is found using self-normalized importance sampling
+(Owen, 2013; Parshakova et al., 2019a) and stochastic optimization.
+3.2.1 Proposals for a pointwise constraint
+We first experiment with constraining GPT-2 small (Radford et al., 2019) using one of the pointwise con-
+straints (¯µ = 1.0) proposed in Khalifa et al. (2021), namely,b(x) = 1 [x contains “Wikileaks”]. In order to ap-
+ply QRS we need to find a suitable proposal distribution. A possible candidate is GPT-2 small itself. An ad-
+vantage of this proposal is that we can use pure rejection sampling with an upper-boundβ = 1to obtain exact
+samples from the EBM. This is because we can upper bound the ratioP (x)/q(x) =a(x)b(x)/a(x) =b(x)≤ 1.
+In fact, for b(x)∈ {0, 1} this process reduces to “naively” filtering out all samples for whichb(x) = 0 .
+However, a serious disadvantage is that the acceptance rate will be given by the natural frequency of the
+constraint. Using QRS, we can employ proposal distributions leading to better efficiency at a small cost in
+quality of approximation top. We explore two such options:
+1. First, we make use of the model proposed by Khalifa et al. (2021), which consists of a fine-tuned
+autoregressive model obtained by applying thedistributional policy gradient (DPG)algorithm (Par-
+shakova et al., 2019b) to approximate the target EBM in a generic way. While this model is
+considerably better at satisfying the desired constraints, it does not match the desired distribution
+perfectly.
+2. Second, in the spirit of “in-context learning” (Brown et al., 2020), we propose tocondition a(x)
+on a promptwith the aim of increasing the constraint satisfaction rate in the resulting conditional
+distributions. In contrast to the previous approach, this does not require the training of a new
+model, even though it does require the manual selection of promising prompts. We experiment with
+five such prompts, which we present in Fig. 3.
+Fig. 3 shows theTVD(p,·) as a function of acceptance rate for different samplers. In this and the following
+experiments, we chose a range ofβ values that yields acceptance rates in the range100–10−5 (cf. Table 2
+in App. A), using Algorithm 2 in App. F for this purpose. We first show theTVD(p,q ) for each proposal
+q, at an acceptance rate of1, before applying QRS (in the upper left corner). Then, we plotTVD(p,pβ) as
+a function of acceptance rate for each proposal distribution. We compute IS estimates of the TVD on 1M
+samples from each proposal distribution. Variance is estimated using the bootstrap estimator (Wasserman,
+2010). Note that all samples obtained from QRS satisfy the constraints perfectly, as sequences that do
+not satisfy the constraint are always rejected, and for this reason the curves start with different acceptance
+rates. As expected, using GPT-2 small results in zero TVD, but comes at the cost of low efficiency, with
+an acceptance rate around10−4. Using prompting, we improve the constraint satisfaction of the resulting
+proposal distributions and trade-off approximation quality for greater efficiency using QRS: For instance,
+if a TVD of0.3 can be tolerated, then some of the prompt proposals provide a 10-fold higher acceptance
+8
+Published in Transactions on Machine Learning Research (11/2022)
+Chandra Pradha Towni (born February 11, 1965) is a social scientist, activist, poet, and author living in Portugal. She is...
+Enrella Carrière is a Canadian writer, translator, and philosopher specializing in the history of show business. She has covered
+topics such as the direction and psychology of television and the evolution of human...
+Albert Fahn (born 1970) is an American scientist who focuses on algorithms for generating biomechanical data. Methods to generate
+and construct biomechanical data...
+Wyndham Radnor (born 1946) is a British historian and criminologist specialising in the subject of labour law. He has written
+extensively on...
+Figure 4: Estimation of the divergence from the EBM (TVD), and moments of featuresfemale and science
+in sampling debiased GPT-2 biographies talking about scientists. Variance is negligible as shown in Table
+10 in App. I. We also show samples from running the QRS sampler at an acceptance rate of10−3. Samples
+are cut off at 40 (subword) tokens and are manually chosen to show two male and two female biographies,
+for constraint satisfaction (moment matching) results refer to the graph. We color words that fire our female
+or science features.
+rate with respect to the base GPT-2 model with no further training. Some prompts work notably better
+than others and we do not exclude the possibility of there existing prompts that perform even better than
+the ones we tested; we leave a more extensive exploration of prompting to create proposal distributions for
+future work. The autoregressive policy obtained from the DPG algorithm is the best proposal distribution
+we tested. Notably, it allows one to obtain low TVDs at higher acceptance rates than is possible by naively
+filtering samples from the base language model. For example, we can obtain a TVD of 0.1 at 100× the
+acceptance rate (see Table 10 in App. I for more numerical results).
+3.2.2 Distributional constraints
+We now turn to the task, also introduced by Khalifa et al. (2021), of generating biographies of scientists while
+debiasing the gender distribution to contain female scientists 50% of the time. For this we make use of GPT-2
+Biographies (a(x)), a language model fine-tuned on Wikipedia biographies9 and follow the same setup as the
+authors to define the binary classifiers identifying sequences talking about scientists or females10 and infer
+an EBM that matches the distributional constraints with minimal deviation from the original model. The
+frequency with which the modela(·) generates scientist biographies is1.8%, female biographies 7.5%, and
+the frequency with which it generates female scientist biographies is only0.14%. As proposal distribution, we
+use the DPG model that Khalifa et al. (2021) trained to approximate the EBM, which reaches a constraint
+satisfaction of 69.0% scientist, 27.3% female and 19.6% female scientist biographies. (See Table 7 in their
+paper for examples generated by this proposal.)
+As before, we obtain 1M samples from the proposal distribution to compute importance sampling estimates
+(detailed in App. E) ofTVD(p,pβ), acceptance rate (ARβ), and the moments of the features that we wish
+to control. We show all metric curves as a function of acceptance rate of the QRS algorithm as well as some
+generation examples in Fig. 4.
+Wefindthatboth TVD(p,pβ)andtheupper-boundon TVD(p,pβ)steadilyconvergetozeroastheacceptance
+rate decreases, meaning that we can perfectly match the target EBM in exchange for sampling efficiency.
+As a result, at an acceptance rate of ARβ = 10−3 we nearly perfectly debias the original language model
+9https://huggingface.co/mkhalifa/gpt2-biographies
+10Gender is estimated by the ratio of female to male pronoun counts, scientists are identified by the mention of at least one
+of multiple words associated with the profession.
+9
+Published in Transactions on Machine Learning Research (11/2022)
+while exclusively generating biographies about scientists (49.5% female and 99.8% scientist biographies).
+We show some example generations at ARβ = 10−3 chosen manually to illustrate two male and two female
+biographies. Notably, we also achieve a good level of constraint satisfaction (48.4% female and99.9% scientist
+biographies) and a TVD of0.1 at ARβ = 10−2. This is a considerable improvement in quality with respect
+to the proposal distribution (with a TVD of 0.7), and in acceptance rate relative to directly rejecting from
+GPT-2 Biographies (which would result in AR≤ 2× 0.14% = 2.8× 10−3). Two more pointwise and two
+more distributional constraints including additional metrics such asDKL(p,pβ) and DKL(pβ,a ) are shown
+in App. A with similar results.
+3.2.3 Comparison with MCMC techniques
+We now compare QRS with MCMC samplers, for which we focus on the EBM for apointwise constraint
+restricting GPT-2 to only generating sequences containing “amazing”.
+Baselines We use the popular Metropolis-Hastings (MH) algorithm (Metropolis et al., 1953; Hastings,
+1970). This algorithm works by constructing a Markov chain of dependent samples, in which the next state
+of the chain is equal to a newly proposed sample with a certain acceptance probability, and otherwise the
+next state is the same as the current state. When the lengthn of the chain tends to infinity it can be proven
+(Robert and Casella, 2004, Theorem 7.4), see App. J, that the average of a statistic on the elements of the
+chain converges to its expected value under the target distribution and, more importantly when focussing on
+sampling as we do, that the distribution of thenth element of the chain converges (in total variation) to the
+target distribution. In practice, the chain is of finite length and only approximate samples are obtained.
+Common practices are to discard the first few samples of the chain to reduce the effects of poor starting
+conditions (which is known as burn-in), and to only keep everytth sample to reduce autocorrelations (which
+is known as thinning). We use both these heuristics in our experiments. We set a burn-in period of 1,000
+steps and only keep every1, 000th sample to attain an acceptance rate of10−3. Note that we chose not to
+include the burn-in period to compute the acceptance rate of MCMC samplers, as this period is constant
+and does not grow with sample size. We also experiment with a reset variant (-R) of the MH samplers
+that does away with autocorrelations among samples altogether (i.e. produces i.i.d. samples like QRS) by,
+instead of using thinning, resetting the chain after 1,000 steps and only retaining the last sample of the chain
+(see Robert and Casella 2004, Theorem 7.4 (ii)). This variant does not make use of a burn-in period.
+We experiment with two proposal distributions for use in the MH samplers: i) the global proposal distribution
+used in QRS, i.e. DPG, for independent MH (IMH) (Robert and Casella, 2004, Sec. 7.4) and ii) a local
+proposaldistributionthatmakeslocaleditstoanevolvingsampleinthechainforrandom-walkMH(RWMH).
+As far as we are aware, IMH is not commonly employed in the literature due to global proposals classically
+being difficult to come by. We stress that with the advances in neural network training techniques such as
+DPG, global proposals are more accessible than ever and we therefore include IMH as a strong baseline in
+our experiments. Our design of the local proposal is inspired by uses of MCMC in controlled text generation,
+in particular by Miao et al. (2019) and Goyal et al. (2021). The local proposal randomly performs either
+an insert, delete or replace operation on the token level, where insert and replace operations are performed
+by sampling from BERT (Devlin et al., 2019). Locations of insertions and deletions are chosen uniformly at
+random. To inform the local proposal distribution about the target distribution, we implement the insert
+and replace operations by randomly mask-filling using BERT (99% of the time) and filling with “amazing”
+(1% of the time). We initialize the chain using a sample from the global proposal distribution.11
+Metrics As nof-divergence estimates are available for the MCMC samplers, we instead resort to some
+proxy metrics specific to controlled text generation to measure the sample quality, extracted from104 samples
+over ten independent experiments. In particular we measure constraint satisfaction (% amazing), perplexity
+(PPL) of our samples under GPT-2, diversity across samples with Self-BLEU-5 (Zhu et al., 2018) and
+percentage of unique samples (% Uniq), and finally, diversity within samples as given by the percentage of
+11Note that localized MCMC methods can still take advantage of good starting points, especially the reset variants. We
+therefore also provide our variants of RWMH with a global proposal distribution for obtaining good starting points, the same
+global proposal as used for QRS.
+10
+Published in Transactions on Machine Learning Research (11/2022)
+Method %Amazing PPL ↓ Self-BLEU-5↓ %Uniq↑ Dist-2↑ TVD↓∗
+proposal 62.9± 0.4 61 .7± 0.3 85.8± 0.1 100 ± 0.0 96 .1± 0.0 0.67
+RWMH 100± 0.0 - 99.8± 0.2 32 .0± 33.7 83.8± 17 Unk.
+RWMH-R 100± 0.1 58 .7± 3.3 87.6± 0.4 100 ± 0.0 92 .0± 0.3 Unk. (≥ 0.28± 0.02)
+IMH 100± 0.0 - 86.9± 0.3 98 .7± 0.5 96 .3± 0.1 Unk.
+IMH-R 100± 0.0 63 .4± 1.5 86.7± 0.1 100 ± 0.0 96 .3± 0.1 Unk. (≥ 0.01± 0.01)
+QRS 100± 0.0 62 .8± 1.6 86.6± 0.2 100 ± 0.0 96 .3± 0.1 0.01
+Table 1: Comparing with MCMC samplers for the constraint of including “amazing” in the sequence. We
+show mean± one standard deviation over 10 runs. All samplers are run at an acceptance rate of10−3. ∗TVD
+is estimated on106 independent samples, standard deviations are below 0.01. App. G contains additional
+results from these experiments.
+distinct bigrams (Dist-2; Li et al., 2016). However, we note that these metrics can easily be cheated. An
+example of this is if we would manually construct a sampler that would repeat a small set of reasonably
+diverse, high probability (under GPT-2) sequences that meet the target constraint. The resulting sampling
+distribution would not be close to the target EBM, but would score well on such proxy metrics. For QRS we
+do report the TVD to the target distribution, which cannot be gamed in this way.12 Notably, for MCMC
+we can also providelower boundson the TVD thanks to the data-processing inequality (DPI). The DPI tells
+us, informally, that thef-divergence of one distribution to another can only decrease by applying the same
+“projection” to the two distributions. A precise formulation of this theorem is provided as Theorem 6.2 of
+Polyanskiy and Wu (2017), but, for our purposes, the following special case (“lumping property”) proven as
+Lemma 4.1 of Csiszár and Shields (2004) will be sufficient:
+Theorem 3.1. Let p and q be distributions over a sample spaceX. Let{A1,...,A k} be a finite partition
+of X. Then the distributionsp′(i) .=p(Ai) and q′(i) .=q(Ai) over{1,...,k } satisfy Df(p′,q′)≤Df(p,q ).
+While it is in general unfeasible to estimate the actual divergence of two distributionsp,q over alarge space
+X based only on a moderate number ofsamples (as opposed toscores) fromp and q (Canonne, 2020), by
+projecting these samples onto a much smaller numberk of “bins”, it is possible to obtain precise estimates
+of the divergence of the “histogram”p′ from q′, and therefore tolower boundthe divergence ofp from q.
+We use this result to obtain lower bounds on the TVD to the target distribution of RWMH-R and IMH-R,
+for which we have i.i.d. samples, whereas this is not the case for RWMH and IMH. After manually inspecting
+a single set of 104 samples out of ten independently sampled sets to look for salient defects, we chose a
+binning function that classifies a sample in two bins according to whether it contains a newline character or
+not. Then, we used it to bin the samples of the remaining nine sets and compute their mean TVD to the
+binned target distribution to obtain lower bounds on the TVD.
+Results Our results are shown in Table 1 (with some samples shown in App. G). All samplers satisfy the
+constraint of only generating sequences containing the term “amazing”. The EBMp, however, is defined
+to be, among all those distributions that satisfy the constraint, the one closest to the original language
+model a (GPT-2) underDKL(p,a ). Constraint satisfaction alone thus does not tell us how well the samplers
+approximate the target EBM. For MCMC samplers we have to rely on proxy metrics. RWMH-R seems
+to excel in terms of perplexity while also obtaining competitive diversity metrics (Self-BLEU-5, % Uniq,
+and Dist-2). However, we can identify a large TVD between its sampling distribution and the target one,
+showcasing the failure of proxy metrics to reliably measure the approximation accuracy of our samplers, and
+12This may raise a question: Could one designany proxy metrics that wouldreliably assess closeness of an MCMC sampler
+to the targetp, given a limited number of MCMC samples? When the spaceX is very large, as is the case here, probably not.
+For an intuitive example, sayp is the uniform distribution overX andω is the uniform distribution over an unknown subsetY
+of X, of size half that ofX. The number of samples to distinguish these distributions clearly grows with the size ofX if only
+samples fromω are available, but if the value of theprobabilityω(x) is also available then asingle sample x is sufficient. More
+formally, one might consider algorithms that compare two distributionsp andω on a setX of sizen, which should ‘accept’ with
+probability 2/3 if TVD(p,ω )≤ ε1 and ‘reject’ with probability2/3 if TVD(p,ω )≥ ε2. Canonne (2020, Theorem 12.9, p. 58)
+shows that such algorithms requireO(1/(ε1−ε2)2) samples fromω if the probabilitiesω(x) are known; whereas Canonne et al.
+(2022, Theorem 1.1) show thatΩ
+(√n
+ε2
+2
++ n
+logn max
+{
+ε1
+ε2
+2
+,
+ε2
+1
+ε4
+2
+})
+samples are needed if these probabilities are unavailable.
+11
+Published in Transactions on Machine Learning Research (11/2022)
+demonstrating the benefits of having explicit estimates of divergence measures. After qualitatively inspecting
+samples of both local MCMC methods (see Tables 6 and 7 in App. G), we found many samples to contain
+repetitions, e.g. of punctuation marks. Also, RWMH seems to suffer from low diversity across samples (as
+evidenced by the high Self-BLEU-5 and low % Uniq scores), containing many repeated samples. On the
+other hand, IMH, IMH-R and QRS do not suffer from this lack of diversity. The variants of IMH and QRS
+seem to perform on par in terms of sample diversity, and QRS attains slightly lower perplexity than IMH-R.
+An estimate of the TVD around 0.01 shows that QRS closely approximates the target EBM and shows
+considerably more diversity within and across samples. It might be that the IMH and IMH-R samplers
+would achieve similar results, but we cannot know as no divergence estimates are available. We only know
+that the binning strategy failed to detect any large divergences for IMH-R. One case in which we can estimate
+f-divergences for IMH-R and RWMH-R variants is the Poisson example that we discussed in Section 3.1. We
+present a comparison between QRS and those reset variants of MH for this Poisson example in Appendix C.2,
+finding that QRS consistently results in lower divergences for all acceptance rates (for ARβ < 1).
+4 Related Work
+The vast majority of approaches to approximate sampling from complex probability distributions have been
+based on MCMC. However, a few approaches have taken rejection sampling as their starting point. Like
+QRS, the method of rejection sampling chains (Tierney, 1992; Chib and Greenberg, 1995, Sec. 6.1) does not
+require a global upper bound. This is a hybrid method that uses rejection sampling in a region satisfying
+a partial upper bound but combines it with IMH outside of that region to produce a Markov chain that
+converges to the correct stationary distribution. Caffo et al. (2002) propose empirical supremum rejection
+sampling, an algorithm that adaptively increases theβ upper bound based on the maximum observed so far,
+with a focus on convergence in the limit rather than approximation quality.
+Closer to our work, some researchers have observed before us that a partial boundβ leads to the probability
+distribution presented in Eq. 3. Rejection control (Liu et al., 1998; Liu, 2004, pp. 44-45), in the context
+of particle filters, exploits this observation to accelerate the computation of an unbiased IS estimate of the
+expectation Ex∼pf(x) in situations where computingf(x) is expensive and must be done repeatedly. While
+the focus of that work was not to produce divergence diagnostics, interestingly, on close examination, we
+find that one of their proofs (Liu, 2004, App. A.1, Eq. (A.4)) formulated aχ2-divergence between a target
+distribution and a proxy distribution similar topβ. Variational rejection sampling (Grover et al., 2018) uses
+a relaxation of Eq. 3 to better approximate the variational posterior in a variational inference setting. They
+aim to construct a differentiable sampler that can tighten the evidence lower bound, if additional computing
+power is available. The focus of our work is more general: we propose a generic sampler for which we can
+quantify a trade-off between sampling efficiency and approximation quality and we study the properties of
+this sampler.
+While this paper is concerned with generating samples fromdiscrete EBMs, much research so far has been
+more concerned withcontinuous EBMs, in particular for applications in vision. Continuous EBMs have the
+advantage over discrete ones that it is possible to differentiate the EBMP (x) with respect tox, and not only
+the approximating modelπθ relative toθ. This opens a range of optimized training techniques (see the survey
+by Song and Kingma 2021), including Langevin and Hamiltonian dynamics (Parisi, 1981; Duane et al., 1987),
+where the local Markov chain moves are informed by∇x log P (x). While such techniques are not available
+for discrete EBMs, some recent efforts are trying to bridge the gap. For instance,continuous relaxation
+techniques (Han et al., 2020; Nishimura et al., 2020) relax the original discrete space into a continuous space,
+perform the sampling in this space, then map the samples back to the discrete space; while Grathwohl et al.
+(2021); Zhang et al. (2022); Rhodes and Gutmann (2022) sample directly in the discrete space, but inform
+the local moves of the chain through gradients computed in a larger continuous space. To the best of our
+knowledge, while Zhang et al. (2022) do experiment with “text infilling”, the ability to replace some blanks
+in a given sentence by actual words, none of the above work has so far directly addressed text generation
+applications of the kind we have been considering here, in which the sample space is not only discrete, but
+composed of structured objects, namely word sequences of varying length, raising specific challenges.
+12
+Published in Transactions on Machine Learning Research (11/2022)
+Monte Carlo sampling techniques are popular for various NLP applications, in particular language modeling.
+For example, Miao et al. (2020) propose a sampler that mitigates poor estimation of probabilities due to
+overfitting. Deng et al. (2020) train globally normalized language models to combat negative effects of
+local normalization, and use a form of sampling importance resampling (Rubin, 1987) to sample from the
+resulting EBM using an autoregressive proposal language model. Goyal et al. (2021) develop a Metropolis-
+Hastings algorithm to sample from masked language models. For controlled text generation Miao et al. (2019)
+propose a random-walk Metropolis-Hastings algorithm for sampling from an EBM that encodes sequence-
+level preferences on natural text. Their proposal distribution consists of local string editing operations on
+randomly selected words or positions. Zhang et al. (2020) improve on this approach by making use of a
+tree-search algorithm to more efficiently explore the space of proposals, by allowing several edits in a single
+step of the MH algorithm. In contrast to QRS, none of these approaches attempt to directly estimate the
+divergence between the sampler and the target EBM, but rely on unreliable proxy metrics.
+5 Discussion
+QRS is a simple-yet-powerful technique: why has it not previously been promoted as a practical sampling
+method? One possible reason is the limited repertoire ofglobal surrogates to complex distributions, apart
+from certain special cases in Euclidean domains (e.g. log-concave targets). This lack has strongly moti-
+vated the development of MCMC techniques which can exploit simplelocal proposals to compute transition
+probabilities between samples. This is now rapidly changing with advances in neural training, such as the
+impressive ability of pretrained language models to exploit simple prompts to orient their productions to-
+wards certain desired outcomes (but without formal guarantees); or with certain recentgeneric techniques,
+such as DPG, for fine-tuning autoregressive models towards arbitrary EBMs (but without the ability to
+totally reproduce them).
+We believe that, given such global proposals, QRS can be a strong competitor to MCMC approaches. In
+particular, QRS has strong theoretical guarantees, not shared by these approaches: i) the ability to estimate,
+for any value of theβ parameter, the divergence of the target EBM from the QRS samplerpβ, for any member
+of the large class off-divergences, including TVD and KL, ii) the ability totune the sampler to attain a
+desired quality-efficiency trade-off, and the intuitive nature of this tuning process thanks to the monotonic
+relationship between parameterβ and thef-divergence (Theorem 2.2), iii) the existence of a simple, intuitive
+bound on the TVD between the QRS sampler and the target, provided by Theorem 2.1, and iv) the fact
+that QRS directly produces i.i.d. samples, rather than the correlated samples of a typical MCMC method.
+Our experimental results show that QRS achieves strong results on the task of controlled text generation,
+where for instance, the sampler achieves excellent debiasing of the language model for acceptance rates in
+the range10−1 to 10−3. We show the versatility of the approach by applying it to different sources of global
+proposals: proposals over EBMs obtained by generic DPG-style fine-tuning; proposals based on handcrafted
+prompts; and for paraphrase generation (App. B), proposals based on round-trip translation.
+Finally, when comparing QRS to variants of Metropolis-Hastings, we find QRS outperforms the local variants
+(RWMH and RWMH-R) and performs on par with the global variants (IMH and IMH-R), according to the
+proxy metrics available for all samplers. Our results on RWMH and RWMH-R, however, show how proxy
+metrics can be deceiving and do not give us a full picture of the approximation accuracy of our samplers.
+Therefore, we stress the importance of well-founded divergence measures and, in this work, have proposed a
+sampler for which we can estimate these.
+Acknowledgments
+We would like to thank the reviewers for their thorough feedback and suggestions for improvements. Also
+thanks to Jos Rozen for his help with experiments, and to Stéphane Clinchant who, in discussion with one
+of the authors, suggested using prompting for the purpose of producing global proposals oriented towards a
+certain generation objective.
+13
+Published in Transactions on Machine Learning Research (11/2022)
+References
+Colin Bannard and Chris Callison-Burch. Paraphrasing with bilingual parallel corpora. InProceedings of
+the 43rd Annual Meeting of the Association for Computational Linguistics (ACL’05), pages 597–604, Ann
+Arbor, Michigan, June 2005. Association for Computational Linguistics. doi: 10.3115/1219840.1219914.
+URL https://aclanthology.org/P05-1074.
+StephenP.BrooksandAndrewGelman. Generalmethodsformonitoringconvergenceofiterativesimulations.
+Journal of Computational and Graphical Statistics, 7(4):434–455, 1998.
+Tom Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, J. Kaplan, P. Dhariwal, Arvind Neelakantan,
+Pranav Shyam, Girish Sastry, Amanda Askell, Sandhini Agarwal, Ariel Herbert-Voss, G. Krüger, Tom
+Henighan, R. Child, Aditya Ramesh, D. Ziegler, Jeffrey Wu, Clemens Winter, Christopher Hesse, Mark
+Chen, E. Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess, J. Clark, Christopher Berner, Sam Mc-
+Candlish, A. Radford, Ilya Sutskever, and Dario Amodei. Language models are few-shot learners.arXiv,
+abs/2005.14165, 2020. GPT-3.
+Brian S. Caffo, James G. Booth, and A. C. Davison. Empirical supremum rejection sampling.Biometrika,
+89(4):745–754, 2002.
+Clément L. Canonne. A Survey on Distribution Testing: Your Data is Big. But is it Blue? Number 9
+in Graduate Surveys. Theory of Computing Library, 2020. doi: 10.4086/toc.gs.2020.009. URL http:
+//www.theoryofcomputing.org/articles/gs009/gs009.pdf.
+Clément L. Canonne, Ayush Jain, Gautam Kamath, and Jerry Li. The price of tolerance in distribution
+testing. In Conference on Learning Theory, volume 178 ofProceedings of Machine Learning Research,
+pages 573–624, 2022. URLhttps://proceedings.mlr.press/v178/canonne22a.html.
+Djalil Chafaï. Back to basics – Total variation distance, 2010. URLhttps://djalil.chafai.net/blog/
+2010/10/14/back-to-basics-total-variation-distance/.
+Sourav Chatterjee and Persi Diaconis. The sample size required in importance sampling.The Annals of
+Applied Probability, 28(2):1099–1135, 2018.
+Siddhartha Chib and Edward Greenberg. Understanding the Metropolis-Hastings algorithm. The Amer-
+ican Statistician, 49(4):327–335, 1995. doi: 10.1080/00031305.1995.10476177. URL http://amstat.
+tandfonline.com/doi/abs/10.1080/00031305.1995.10476177.
+Mary Kathryn Cowles and Bradley P. Carlin. Markov chain Monte Carlo convergence diagnostics: A
+comparative review. Journal of the American Statistical Association, 91(434):883–904, 1996. URLhttp:
+//www.jstor.org/stable/2291683.
+I. Csiszar.I-Divergence Geometry of Probability Distributions and Minimization Problems.The Annals of
+Probability, 3(1):146 – 158, 1975. doi: 10.1214/aop/1176996454. URLhttps://doi.org/10.1214/aop/
+1176996454.
+Imre Csiszár and Paul C. Shields. Information theory and statistics: A tutorial.Commun. Inf. Theory, 1(4):
+417–528, December 2004. doi: 10.1561/0100000004. URL https://www.stat.berkeley.edu/~binyu/
+212A/papers/cs.pdf.
+Yuntian Deng, Anton Bakhtin, Myle Ott, Arthur Szlam, and Marc’Aurelio Ranzato. Residual energy-
+based models for text generation. In 8th International Conference on Learning Representations, ICLR
+2020, Addis Ababa, Ethiopia, April 26-30, 2020. OpenReview.net, 2020. URLhttps://openreview.net/
+forum?id=B1l4SgHKDH.
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova. BERT: Pre-training of deep bidirec-
+tional transformers for language understanding. InProceedings of the 2019 Conference of the North Amer-
+ican Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1
+(Long and Short Papers), pages 4171–4186, Minneapolis, Minnesota, June 2019. Association for Compu-
+tational Linguistics. doi: 10.18653/v1/N19-1423. URLhttps://www.aclweb.org/anthology/N19-1423.
+14
+Published in Transactions on Machine Learning Research (11/2022)
+Simon Duane, A. D. Kennedy, Brian J. Pendleton, and Duncan Roweth. Hybrid Monte Carlo.Physics Letters
+B, 195(2):216 – 222, 1987. ISSN 0370-2693. doi: DOI:10.1016/0370-2693(87)91197-X. URLhttp://www.
+sciencedirect.com/science/article/B6TVN-46YSWPH-2XF/2/0f89cdc6cf214a2169b03df7414f3df4.
+Angela Fan, Mike Lewis, and Yann Dauphin. Hierarchical neural story generation. InProceedings of the 56th
+Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages889–898,
+Melbourne, Australia, July 2018. Association for Computational Linguistics. doi: 10.18653/v1/P18-1082.
+URL https://aclanthology.org/P18-1082.
+Ladislas Fuchs. A new proof of an inequality of Hardy-Littlewood-Polya.Mat. Tidsskr. B, 1947:53–54, 1947.
+Dani Gamerman and Hedibert F. Lopes.Markov Chain Monte Carlo: Stochastic Simulation for Bayesian
+Inference. Chapman and all/CRC, 2006.
+Andrew Gelman and Donald B. Rubin. Inference from iterative simulation using multiple sequences.Statis-
+tical science, pages 457–472, 1992.
+Gustavo L. Gilardoni. On a Gel’fand-Yaglom-Peres theorem forf-divergences. arXiv, abs/0911.1934, 2009.
+Kartik Goyal, Chris Dyer, and Taylor Berg-Kirkpatrick. Exposing the implicit energy networks behind
+masked language models via Metropolis-Hastings.CoRR, abs/2106.02736, 2021. URL https://arxiv.
+org/abs/2106.02736.
+Will Grathwohl, Kevin Swersky, Milad Hashemi, David Duvenaud, and Chris Maddison. Oops I took a
+gradient: Scalable sampling for discrete distributions. In Marina Meila and Tong Zhang, editors,Proceed-
+ings of the 38th International Conference on Machine Learning, volume 139 ofProceedings of Machine
+Learning Research, pages 3831–3841. PMLR, 18–24 Jul 2021. URLhttps://proceedings.mlr.press/
+v139/grathwohl21a.html.
+Alex Graves. Sequence transduction with recurrent neural networks.arXiv:1211.3711, 2012. URL https:
+//arxiv.org/abs/1211.3711.
+Aditya Grover, Ramki Gummadi, Miguel Lazaro-Gredilla, Dale Schuurmans, and Stefano Ermon. Variational
+rejection sampling. arXiv:1804.01712, 2018. URL https://arxiv.org/abs/1804.01712.
+Jun Han, Fan Ding, Xianglong Liu, Lorenzo Torresani, Jian Peng, and Qiang Liu. Stein Variational Inference
+for Discrete Distributions.arXiv:2003.00605, 108, 2020. URLhttp://arxiv.org/abs/2003.00605.
+W. Keith Hastings. Monte Carlo sampling methods using Markov chains and their applications.Biometrika,
+57(1):97–109, 1970.
+Jean-Baptiste Hiriart-Urruty and Claude Lemaréchal. Convex Analysis and Minimization Algorithms I:
+Fundamentals. Springer, 1996. ISBN 9783540568506.
+Wassily Hoeffding. Probability inequalities for sums of bounded random variables. InThe Collected Works
+of Wassily Hoeffding, pages 409–426. Springer, 1994.
+E. T. Jaynes. Information theory and statistical mechanics.Phys. Rev., 106(4):620–630, May 1957. doi:
+10.1103/PhysRev.106.620. URL http://prola.aps.org/abstract/PR/v106/i4/p620_1.
+Muhammad Khalifa, Hady Elsahar, and Marc Dymetman. A distributional approach to controlled text
+generation. In International Conference on Learning Representations, 2021. URL https://openreview.
+net/forum?id=jWkw45-9AbL.
+S. Kullback and M. A. Khairat. A Note on Minimum Discrimination Information.The Annals of Mathemat-
+ical Statistics, 37(1):279 – 280, 1966. doi: 10.1214/aoms/1177699619. URLhttps://doi.org/10.1214/
+aoms/1177699619.
+Yann LeCun, Sumit Chopra, Raia Hadsell, Marc’Aurelio Ranzato, and Fu Jie Huang. A Tutorial on Energy-
+Based Learning. InPredicting Structured Data. MIT Press, 2006.
+15
+Published in Transactions on Machine Learning Research (11/2022)
+Jiwei Li, Michel Galley, Chris Brockett, Jianfeng Gao, and Bill Dolan. A diversity-promoting objective
+function for neural conversation models. InProceedings of the 2016 Conference of the North American
+Chapter of the Association for Computational Linguistics: Human Language Technologies, pages 110–119,
+San Diego, California, June 2016. Association for Computational Linguistics. doi: 10.18653/v1/N16-1014.
+URL https://www.aclweb.org/anthology/N16-1014.
+Friedrich Liese and Igor Vajda. On divergences and informations in statistics and information theory.IEEE
+Transactions on Information Theory, 52(10):4394–4412, 2006. ISSN 00189448. doi: 10.1109/TIT.2006.
+881731.
+Jun S. Liu. Monte Carlo Strategies in Scientific Computing. Springer Series in Statistics. Springer New
+York, 2004.
+Jun S. Liu, Rong Chen, and Wing Hung Wong. Rejection control and sequential importance sampling.
+Journal of the American Statistical Association, 93(443):1022–1031, 1998.
+Gábor Lugosi and Shahar Mendelson. Mean estimation and regression under heavy-tailed distributions: A
+survey. Foundations of Computational Mathematics, 19(5):1145–1190, 2019.
+Jonathan Mallinson, Rico Sennrich, and Mirella Lapata. Paraphrasing revisited with neural machine transla-
+tion. InProceedings of the 15th Conference of the European Chapter of the Association for Computational
+Linguistics: Volume 1, Long Papers, pages 881–893, Valencia, Spain, April 2017. Association for Compu-
+tational Linguistics. URL https://aclanthology.org/E17-1083.
+Nicholas Metropolis, Arianna W. Rosenbluth, Marshall N. Rosenbluth, Augusta H. Teller, and Edward
+Teller. Equation of state calculations by fast computing machines.Journal of Chemical Physics, 21(6):
+1087–1092, 1953.
+Ning Miao, Hao Zhou, Lili Mou, Rui Yan, and Lei Li. CGMH: constrained sentence generation by Metropolis-
+Hastings sampling. In The Thirty-Third AAAI Conference on Artificial Intelligence, AAAI 2019, The
+Thirty-First Innovative Applications of Artificial Intelligence Conference, IAAI 2019, The Ninth AAAI
+Symposium on Educational Advances in Artificial Intelligence, EAAI 2019, Honolulu, Hawaii, USA, Jan-
+uary 27 - February 1, 2019, pages 6834–6842. AAAI Press, 2019. doi: 10.1609/aaai.v33i01.33016834. URL
+https://doi.org/10.1609/aaai.v33i01.33016834.
+Ning Miao, Yuxuan Song, Hao Zhou, and Lei Li. Do you have the right scissors? Tailoring pre-trained
+language models via Monte-Carlo methods. In Dan Jurafsky, Joyce Chai, Natalie Schluter, and Joel R.
+Tetreault, editors,Proceedings of the 58th Annual Meeting of the Association for Computational Linguis-
+tics, ACL 2020, Online, July 5-10, 2020, pages 3436–3441. Association for Computational Linguistics,
+2020. doi: 10.18653/v1/2020.acl-main.314. URL https://doi.org/10.18653/v1/2020.acl-main.314.
+Moin Nadeem, Anna Bethke, and Siva Reddy. StereoSet: Measuring stereotypical bias in pretrained language
+models. CoRR, abs/2004.09456, 2020. URLhttps://arxiv.org/abs/2004.09456.
+Nathan Ng, Kyra Yee, Alexei Baevski, Myle Ott, Michael Auli, and Sergey Edunov. Facebook FAIR’s
+WMT19 news translation task submission. InProceedings of the Fourth Conference on Machine Transla-
+tion (Volume 2: Shared Task Papers, Day 1), pages 314–319, Florence, Italy, August 2019. Association for
+Computational Linguistics. doi: 10.18653/v1/W19-5333. URLhttps://aclanthology.org/W19-5333.
+Akihiko Nishimura, David B. Dunson, and Jianfeng Lu. Discontinuous Hamiltonian Monte Carlo for discrete
+parameters and discontinuous likelihoods.Biometrika, 107(2):365–380, Mar 2020. ISSN 1464-3510. doi:
+10.1093/biomet/asz083. URL http://dx.doi.org/10.1093/biomet/asz083.
+Art B. Owen. Importance Sampling. InMonte Carlo Theory, Methods and Examples, chapter 9. Unpublished
+Lecture Notes, 2013. URLhttps://statweb.stanford.edu/~owen/mc/Ch-var-is.pdf.
+G. Parisi. Correlation Functions and Computer Simulations.Nuclear Physics B, 180:378, 1981. doi: 10.
+1016/0550-3213(81)90056-0.
+16
+Published in Transactions on Machine Learning Research (11/2022)
+Tetiana Parshakova, Jean-Marc Andreoli, and Marc Dymetman. Global Autoregressive Models for Data-
+Efficient Sequence Learning. InProceedings of the 23rd Conference on Computational Natural Language
+Learning (CoNLL), pages 900–909, Hong Kong, China, November 2019a. Association for Computational
+Linguistics. doi: 10.18653/v1/K19-1084. URL https://www.aclweb.org/anthology/K19-1084.
+Tetiana Parshakova, Jean-Marc Andreoli, and Marc Dymetman. Distributional Reinforcement Learning For
+Energy-Based Sequential Models.arXiv, abs/1912.08517, 2019b.
+Yury Polyanskiy. MIT Information Theoretic Methods in Statistics and Computer Science, Lecture 1:f-
+Divergences, 2019. URLhttps://people.lids.mit.edu/yp/homepage/data/LN_fdiv.pdf.
+Yury Polyanskiy and Yihong Wu. MIT, Yale and UIUC, Lecture Notes on Information Theory, 2017. URL
+http://people.lids.mit.edu/yp/homepage/data/itlectures_v5.pdf.
+Tiberiu Popoviciu. Sur les équations algébriques ayant toutes leurs racines réelles.Mathematica, 9(129-145):
+20, 1935.
+Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, and Ilya Sutskever. Language models
+are unsupervised multitask learners.OpenAI Blog, 1(8):9, 2019.
+Nils Reimers and Iryna Gurevych. Sentence-BERT: Sentence embeddings using siamese BERT-networks. In
+Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing. Association
+for Computational Linguistics, 11 2019. URLhttps://arxiv.org/abs/1908.10084.
+Benjamin Rhodes and Michael Gutmann. Enhanced gradient-based mcmc in discrete spaces.arXiv preprint
+arXiv:2208.00040, 2022.
+Christian P. Robert and George Casella. Monte Carlo Statistical Methods (Springer Texts in Statistics).
+Springer-Verlag, Berlin, Heidelberg, 2004.
+Ronald Rosenfeld. A maximum entropy approach to adaptive statistical language modelling.Comput. Speech
+Lang., 10(3):187–228, 1996. doi: 10.1006/csla.1996.0011. URL https://doi.org/10.1006/csla.1996.
+0011.
+Vivekananda Roy. Convergence diagnostics for Markov chain Monte Carlo. Annual Review of Statistics
+and Its Application, 7(1):387–412, 2020. doi: 10.1146/annurev-statistics-031219-041300. URL https:
+//doi.org/10.1146/annurev-statistics-031219-041300.
+Halsey Royden and Patrick Fitzpatrick.Real Analysis. Pearson, fourth edition, 2010.
+Donald B. Rubin. Comment on “The calculation of posterior distributions by data augmentation”.Journal
+of the American Statistical Association, 82(398):543–546, 1987.
+Yang Song and Diederik P. Kingma. How to train your energy-based models.CoRR, abs/2101.03288, 2021.
+URL https://arxiv.org/abs/2101.03288.
+Terence Tao. The strong law of large numbers, 2008. URLhttps://terrytao.wordpress.com/2008/06/
+18/the-strong-law-of-large-numbers.
+Luke Tierney. Exploring posterior distributions using Markov chains. Technical report, Minnesota University,
+Minneapolis Department of Statistics, 1992.
+Dootika Vats, James M. Flegal, and Galin L. Jones. Multivariate output analysis for Markov chain Monte
+Carlo. Biometrika, 2019.
+Aki Vehtari, Andrew Gelman, Daniel Simpson, Bob Carpenter, and Paul-Christian Bürkner. Rank-
+normalization, folding, and localization: an improvedR for assessing convergence of MCMC (with discus-
+sion). Bayesian Analysis, 16(2):667–718, 2021.
+JohnvonNeumann. Varioustechniquesusedinconnectionwithrandomdigits. John von Neumann, Collected
+Works, 5:768–770, 1963.
+17
+Published in Transactions on Machine Learning Research (11/2022)
+Larry Wasserman. All of Statistics: A Concise Course in Statistical Inference. Springer, New York, 2010.
+ISBN 9781441923226 1441923225.
+Maosen Zhang, Nan Jiang, Lei Li, and Yexiang Xue. Language generation via combinatorial constraint
+satisfaction: A tree search enhanced Monte-Carlo approach. InFindings of the Association for Compu-
+tational Linguistics: EMNLP 2020, pages 1286–1298, Online, November 2020. Association for Computa-
+tional Linguistics. doi: 10.18653/v1/2020.findings-emnlp.115. URL https://aclanthology.org/2020.
+findings-emnlp.115.
+Ruqi Zhang, Xingchao Liu, and Qiang Liu. A langevin-like sampler for discrete distributions. InInternational
+Conference on Machine Learning, pages 26375–26396. PMLR, 2022.
+Yaoming Zhu, Sidi Lu, Lei Zheng, Jiaxian Guo, Weinan Zhang, Jun Wang, and Yong Yu. Texygen: A
+benchmarking platform for text generation models. In Kevyn Collins-Thompson, Qiaozhu Mei, Brian D.
+Davison, Yiqun Liu, and Emine Yilmaz, editors, The 41st International ACM SIGIR Conference on
+Research & Development in Information Retrieval, SIGIR 2018, Ann Arbor, MI, USA, July 08-12, 2018,
+pages 1097–1100. ACM, 2018. doi: 10.1145/3209978.3210080. URLhttps://doi.org/10.1145/3209978.
+3210080.
+18
+Published in Transactions on Machine Learning Research (11/2022)
+A Additional Controlled Text Generation Results
+We perform constrained text generation for a variety of distributional and pointwise constraints. In partic-
+ular, we constrain the GPT-2 biographies model to contain (a) 50% female biographies about scientists, (b)
+50% female biographies about sports, or (c) 50% female biographies without additional constraint. Also, we
+constrain GPT-2 small to exclusively generate sequences containing (d) the term “amazing”, or (e) the term
+“Wikileaks”. For each of these tasks, we obtained a fine-tuned model using DPG, which serves both as a
+baseline and as a proposalq that we can sample from. In the case of pointwise constraints, we also consider
+a naive filtersamplerqproj in which the proposal distribution is directly projected onto the constraint man-
+ifold by filtering out all samples that do not match the constraint. This sampler also assigns well-defined
+probabilities to the sequences that it samples, so we can compute estimates of theTVD and DKL for it.
+For each task, we again obtain1M samples from the corresponding proposal, which we use to evaluate the
+proposal q, the projected proposalqproj (only for the pointwise constraint), and QRS sampling (pβ) for a
+range ofβ values reported in Table 2. For all of these, we compute estimates of a number of metrics including
+those of Sec. 3.2.2 (i.e.TVD(p,pβ), DKL(p,pβ), AR, reverse KL divergence from the base language model
+DKL(·,a ), and the moments of the features that we wish to control).
+Our results are shown in Fig. 5. As expected, the upper bound on the TVD betweenpβ and p, and the
+KL divergence of p from pβ both converge monotonically to zero as the acceptance rate decreases. For
+the constraints and corresponding proposal distributions shown here, it seems that an acceptance rate of
+10−3 is sufficient to match the target EBM nearly perfectly. The feature moments also converge as the
+acceptance rate decreases, although in some cases the QRS sampler matches the target EBM so closely that
+small inaccuracies in theλ values obtained from the EBM estimation procedure (which is from Khalifa et al.
+2021) become apparent. As for the divergence of the QRS distribution from the original language model
+DKL(pβ,a ), there is no obvious trajectory that it should follow other than a tendency to converge to the
+lowest possible valueDKL(p,a ) when all constraints are satisfied (by definition, the EBMp is the distribution
+c which minimizesDKL(c,a ) among all distributions satisfying the constraints). Indeed, our results show
+that this metric is a non-monotonic function of AR. We observe that the moments computed downstream
+on QRS closely match the IS predictions, giving us confidence in the accuracy of those estimates. Finally,
+in the case of our pointwise “amazing” and “Wikileaks” constraints, we find that the naive filter strategy
+(qproj) corresponds to running the QRS sampler at a high acceptance rate.
+Experiment βmin βmax
+50% female and 100% scientists 1.0· 10−12 9.3· 106
+50% female and 100% sports 1.0· 10−12 2.9· 107
+50% female 4.0· 10−7 4.0· 103
+100% “amazing” 1.0· 10−12 5.3· 101
+100% “Wikileaks” 1.0· 10−12 6.0
+simple 1.0· 10−12 3.8
+multiple 1.0· 10−12 2.3
+knowledge 1.0· 10−12 24.0
+jeopardy 1.0· 10−12 29.0
+news 1.0· 10−12 3.0
+Table 2: We report the range ofβ values used to obtain the range of acceptance rates in Fig. 3, 4, and 5.
+B Applications to Paraphrase Generation
+Inspired by Miao et al. (2019), we perform proof-of-concept experiments on paraphrase generation by framing
+the task in terms of conditional EBMs. Specifically, given a sentencey to paraphrase, we define our EBM
+in terms of a language modela(x) = GPT-2(x), and a pointwise constraintb(x) given by a binary classifier
+that classifies a pair (x,y ) as a paraphrase if the cosine similarity between their sentence embeddings is
+19
+Published in Transactions on Machine Learning Research (11/2022)
+(a) 50% female scientist biographies
+(b) 50% female sports biographies
+(c) 50% female biographies
+(d) 100% sequences containing “amazing”
+(e) 100% sequences containing “Wikileaks”
+Figure 5: We show IS estimates of TVD(p,·), an upper-bound on TVD(p,pβ), DKL(p,·), DKL(·,a ) and
+feature moments as a function of acceptance rate. We show three distributional constraints on GPT-2
+biographies and two pointwise constraints on GPT-2 small. As proposal distribution, we use a DPG model
+trained for each constraint separately. We show separate lines for the target moments and the moments
+realized by the EBMs, revealing slight inaccuracies in the EBM moments for some constraints.
+20
+Published in Transactions on Machine Learning Research (11/2022)
+Input Sequence Proposal Distribution QRS samples from p at AR= 10−5
+How is the two
+wheeler insurance
+from Bharti Axa
+insurance?
+What about bicycle insurance from Bharti Axa insur-
+ance?
+How is the Axa Bharti two-wheeler insurance pol-
+icy?
+What about the Bharti Axa insurance? How is Bharti Axa insurance for two-wheeler?
+What is the Bharti Axa insurance plan? The Bharti Axa Two-wheeler insurance. How is it?
+Are there Doctor
+Who references in
+the Muse song
+"Knights of
+Cydonia"?
+Do you hear a hint of doctors in the Muse songs
+"Knights of Cydonia"?
+Are there Doctor Who references in Muse’s Knights
+of Cydonia?
+Can you find a hint at Doctor Who in the "Knights of
+Cydonia" line from the book’s Muse song?
+Does this Muse song ’Knights of Cydonia’ have any
+references to Doctor Who?
+Are there any references to Doctor Who in a muse song,
+Knights of Cydonia?
+Are there Doctor Who references in Muse’s Knights
+of Cydonia?
+In French, how do
+you say "cool"?
+How do you call ’cool’ in French? How to Say "cool" in French
+How do you keep the language Cool in French? How to Say ’Cool’ in French
+How do you say ’cool’ in French? How do you say "cool" in French
+Figure 6: TVD(p,pβ) running the QRS sampler at various acceptance rates to generate paraphrases of three
+sequences (top). We show some example paraphrases from both the proposal distributionq(x) (round-trip
+NMT) as well as the QRS samplerpβ at an acceptance rate of10−5 (bottom).
+above 0.95. We obtain high-quality sentence embeddings from sentence-BERT13 (Reimers and Gurevych,
+2019). As proposal distribution we do not use GPT-2, but rather illustrate how we can utilize off-the-
+shelf deep learning models as proposal distributions for QRS. In particular, we use a round-trip machine-
+translation model, which is a well-known tool in generating paraphrases (Bannard and Callison-Burch, 2005;
+Mallinson et al., 2017). Specifically, we use the English-to-German and German-to-English models from Ng
+et al. (2019). We first obtain a beam-searched (Graves, 2012) translation into German,14 and then define
+the proposal distribution as the German-to-English model conditioned on the beam searched translation.
+We locally renormalize the model to do top-30 sampling (Fan et al., 2018).
+We show IS estimates ofTVD(p,pβ) using 1M samples for three sequences in Fig. 6 along with samples
+from both the proposal distribution and QRS at AR= 10−5. The quality of the proposal distribution varies
+with the input sequence, as can be seen from the slope of the curve and the low-efficiency starting points
+of some curves (non-paraphrases are always rejected and so they have a big influence on the acceptance
+rate). Still, QRS gives excellent approximations to the target EBM in two out of the three examples (in the
+“insurance” and “cool” examples, the TVD is nearly zero), although the TVD in the “Doctor Who” example
+remains above 0.4 even for AR= 10−5). Looking at the examples, we find that the proposal distribution
+produces decent paraphrases, but they are not always semantically equivalent or grammatically correct. The
+QRS samples are mostly semantically equivalent, though they still contain some mistakes (“Axa Bharthi”
+vs “Bharti Axa”) and seem to be insensitive to the question mark and to the casing of words (“Cool”,
+“Two-wheeler insurance”). Interestingly, this experiment illustrates how the presented approach could be
+employed todisentangle the questions of how to model a problem (by defining the corresponding EBM) and
+how to efficiently sample from it (by improving the proposal distributions), making it possible to work on
+each of these questions separately.
+13We usehttps://huggingface.co/sentence-transformers/all-mpnet-base-v2 .
+14We use a beam size of5.
+21
+Published in Transactions on Machine Learning Research (11/2022)
+(a)
+ (b)
+Figure 7: (a) Estimation of sampling quality asDKL(p,pβ), efficiency (acceptance rate), and the trade-
+off between them for a QRS sampler when using a proposalq = Poisson(λ = 10) to approximate p =
+Poisson(λ = 11) , computed in 10 independent experiments over 104 samples. (b) Differences between
+estimated DKL(p,pβ) and their true values forβ = 2, computed 1000 times for each different number of
+samples. Shaded areas represent one standard deviation.
+C Additional Results for Poisson Distributions
+C.1 KL-divergence results for QRS
+Fig. 7 shows the convergence of estimates of the KL divergence when using QRS with Poisson distributions.
+As in the analogous plots for TVD (Fig. 2), we see that the divergence quickly converges to zero asβ
+increases, and that the standard deviation of the estimates is much larger than the bias.
+C.2 Comparison of QRS, IMH-R and RWMH-R
+We now compare the performance of QRS with other approximate sampling methods, namely the reset ver-
+sionsoftheindependentMetropolisHastings(IMH-R)andtherandom-walkMetropolisHastings(RWMH-R)
+samplers. As above, we use the proposalq = Poisson(λ = 10) and targetp = Poisson(λ = 11). To ensure
+accurate values for the KL divergence and TVD, we implement each method in closed form, as now explained.
+Calculating the probability mass functions of the samplersFor QRS, we compute the probability
+mass functionpβ and acceptance rate using Eq. 3 and 4. For IMH-R, we takek samples from the proposal
+q according to the generative process:
+X(0)∼q,
+for t = 1,...,k − 1
+Y (t)∼q
+X(t) =
+{
+Y (t) with probability min
+(
+1, p(Y (t))/q(Y (t))
+p(X (t−1))/q(X (t−1))
+)
+X(t−1) otherwise.
+For nonnegative integer statesX(t−1) = x0 and X(t) = x1, this corresponds to the transition matrix (or
+Markov kernel, noting that the state space is infinite)
+Tx1,x0 =q(x1) min
+(
+1,p(x1)/q(x1)
+p(x0)/q(x0)
+)
+, ∀x1̸=x0
+Tx0,x0 = 1−
+∑
+x1̸=x0
+Tx1,x0.
+We compute the divergence of the target from the distribution ofX(k−1), which isTk−1q; and for comparison
+with QRS, we compute the “acceptance rate” as1/k, i.e. the reciprocal of the number of times we sample
+22
+Published in Transactions on Machine Learning Research (11/2022)
+Figure 8: Quality-efficiency trade-off for QRS, IMH-R and RWMH-R samplers, when approximating the
+target distributionp = Poisson(λ = 11). We use distributionq = Poisson(λ = 10) as proposal for QRS and
+IMH-R, and as initial distribution for RWMH-R. Quality is measured as TVD(p,psampler) in the left plot,
+and asDKL(p,psampler) in the right plot. Efficiency is measured as the acceptance rate for QRS; and as the
+reciprocal of the number of sampling iterations for IMH-R and RWMH-R, which we call the “acceptance
+rate” in this context.
+from q. For RWMH-R, we consider the chain:
+X(0)∼q,
+for t = 1,...,k − 1
+Y (t)∼
+{
+X(t−1)− 1 with probability 1
+2
+X(t−1) + 1 otherwise
+X(t) =
+{
+Y (t) with probability min
+(
+1, p(Y (t))
+p(X (t−1))
+)
+X(t−1) otherwise,
+corresponding to the transition matrix
+Tx1,x0 =
+
+
+
+min
+(
+1, p(x1)
+p(x0)
+)
+if|x1−x0| = 1
+0 if|x1−x0|> 1
+1−∑
+x1:|x1−x0|=1Tx1,x0 if x1 =x0.
+We compute the divergence of the target from the distribution ofX(k−1), which isTk−1q; and for comparison
+with QRS, we compute the “acceptance rate” as1/k, i.e. the reciprocal of the number of times we must
+evaluate the target distributionp (or fork = 1, the number of times we sample from the proposalq). Clearly,
+the performance of RWMH-R might be improved by using a different random walk: the±1 random walk is
+used here as it seems the simplest and most natural choice.
+Truncation errors For all methods, to ensure practical computation, we truncate the distributions, work-
+ing only with statesx< 50. To assess the truncation error, we repeat the experiment, this time truncating
+with x < 100, and find that the largest relative error in KL, TVD or AR for any method is in the KL
+divergence of QRS forβ = 5, which is
+⏐⏐⏐⏐
+DKL(p,pβ)x<100−DKL(p,pβ)x<50
+DKL(p,pβ)x<100
+⏐⏐⏐⏐= 1.48···× 10−10.
+Results Figure 8 presents the TVD and KL divergence as a function of AR, computed for parameterβ
+in the range[0.1, 5] for QRS, and fork = 1, 2,... 5 iterations of IMH-R and RWMH-R. For acceptance rate
+AR = 1, all samplers give the same divergence, as they all return samples directly from the proposalq.
+23
+Published in Transactions on Machine Learning Research (11/2022)
+For each lower acceptance rate15, the TVD of QRS is systematically lower than that of IMH-R, and the
+TVD of IMH-R is systematically lower than that of RWMH-R; and the same holds for KL divergence. On
+investigating the ratios of the divergences, we find that these advantages increase as the acceptance rate
+decreases, and for AR≈ 1/5 we have
+TVD(p,pIMH-R,k=5)
+TVD(p,pQRS,β=5) = 2.24···× 103 and DKL(p,pIMH-R,k=5)
+DKL(p,pQRS,β=5) = 3.60···× 102.
+D Properties of QRS: Proofs
+D.1 Proofs of Eq. 3 and Eq. 4
+Proof of Eq. 3 By definition,pβ(x) is the probability that the first16 output from Algorithm 1 is equal
+to x. On the first step of the algorithm, the probability that a givenx is accepted isq(x)rx, whereas the
+probability that the algorithm rejects its first sample isρ .=∑
+x∈Xq(x)(1−rx) = 1−∑
+x∈Xq(x)rx. More
+generally, the probability forx to be accepted on stepi of the algorithm, while nox was accepted on previous
+steps is thenρi−1q(x)rx. Overall, the probabilitypβ(x) that the first sample accepted isx is
+∞∑
+i=1
+ρi−1q(x)rx =q(x)rx
+∞∑
+i=1
+ρi−1 = 1
+1−ρq(x)rx
+= 1∑
+x∈Xq(x)rx
+q(x)rx = 1
+Zβ
+Pβ(x).
+Proof of Eq. 4 We have
+ARβ = Ex∼q min(1,P (x)/(βq(x)))
+=β−1∑
+x∈X
+min(P (x),βq (x))
+=β−1∑
+x∈X
+Pβ(x) =Zβ/β.
+D.2 Proof of Theorem 2.1
+We will need a well-known property ofTVD (e.g. see Chafaï 2010), namely that, for any distributionsp1,p 2
+overX, we have
+TVD(p1,p 2) =
+∑
+x∈X:p1(x)≥p2(x)
+(p1(x)−p2(x)). (8)
+The proof, illustrated in Fig. 9, then proceeds as follows:
+Let Aβ
+.={x∈ X : P (x)≤ βq(x)} and ¯Aβ
+.= X\Aβ. We havePβ(x) .= min(P (x),βq (x)) and therefore
+Pβ(x) = P (x) for x∈ Aβ, and Pβ(x) < P(x) for x∈ ¯Aβ. Overall, Pβ is less than or equal toP, and
+thus Zβ≤ Z. For anyx, we havepβ(x) = Pβ(x)/Zβ and p(x) = P (x)/Z, and hence forx∈ Aβ we have
+p(x)≤pβ(x).
+If we defineCβ
+.={x∈X :p(x)≤pβ(x)}, and ¯Cβ
+.=X\Cβ, we haveAβ⊆Cβ and ¯Cβ⊆ ¯Aβ. Using Eq. (8),
+we now see that
+TVD(p,pβ) =
+∑
+x∈X:p(x)≥pβ(x)
+(p(x)−pβ(x)) =
+∑
+x∈ ¯Cβ
+(p(x)−pβ(x))≤
+∑
+x∈ ¯Cβ
+p(x).
+Finally we get
+TVD(p,pβ)≤p( ¯Cβ)≤p( ¯Aβ) = 1−p(Aβ). (9)
+15The acceptance rates of QRS forβ = 2, 3,... are nearly equal to1/2, 1/3,... because AR =Zβ/β by Eq. 4, and for this
+choice ofβ, p and q we haveZβ≈ 1.
+16Or, for that matter, due to the obvious i.i.d. nature of the algorithm, for any fixedk, thek-th output.
+24
+Published in Transactions on Machine Learning Research (11/2022)
+𝐴! ̅𝐴! 𝐴" ̅𝐴"𝐶" ̅𝐶"
+𝑃!
+𝑃 𝑝!𝑝
+𝑃!
+Figure 9: Visualization of Theorem 2.1. The left panel shows the unnormalized distributionsP and Pβ,
+the right panel their normalized versionsp and pβ. In the right panel, the area under the curvesp and pβ
+represent the totalp-mass andpβ-mass ofX respectively, which are both1. To simplify visual comparison,
+the figure assumes thatZ = 1, in other words thatP = p; thenZβ≤ 1 and pβ is Pβ scaled by the factor
+1/Zβ. The TVD betweenp and pβ is equal to the area between the two curves aboveCβ, but also to the
+area between the two curves above¯Cβ. This last area is included inside the area below thep curve above
+¯Aβ, which is the visual counterpart of Eq. (9).
+Proof of the corollary to the theoremFor any (normalized) distributionp over a discrete spaceX,
+we have∑∞
+i=1p(xi) = 1, hence for anyϵ >0, there exists a finite subsetX′⊆X such thatp(X′)> 1−ϵ,
+with X′⊆ Supp(p)⊆ Supp(q). If we take β .= maxx∈X′
+P(x)
+q(x), then β is finite, X′⊆ Aβ, and therefore
+p(Aβ)≥ 1−ϵ, which proves the result.
+A generalization to arbitrary q-supports The corollary exploits the assumption — that we made
+throughout Sec. 2 — that the support ofp, Supp(p), is contained in the support ofq, Supp(q), in other
+terms,p(x)> 0⇒q(x)> 0. If that were not the case thenβ .= maxx∈X′
+P(x)
+q(x) could be infinite andAβ would
+not be defined. However, it is interesting that we can actually generalize the result to the case where Supp(p)
+may not be contained in Supp(q). In that case, for anyϵ> 0, there exists a finite subsetY′⊆ Supp(q) such
+that p(Y′) > p(Supp(q))−ϵ. If we now takeβ .= maxx∈Y′
+P(x)
+q(x), thenβ is finite,Y′⊆ Aβ, and therefore
+p(Aβ)≥p(Supp(q))−ϵ. For anyβ, each elementx ofAβ is either inSupp(q), or it satisfies0 =βq(x)≥P (x)
+so thatp(x) = 0. It follows thatp(Aβ)≤p(Supp(q)). Therefore
+p(Supp(q))≥p(Aβ)≥p(Supp(q))−ϵ.
+When the support ofp is included in Supp(q), we havep(Supp(q)) = 1, and therefore we get the previous
+result back, but now we see that, in the general case
+lim
+β→∞
+(1−p(Aβ)) = 1−p(Supp(q)). (10)
+D.3 Proof of Theorem 2.2 (Monotonicity)
+Notation It will be convenient to use the notationa∧b to denote min(a,b ).
+D.3.1 Preliminaries: majorization of convex functions and a squeezing lemma
+We will exploit the following “majorization” result about convex functions.
+Theorem D.1(Fuchs 1947). Letp1,...,p n be real numbers, and let
+b>y 1≥... ≥yn >a, b>y ′
+1≥... ≥y′
+n >a
+be nonincreasing sequences of real numbers, such that
+n∑
+i=1
+piy′
+i =
+n∑
+i=1
+piyi,
+k∑
+i=1
+piy′
+i≤
+k∑
+i=1
+piyi, (11)
+25
+Published in Transactions on Machine Learning Research (11/2022)
+••
+•
+••
+•→ ←←→
+Squeezing
+→
+𝑓(𝜇) 𝑓(𝜇)'!𝑝!𝑓(𝑦!) '!𝑝!𝑓(𝑦!′)
+'!𝑝!𝑦!"=𝜇='!𝑝!𝑦!𝜇='!𝑝!𝑦!
+Figure 10: Squeezing lemma. We letµ =∑
+ipiyi, and represent the pointsyi andy′
+i through dots with sizes
+proportional topi.
+for k = 1,...,n − 1. Then for any convex functionf : (a,b )→ R, we have
+k∑
+i=1
+pif(y′
+i)≤
+k∑
+i=1
+pif(yi). (12)
+Our application of this theorem will be based on the following “squeezing” lemma (see Fig 10).
+Lemma D.2. Let p1,...,p n be nonnegative real numbers, with∑n
+i=1pi = 1, let f be a convex function
+f : (a,b )→ R, and let
+b>y 1≥... ≥yn >a, b>y ′
+1≥... ≥y′
+n >a
+be nonincreasing sequences of real numbers, such that
+n∑
+i=1
+piy′
+i =
+n∑
+i=1
+piyi.
+Suppose that there exists an integerk such thaty′
+i≤yi if i≤k and y′
+i≥yi otherwise. Then
+n∑
+i=1
+pif(y′
+i)≤
+n∑
+i=1
+pif(yi). (13)
+Proof. If m≤k then∑m
+i=1pi(yi−y′
+i)≥ 0, asy′
+i≤yi for i≤k. Ifm>k then
+m∑
+i=1
+pi(yi−y′
+i) =
+n∑
+i=m+1
+pi(y′
+i−yi)≥ 0,
+as∑n
+i=1pi(yi−y′
+i) = 0 and y′
+i≥yi for i>k . This means that the conditions (11) are satisfied, and we can
+then conclude through (12).
+D.3.2 For the main proof, we can focus on the case whereP is normalized, the general case follows
+Suppose that p is the normalized version of P, with p(x) = P (x)/Z. We have by definition pβ(x) =
+(P (x)∧ (βq (x))/Zβ, in other wordspβ(x)∝P (x)∧ (βq (x)). Let us denote by˜p˜β the similar distribution,
+26
+Published in Transactions on Machine Learning Research (11/2022)
+but this time defined relative to ˜P .= p, in other words ˜p˜β(x) ∝ ˜P (x)∧ ( ˜βq (x)) = p(x)∧ ( ˜βq (x)), or
+equivalently, ˜p˜β(x)∝ (Zp (x))∧ (Z ˜βq (x)) =P (x)∧ (Z ˜βq (x)), thus ifβ =Z ˜β then it follows thatpβ = ˜p˜β.
+Therefore, in order to prove that0<β <β′ <∞ implies Df(p,pβ′)≤Df(p,pβ), it is enough to prove that
+0< ˜β < ˜β′ <∞ implies Df(p, ˜p ˜β′)≤Df(p, ˜p˜β).
+D.3.3 Some basic properties of pβ
+Let 0<β <∞. We have
+Pβ(x) =p(x)∧ (βq(x)), (14)
+so that
+Zβ =
+∑
+x
+Pβ(x) =
+∑
+x
+p(x)∧ (βq(x)) =
+∑
+x
+p(x) (1∧ (βq (x)/p(x))), (15)
+pβ(x) = Pβ(x)
+Zβ
+= p(x)∧ (βq (x))
+Zβ
+=p(x)1∧ (βq (x)/p(x))
+Zβ
+. (16)
+The following observations will be key in the proof. For0<β ≤β′ <∞, we have
+1
+Zβ
+≥ 1
+Zβ′
+, β
+Zβ
+≤ β′
+Zβ′
+, (17)
+which are simple consequences of the following facts:
+Zβ =
+∑
+x
+p(x)∧ (βq(x))≤
+∑
+x
+p(x)∧ (β′q(x)) =Zβ′,
+Zβ
+β =
+∑
+x
+p(x)
+β ∧q(x)≥
+∑
+x
+p(x)
+β′ ∧q(x) = Zβ′
+β′ .
+D.3.4 Using the form Df(pβ,p ) instead of the formDf(p,pβ)
+As already remarked in footnote 5,f-divergences have the property thatDf(p1,p 2) = D ˜f(p2,p 1), where
+˜f(t) .= tf(1/t) is the “perspective” transform off, which is convex whenf is convex (Polyanskiy, 2019,
+Remark 7.2). 17
+For the monotonicity proof, it will be more convenient to use the formDf(pβ,p ) than the formDf(p,pβ). We
+willthenprovethatforanyconvexfunction f (withtheusualconditionson f-divergences), if0<β <β′ <∞
+then Df(pβ′,p )≤Df(pβ,p ), which will imply that for any convex functionf (with the usual conditions on
+f-divergences), if 0<β <β′ <∞ then Df(p,pβ′)≤Df(p,pβ), the original formulation of Theorem 2.2.
+With p fixed, we will use the abbreviationDβ
+.=Df(pβ,p ), so that
+Dβ =Df(pβ,p ) =
+∑
+x
+p(x) f
+(pβ(x)
+p(x)
+)
+=
+∑
+x
+p(x) f
+(1∧ (βq (x)/p(x))
+Zβ
+)
+. (18)
+D.3.5 Focusing on the finite caseX ={x1,...,x m} first
+Our proof will now proceed by assuming thatX ={x1,...,x m} is finite, but we will show at the end
+(Sec. D.3.8) that the proof generalizes to any countable spaceX.
+17For discrete distributionsp1,p 2 in particular, this is always true, irrespective of whetherp1≪ p2 or p2≪ p1 — with≪
+denoting absolute continuity, that isp1≪ p2 meaning that Supp(p1)⊆ Supp(p2) and similarly for the reverse case — but
+this requires a small technical extension of the notion off-divergence, see Polyanskiy (2019), Remark 7.1. In the case where
+p1 =pβ,p 2 =p, we do not need this extension because we have bothpβ≪p andp≪pβ, an easy consequence of the fact that
+p≪q by our hypotheses and ofpβ(x) =
+Pβ (x)
+Zβ
+= p(x)∧(βq (x))
+Zβ
+.
+27
+Published in Transactions on Machine Learning Research (11/2022)
+Figure 11: Left: three regions forβ. Right: continuity ofDβ.
+D.3.6 A reparametrization in terms of importance ratios
+Let
+r(x) .=p(x)/q(x),
+R .={0}∪ r(X) ={r0,r 1,...,r n}
+where r0 = 0, and fori> 0, ri is the image byr of somex∈X (where X ={x1,...,x m} is now finite, by
+assumption; note that0 may or not appear inr(X) and thatm can be larger thann + 1). We order theri
+such thatri <r i+1:
+We can re-express Eq. 14–16 and 18 in terms ofri:
+p(ri) .=
+∑
+x∈X:r(x)=ri
+p(x), (19)
+Zβ =
+∑
+i
+p(ri) (1∧ (β/ri)), (20)
+pβ(ri) .=p(ri) 1∧ (β/ri)
+Zβ
+, (21)
+Dβ =
+∑
+i
+p(ri) f
+(pβ(ri)
+p(ri)
+)
+=
+∑
+i
+p(ri) f
+(1∧ (β/ri)
+Zβ
+)
+. (22)
+Note 1 We abuse notation:x∈X andr∈ R≥0 are in different spaces, so we could really write˘p(ri) instead
+of p(ri) to distinguish the two spaces.
+Note 2 We letp(r0) .= 0 in all cases.
+D.3.7 Focusing on sub-intervals is enough
+As the right-hand side of Eq. 20 is a continuous and positive function ofβ∈ (0,∞), the right-hand side of
+Eq. 22 is also continuous, and thereforeDβ is a continuous function ofβ∈ (0,∞). The index i runs over
+a finite set, hence to prove thatDβ is non-increasing inβ it is enough to prove that it is non-increasing on
+each interval(rk,rk+1).
+It will be useful to distinguish three regions forβ (see left panel of Fig. 11), namely regionA, withβ smaller
+than the smallest non-null importance ratior1; regionB with β between r1 and rn; and regionC with β
+larger than the largest importance ratiorn.
+We start by noting thatpβ is constant onA and onC:
+28
+Published in Transactions on Machine Learning Research (11/2022)
+𝑟!"#…𝑟! …••𝑏𝑏′ 𝑦!… 𝑦#𝑦!"#𝑦$ …••••
+1𝑍%→ ←𝑏/𝑟$𝑍%
+••••1𝑍%←→𝑏/𝑟!"#𝑍%→ ←
+𝑦!… 𝑦#𝑦!"#𝑦$ …
+1𝑍%&𝑏′/𝑟$𝑍%& 1𝑍%&𝑏′/𝑟!"#𝑍%&𝑦′!… 𝑦′#𝑦′!"#𝑦′$ …••••
+Figure 12: Application of squeezing lemma tork <b<b ′ <r k+1.
+• Forβ∈A we have
+p(x)∧ (βq(x)) =
+{
+0 p(x) = 0
+βq(x) p(x)> 0
+and it follows that
+pβ(x) =
+{
+0 p(x) = 0
+q(x)
+q(Supp(p)) p(x)> 0,
+which is the “normalized” version ofq relative to Supp(p).
+• Forβ∈C we havepβ(x)∝p(x)∧ (βq(x)) =p(x). Hencepβ =p (standard RS).
+It follows thatDβ is constant forβ∈ A, and again constant (actually null) forβ∈ C. Thus, in order to
+prove our monotonicity result, it is sufficient to prove thatDβ decreases forβ increasing inside each interval
+(rk,rk+1) for k = 1, 2,...,n − 1 (see right panel of Fig. 11).
+Let 1≤k < nand considerrk < b < b′ < rk+1, we want to show thatDb′ =Df(pb′,p )≤Db =Df(pb,p ).
+Fori = 1, 2,...,n , let
+yi
+.=
+1∧ b
+ri
+Zb
+, y ′
+i
+.=
+1∧ b′
+ri
+Zb′
+. (23)
+From (20) and (22), we have
+∑
+i
+p(ri)yi = 1,
+∑
+i
+p(ri)y′
+i = 1, (24)
+Db =
+∑
+i
+p(ri)f(yi), D b′ =
+∑
+i
+p(ri)f(y′
+i). (25)
+We further note that
+yi =
+{1
+Zb
+i≤k
+b/ri
+Zb
+i>k
+and y′
+i =
+{1
+Zb′ i≤k
+b′/ri
+Zb′ i>k,
+(26)
+and we saw earlier in (17) that
+1
+Zb′
+≤ 1
+Zb
+and b′
+Zb′
+≥ b
+Zb
+. (27)
+It follows that
+y′
+i≤yi for i≤k and yi≤y′
+i for i>k. (28)
+29
+Published in Transactions on Machine Learning Research (11/2022)
+We can now apply our squeezing lemma,see Fig. 12: we apply Lemma D.2 to theyi,y′
+i and k of the
+previous paragraph, and letpi =p(ri). By Eq. (24), (25) and (28), the hypotheses of the lemma are satisfied,
+and we conclude that∑n
+i=1pif(y′
+i)≤∑n
+i=1pif(yi), so that
+Df(pβ′,p )≤Df(pβ,p ). (29)
+D.3.8 Concluding the proof: from the finite case to the (countably) infinite case
+(A) Having proved the monotonicity result (29) for finite sample spacesX, we now wish to generalize this
+result to an arbitrary countable spaceX. We will use the following theorem, adapted from Gilardoni (2009,
+Proposition 1) to the case of probabilities over discrete spaces. For a partitionE ={E1,...,E I} of X into
+I subsets, and a distributionp overX, letpE denote the projection ofp onto the finite set{1,...,I } given
+bypE(i) .=p(Ei).
+Theorem D.3 (Gilardoni 2009). Let r and s be probability distributions overX. Let Df denote the f-
+divergence for some convex functionf with f(1) = 0. Then
+Df(r,s ) = sup
+E
+Df(rE,sE),
+where the sup is taken over all finite partitionsE of X.
+(B) Let p,q and pβ be distributions over a countable spaceX, and let a and b be values of the QRS
+parameterβ such that0<a<b< ∞. We prove thatDf(p,pb)≤Df(p,pa) by contradiction. Suppose that
+Df(p,pb) > Df(p,pa). Then, by Theorem D.3, there exists a finite partitionE ={E1,...,E I} of X such
+that
+Df(pE, (pb)E)>D f(p,pa). (30)
+(C) For eachi∈{ 1,...,I }, let us splitEi into three subsets
+E(1)
+i
+.={x∈Ei :p(x)≤aq (x)≤bq (x)},
+E(2)
+i
+.={x∈Ei :aq (x)<p (x)≤bq (x)},
+E(3)
+i
+.={x∈Ei :aq (x)≤bq (x)<p (x)},
+and consider the refinement of partitionE given by
+F .={F1,...,F J} .={E(j)
+i : 1≤i≤I, 1≤j≤ 3, E(j)
+i ̸=∅},
+so thatJ≤ 3I. Let β∈{ a,b}. It is easy to see thatF has the followinghomogeneity property: one can
+split the indicesInd ={1,...,J } into two disjoint subsetsIndβ and Indβ, with
+Indβ
+.={j∈Ind :p(x)≤βq(x)∀x∈Fj} and Indβ
+.={j∈Ind :p(x)>βq (x)∀x∈Fj}.
+(SetsIndβ andIndβ do not necessarily form a partition ofInd as one of these sets may be empty.) We can
+now consider the projectionspF and qF of p and q onto Ind, and the associated QRS distribution(pF)β,
+which is given by
+(pF)β(j) .= pF(j)∧ (βqF(j))
+˜Zβ
+= p(Fj)∧ (βq(Fj))
+˜Zβ
+=
+
+
+
+p(Fj)
+˜Zβ
+j∈Indβ
+βq(Fj)
+˜Zβ
+j∈Indβ,
+where
+˜Zβ =
+∑
+j∈Ind
+p(Fj)∧ (βq (Fj)) =
+∑
+j∈Indβ
+p(Fj) +
+∑
+j∈Indβ
+βq(Fj).
+30
+Published in Transactions on Machine Learning Research (11/2022)
+But we also have
+(pβ)F(j) =pβ(Fj) =
+∑
+x∈Fjp(x)∧ (βq(x))
+Zβ
+=
+
+
+
+p(Fj)
+Zβ
+j∈Indβ
+βq(Fj)
+Zβ
+j∈Indβ,
+where
+Zβ =
+∑
+x∈X
+p(x)∧ (βq (x)) =
+∑
+j∈Indβ
+p(Fj) +
+∑
+j∈Indβ
+βq (Fj).
+Comparing these two sets of equations, we see that˜Zβ =Zβ and that
+(pβ)F = (pF)β.
+(D) Let us now go back to Eq. 30. The distributions pE and (pb)E can be seen as projections of the
+distributionspF and (pb)F from the set{1,...,J } to the set{1,...,I }, and therefore the DPI (Theorem 3.1)
+applies, implying thatDf(pE, (pb)E)≤Df(pF, (pb)F), and therefore:
+Df(pF, (pb)F)>D f(p,pa).
+A second application of the DPI theorem, this time projectingp andpa fromX to the set{1,...,J }, implies
+that Df(pF, (pa)F)≤Df(p,pa), and therefore
+Df(pF, (pb)F)>D f(pF, (pa)F).
+(E) We saw earlier that(pb)F = (pF)b and (pa)F = (pF)a, hence
+Df(pF, (pF)b)>D f(pF, (pF)a),
+which contradicts our monotonicity result for the finite set{1,...,J }, concluding the proof.
+D.4 Alternative proof of monotonicity for finiteX, based on calculus
+Sections D.3.1 to D.3.7 proved the monotonicity of thef-divergence Df(pβ,p ) for distributions on a finite
+space X, based on a result aboutmajorization (Theorem D.1). We now give an alternative proof, which
+avoids this potentially unfamiliar majorization result, and which is based on the easy-to-prove observation
+that the derivative ofDf(pβ,p ) with respect toβ is nonpositive. However, this derivative does not exist for
+all β, as neither the partition functionZβ nor the functionf is necessarily differentiable. Thus to prove
+monotonicity, we must do some work to show thatDf(pβ,p ) is a Lipschitz continuous function forβ in
+an appropriate interval. We prove the following, which readily generalizes to infinite spacesX using the
+arguments of Section D.3.8.
+Lemma D.4. Let f : R>0→ R be a convex function satisfyingf(1) = 0. Let the setX be finite, and let
+0<β <β′ <∞. ThenDf(pβ′,p )≤Df(pβ,p ).
+Proof. The partition functionZb of the QRS distribution is
+Zb =
+∑
+i
+p(ri)(1∧ (b/ri))
+as previously remarked in Eq. 20, where
+R .={r0,...,r n} .={0}∪{ p(x)/q(x) :x∈X}.
+If b /∈R then this may be written in the form
+Zb =
+∑
+ℓ:rℓ<b
+p(rℓ) +b
+∑
+h:rh>b
+(p(rh)/rh),
+31
+Published in Transactions on Machine Learning Research (11/2022)
+so the quotient rule gives
+d
+db
+b
+Zb
+= Zb−b∑
+h:rh>b(p(rh)/rh)
+Z2
+b
+=
+∑
+ℓ:rℓ<bp(rℓ)
+Z2
+b
+.
+Similarly, as remarked in Eq. 22, the divergence is
+Df(pb,p ) =
+∑
+i
+p(ri)f
+(1∧ (b/ri)
+Zb
+)
+,
+and ifb /∈R then this may be written in the form
+Df(pb,p ) =
+∑
+ℓ:rℓ<b
+p(rℓ)f
+( 1
+Zb
+)
++
+∑
+h:rh>b
+p(rh)f
+( b
+rhZb
+)
+.
+Let N be the set of values ofb∈ [β,β′] such thatf is nondifferentiable at one of the arguments1/Zb or
+b/(rhZb) in the above expression. Forb /∈R∪N, the chain rule gives
+dDf(pb,p )
+db =
+∑
+ℓ:rℓ<b
+p(rℓ)f′
+( 1
+Zb
+)(
+−
+∑
+h:rh>b(p(rh)/rh)
+Z2
+b
+)
++
+∑
+h:rh>b
+p(rh)f′
+( b
+rhZb
+)(∑
+ℓ:rℓ<bp(rℓ)
+rhZ2
+b
+)
+=
+∑
+ℓ:rℓ<b
+∑
+h:rh>b
+p(rℓ)p(rh)
+rhZ2
+b
+(
+f′
+( b
+rhZb
+)
+−f′
+( 1
+Zb
+))
+≤ 0, (31)
+where the final inequality follows from the convexity off.
+Now we argue thatDf(pb,p ) is a Lipschitz continuous function ofb∈ [β,β′].
+• As the support ofq contains the support ofp, we havemaxR <∞. Thus, the partition function
+Zb =∑
+ip(ri)(1∧ (b/ri)) is bounded by
+∀b∈ [β,β′], 0<Z lo
+.= 1∧ (β/ maxR)≤Zb≤ 1.
+• It follows that the arguments of functionf appearing inD(pb,p ) are bounded by
+∀b∈ [β,β′], 0<Z lo≤ 1∧ (b/ri)
+Zb
+≤ 1
+Zlo
+.
+That is, all these arguments lie in an interval[x0,x 1] with 0<x 0 <x 1 <∞.
+• As f is convex on (0,∞), the restriction off to the domain [x0,x 1] with 0 < x0 < x1 <∞ is
+Lipschitz.
+• The following are Lipschitz: finite sums of Lipschitz functions; the minimum of two Lipschitz func-
+tions; the functionx↦→1/x forx>a wherea> 0; the product of bounded Lipschitz functions; and
+the composition of two Lipschitz functions. It follows thatD(pb,p ) is Lipschitz forb∈ [β,β′].
+If a function is Lipschitz continuous on a closed bounded interval, then is differentiable almost everywhere
+on that interval, and the change in the function over that interval is equal to the integral of its derivative
+(see for instance Royden and Fitzpatrick 2010, Chapter 6, Proposition 7 and Theorem 10). Therefore,
+Df(pβ′,p )−Df(pβ,p ) =
+∫β′
+β
+dDf(pb,p )
+db db≤ 0,
+where the inequality follows from Eq. 31. This completes the proof.
+32
+Published in Transactions on Machine Learning Research (11/2022)
+E Importance Sampling (IS) Estimates
+Here we provide all relevant IS (Owen, 2013) estimates and their derivations. As mentioned in Sec. 2, we
+base all estimates on a sample{x1,...,x N} of i.i.d. draws fromq; and if the sum∑
+x∈Xh(x) is well-defined
+for a functionh :X→ R, then we have
+∑
+x∈X
+h(x) =
+∑
+x∈X
+q(x)h(x)
+q(x) = Ex∼q
+h(x)
+q(x)≃ 1
+N
+N∑
+i=1
+h(xi)
+q(xi).
+In this way, we find
+Z =
+∑
+x∈X
+P (x) ≃ 1
+N
+N∑
+i=1
+P (xi)
+q(xi),
+Zβ =
+∑
+x∈X
+Pβ(x) ≃ 1
+N
+N∑
+i=1
+Pβ(xi)
+q(xi) ,
+ARβ = Ex∼q min
+(
+1, P (x)
+βq(x)
+)
+≃ 1
+N
+N∑
+i=1
+min
+(
+1, P (xi)
+βq(xi)
+)
+,
+p(Aβ) =
+∑
+x∈X
+p(x)1 [x∈Aβ] ≃ 1
+N
+N∑
+i=1
+P (xi)
+Zq(xi) 1 [xi∈Aβ],
+Ex∼pβh(x) =
+∑
+x∈X
+pβ(x)h(x) ≃ 1
+N
+N∑
+i=1
+Pβ(xi)
+Zβq(xi)h(xi).
+(32)
+Similarly, we may estimatef-divergences with
+Df(p,pβ) = Ex∼q
+Pβ(x)
+Zβ q(x)f
+(Zβ P (x)
+Z Pβ(x)
+)
+≃ 1
+N
+N∑
+i=1
+Pβ(xi)
+Zβ q(xi) f
+(Zβ P (xi)
+Z Pβ(xi)
+)
+,
+which for TVD (f(t) =|1−t|/2) and KL divergence (f(t) =t logt) rearranges to
+TVD(p,pβ)≃ 1
+2N
+N∑
+i=1
+⏐⏐⏐⏐
+Pβ(xi)
+Zβ q(xi)− P (xi)
+Zq(xi)
+⏐⏐⏐⏐, (33)
+DKL(p,pβ)≃ logZβ
+Z + 1
+N
+N∑
+i=1
+P (xi)
+Zq(xi) log P (xi)
+Pβ(xi). (34)
+F Estimating the Mapping Betweenβ and AR
+Eq. 32 provides a way to estimate the AR given a value ofβ and a set of samples from a proposalq. How
+can we go in the opposite direction and estimateβ for a target AR value? One way to do so, is to estimate
+the full mapping from AR toβ, and interpolate it at the target AR. Algorithm 2 estimates this mapping
+efficiently, based on the observation that Eq. 32 can be rewritten as a sum of two terms:
+ARβ≃ (ai +bi)/N at β =βi (35)
+where
+βi
+.=P (xi)/q(xi), a i
+.=
+N∑
+j=1
+1 [βj≤βi]βj/βi, b i
+.=
+N∑
+j=1
+1 [βj >β i], (36)
+noting that botha andb can be computed efficiently given a sorted list ofβi values. (In the case thatβi =βj
+for somej̸=i, the output will contain repeated values, which are easily filtered out, if necessary.)
+33
+Published in Transactions on Machine Learning Research (11/2022)
+sampler AR %female %science PPL ↓ Self-BLEU-5↓ %Uniq↑ Dist-1↑ Dist-2↑ Dist-3↑ TVD(p,pβ )↓∗ DKL (p,pβ )↓∗
+DPG 1 27 .3± 0.4 69 .1± 0.4 34 .4± 0.2 89.8± 0.1 100 .0± 0 89 .7± 0.1 95.8± 0.0 93.1± 0.0 0.7± 0.00099 2 .28± 0.03
+IMH 10−1 46.3± 4.3 99 .8± 0.1 - 95.4± 0.5 55 .7± 5.8 89.3± 0.7 96.0± 0.2 93.4± 0.2 Unk. Unk.
+IMH-R 10−1 40.9± 1.5 99 .5± 0.2 29 .2± 0.8 91.3± 0.1 100 .0± 0 89 .5± 0.2 95.9± 0.1 93.3± 0.0 Unk. Unk.
+QRS 10−1 44.2± 2.6 99 .7± 0.1 29 .9± 0.8 91.1± 0.2 100 .0± 0 89 .4± 0.2 96.0± 0.1 93.3± 0.0 0.37± 0.0049 0 .77± 0.036
+R WMH-base 10−1 29.9± 45.6 70.0± 45.8 - 100.0± 0.0 7 .6± 15.1 89.3± 4.7 96.1± 1.0 93.0± 1.0 Unk. Unk.
+R WMH-R-base 10−1 28.0± 1.3 68 .3± 1.5 34 .9± 0.7 89.8± 0.2 100 .0± 0 89 .6± 0.2 95.8± 0.1 93.1± 0.1 Unk. Unk.
+IMH 10−3 49.8± 2.1 99 .8± 0.1 - 91.2± 0.2 97 .4± 1.0 89.1± 0.2 95.9± 0.1 93.4± 0.0 Unk. Unk.
+IMH-R 10−3 49.8± 1.6 99 .8± 0.1 34 .1± 0.8 90.9± 0.2 100 .0± 0 89 .1± 0.2 95.9± 0.1 93.4± 0.0 Unk. Unk.
+QRS 10−3 49.4± 1.4 99 .8± 0.1 34 .1± 0.9 90.9± 0.2 100 .0± 0 89 .1± 0.2 95.9± 0.1 93.4± 0.0 0.012± 0.0055 0 .0084± 0.0048
+Table 3: Further comparisons of samplers on the “female-science” EBM described in Sec. 3.2.2. We do not
+compute perplexity for IMH and RWMH without reset as it does not yield i.i.d. samples. As noted, TVD
+and KL for MCMC methods are unknown (i.e. we have no way of estimating them). Where available we
+show mean± one standard deviation over 10 runs.∗TVD and KL are estimated on independent sets of106
+samples.
+Algorithm 2 Estimate AR→β mapping
+1: Require: P, q, N
+2: S← [ ]
+3: for i = 1, 2,...,N do
+4: xi∼q
+5: βi←P (xi)/q(xi)
+6: S[i]←βi
+7: end for
+8: Ss← SortAscending(S) {Array of sortedβi}
+9: aaux[0]← 0
+10: for i = 1, 2,...,N do
+11: βi←Ss[i]
+12: aaux[i]←aaux[i− 1] +βi {a[i] =∑
+j:βj≤βiβj}
+13: b[i]←N−i {b[i] =∑
+j 1 [βj >β i]}
+14: end for
+15: for i = 1, 2,...,N do
+16: βi←Ss[i]
+17: a[i]←aaux[i]/βi {a[i] =∑
+j:βj≤βiβj/βi}
+18: AR[i]← (a[i] +b[i])/N
+19: end for
+20: return AR and Ss {Ss[i] is theβ at whichARβ =AR[i]}
+G Further Comparisons with MCMC
+Table 4 shows results complementing those of Table 1. RWMH-base and RWMH-R-base denote variants
+of RWMH and RWMH-R that do not use a mixture distribution to inform the local proposal distribution.
+Moreover, Table 3 shows results for similar experiments performed on sampling from the “debiased scientist
+biographies” EBM described in Sec. 3.2.2. Here, there is no obvious way to inform the proposal and therefore,
+we only use the -base variants for the RWMH sampler. Furthermore, Tables 5, 6, 7, 8 and 9 show a collection
+of the first 10 samples produced by the QRS, RWMH, RWMH-R, IMH and IMH-R samplers, respectively.
+H Computing Divergences for Two Poissons
+Given Poisson distributionsp and q with ratesλp >λ q > 0, we wish to find the divergence
+Df(p,pβ) =
+∞∑
+x=0
+Pβ(x)
+Zβ
+f
+(p(x)Zβ
+Pβ(x)
+)
+. (37)
+34
+Published in Transactions on Machine Learning Research (11/2022)
+sampler AR %amazing PPL ↓ Self-BLEU-5↓ %Uniq↑ Dist-1↑ Dist-2↑ Dist-3↑ TVD(p,pβ )↓∗ DKL (p,pβ )↓∗
+DPG 1 62 .9± 0.4 61 .7± 0.3 85.8± 0.1 100 .0± 0 89 .3± 0.1 96 .1± 0.0 94 .1± 0.0 0 .67± 0.00095 1 .91± 0.04
+IMH 10−1 100.0± 0 - 92.0± 0.7 66 .5± 3.9 89 .9± 0.3 96 .3± 0.1 94 .3± 0.1 Unk. Unk.
+IMH-R 10−1 100.0± 0 60 .8± 1.4 87.1± 0.2 100 .0± 0 89 .8± 0.2 96 .4± 0.1 94 .4± 0.1 Unk. Unk.
+QRS 10−1 100.0± 0 61 .8± 0.8 86.8± 0.4 100 .0± 0 89 .9± 0.2 96 .4± 0.1 94 .3± 0.1 0 .27± 0.0054 0 .45± 0.045
+R WMH-base 10−1 80.0± 40.0 - 99.6± 0.9 21 .8± 28.8 85.8± 7.6 91 .1± 11.2 87.2± 14.6 Unk. Unk.
+R WMH-R-base 10−1 63.2± 1.3 61 .9± 1.2 86.5± 0.3 100 .0± 0 88 .5± 0.2 96 .2± 0.1 94 .3± 0.1 Unk. Unk.
+IMH 10−3 100.0± 0 - 86.9± 0.3 98 .7± 0.5 90 .0± 0.2 96 .3± 0.1 94 .2± 0.1 Unk. Unk.
+IMH-R 10−3 100.0± 0 63 .4± 1.5 86.7± 0.1 100 .0± 0 89 .9± 0.2 96 .3± 0.1 94 .3± 0.1 Unk. Unk.
+QRS 10−3 100.0± 0 62 .8± 1.6 86.6± 0.2 100 .0± 0 90 .0± 0.2 96 .3± 0.1 94 .3± 0.0 0 .01± 0.0067 0 .011± 0.0093
+R WMH 10−3 100.0± 0 - 99.8± 0.1 41 .0± 35.2 71.5± 36.0 69.4± 33.7 63.1± 31.1 Unk. Unk.
+R WMH-R 10−3 100.0± 0 57 .7± 3.9 87.8± 0.1 100 .0± 0 82 .9± 0.4 93 .2± 0.4 92 .4± 0.3 Unk. Unk.
+Table 4: Further comparisons of samplers on an EBM with a pointwise constraint to include the word
+“amazing” in the sequence. We do not compute perplexity for IMH and RWMH without reset as it does
+not yield i.i.d. samples. As noted, TVD and KL for MCMC methods are unknown (i.e. we have no way of
+estimating them). Where available, we show mean± one standard deviation over 10 runs.∗TVD and KL
+are estimated on independent sets of106 samples.
+QRS samples at 10−3 acceptance rate
+• Cowgirl 87 Care Commission Header now available on our VIP web site. CowboyBillIssues AVAILABLE NOW... Start your website bio examining this amazing cam-
+• take note. No wonder Vox isn’t having an amazing day. Screen Snipe Dave ends Neo by christening it #DroppedSummer [] @cloudp
+• I got an unprecedented amount of reviews years ago because of such an interesting movie that seemed Nude World will be released in some theaters soon. The movie itself was
+pretty amazing. I only had to hear
+• Before Charlie Hebdo rendered its amazing save for lost lives, scholarship was blind to the brutal irony. Gregory Wade accidentally shot three bystanders, at least ten more
+wounded, and four more dead within three days of
+• 4279 watts has passed the bar You can also check your save scores by clicking ‘Save Data to PWSW Audience‘. Shopping Welters also have amazing customer
+• Sculpt your beard to stay stylish when you struggle to look like a nerd. This Collection makes all your lengthening amazing, so show it off – Ruler of Salt, Cone of Salt at
+Holl
+• If you’ve contacted our sponsor, they know who you are and how hard you work. Unless months pass without a postcard. Best Served to meet everything you demand. You are
+amazing and are
+• I’m sure a lot of people are most excited to see an F-35 Lightning II V2 today because of the amazing kick that’s (understandably) in the engine room now that Benson
+• Catherine is serviceable, happy, and successful. She loves teaching, having children, and saving time. She regularly works with can and is an amazing listener. Our
+community is full of
+• The bellies of the runs was amazing. A ton of complements were good, including some neighboring dressing room appearances. So long worked up info, my 2014 Mustang had lots
+of special opening-specific
+Table 5: The first 10 examples produced in the first run of QRS on the EBM filtering GPT-2 sequences
+containing “amazing”.
+R WMH samples at 10−3 acceptance rate
+• The OnePlus 2 is one of the most amazing smartphones we’ve ever tried. It’s an extremely powerful smartphone you’ve never heard of before, and carries an amazing battery
+life, or battery life I’m
+• The OnePlus 2 is one of the most amazing smartphones we’ve ever tried. It’s an extremely powerful smartphone you’ve never heard of before, and carries an amazing battery
+life, or battery life I’m
+• The OnePlus 2 is one of the most amazing smartphones we’ve ever tried. It’s an extremely powerful smartphone you’ve never heard of before, and carries an amazing battery
+life, or battery life I’m
+• The OnePlus 2 is one of the most amazing smartphones we’ve ever tried. It’s an extremely powerful smartphone you’ve never heard of before, and carries an amazing battery
+life, or battery life I’m
+• The OnePlus 2 is one of the most amazing smartphones we’ve ever tried. It’s an extremely powerful smartphone you’ve never heard of before, and carries an amazing battery
+life, or battery life I’m
+• The OnePlus 2 is one of the most amazing smartphones we’ve ever tried. It’s an extremely powerful smartphone you’ve never heard of before, and carries an amazing battery
+life, or battery life I’m
+• The OnePlus 2 is one of the most amazing smartphones we’ve ever tried. It’s an extremely powerful smartphone you’ve never heard of before, and carries an amazing battery
+life, or battery life I’m
+• The OnePlus 2 is one of the most amazing smartphones we’ve ever tried. It’s an extremely powerful smartphone you’ve never heard of before, and carries an amazing battery
+life, or battery life I’m
+• The OnePlus 2 is one of the most amazing smartphones we’ve ever tried. It’s an extremely powerful smartphone you’ve never heard of before, and carries an amazing battery
+life, or battery life I’m
+• The OnePlus 2 is one of the most amazing smartphones we’ve ever tried. It’s an extremely powerful smartphone you’ve never heard of before, and carries an amazing battery
+life, or battery life I’m
+Table 6: The first 10 examples produced in the first run of RWMH on the EBM filtering GPT-2 sequences
+containing “amazing”.
+35
+Published in Transactions on Machine Learning Research (11/2022)
+R WMH-R samples at 10−3 acceptance rate
+• yay!!! this game is amazing!!!!! a cool physical sci fi action game where you play a hardened junkie with an old girlfriend who’s tough
+• in the immediate aftermath of the church shutdown, strange and often amazing events raised the question of whether the government had ever given up its restrictive control of
+religious provocations for political purposes and assumed a new political leadership
+• ... had an amazing 7 out of 10, 8 out of 10, 9 out of 10, 6 out of 5... liked it... the story...
+• I do have several solo masters who still have done amazing work to suit/complement orientated-character traits. In particular, I find myself building out secondary mazes
+based on their chunks iay
+• "She and my son played "Friends," and used songs that I loved from that’s were amazing," Kleutz said. "They were acknowledging responsible themes. They felt I was so
+passionate that I
+• useful for those in need or those who are distracted in the outside world. qualms ( # 77574 ), pro / pro bizarre ( # 776171 ), amazing 1 / 2 / 3 / 5 ( # 776249 )
+• We are inspired by the amazing work of the Reader Space Foundation, which fosters artists who make an impact on a global audience through knowledge, support, and advocacy.
+It’s made us an un-
+• the casanova is amazing the key to this being a classic, a true black lace bra made from dl’s, lace and all the fabrics that are available in pink and black. go on, have
+some fruit, sugar, vitamins, icing. whisper, wow, good for you
+• and it is only using standard rules of thumb, but it is amazing that all the use of " " can be taken into account. " " " " " " " " " " " " " " " " " " " " " " " " "
+established.
+• With so many amazing actors appearing on every level in a stone once it’s filmed, Star Wars Rebels follows the Rebellion throughout 2017 with an unusual archive of credits
+from the original and Rebels Two Casts.
+Table 7: The first 10 examples produced in the first run of RWMH-R on the EBM filtering GPT-2 sequences
+containing “amazing”.
+IMH samples at 10−3 acceptance rate
+• OF ALL The Verifiers who voted for Dragon Quest Revealed, two amazing choices are going to still be in the fire. To make up for the lost depth, Vulcans will make a busy
+• A PO3 sniff tested, protecting the lab from detection by probiotic products, is amazing. 5 years ago, scientists found the cannabinoid-blocking drug O3 responsible
+• You have watched The Witcher 3 as a kid. You have eaten plenty of meat at your meals. You’ve seen a video game show before that has been amazing. Very few people have
+grown up without
+• 11 am 2pm 958-701-99997 to Lift EcoTV, located in Washington, D.C. Do you have more questions about lifting something amazing in the Farm 600 in
+• Bringing this gift is a unique opportunity to share with your loved ones about the home we love. Our family stunts cloud of feedback and the truly amazing handmade items we
+came upon included, providing a great
+• Over a group of homebrew enthusiasts gathered for a beer sampling on Wednesday morning, they shared some amazing homebrew recipes with beer enthusiasts on the craft beer of
+the weekend, as well as some star brewers at home
+• RIDER VIDEOTAPE | LEON BEVERLY RON OLD AFAIK proud to present you the amazing RADIO available from RON Old Hollywood: http://www.personalradio
+• with comments, screenshots collaborating authors & planners Connecting friends & family, live with family of our wonderful amazing people. An Albany
+Folklore Center where we are based
+• Could She Play The Same Sex Career? Missoula is full of different, amazing lesbian and gay couples to come. It’s so amazing that she’s so welcoming to them. They love
+• amazing even or nerdyally I mean it’s true that almost every person touching your skin is under their own skin, but when you have to contribute, you are competing
+against art first
+Table 8: The first 10 examples produced in the first run of IMH on the EBM filtering GPT-2 sequences
+containing “amazing”.
+IMH-R samples at 10−3 acceptance rate
+• Journey to Mars! Supermassive Black Hole Recovered From Big Bang Rosetta Sky It took an amazingly severe situation to produce an amazing HDR image through single
+recombination with massive radio uplink
+• Early in the credits game, Sid Meier looked over Randi with his smugly excited face. "What if," he started, "if you think Randi’s doing amazing things to me
+• While Gilinda tells everybody what she has in mind in the past, notice that despite their competitiveness and amazing athleticism, they do outlive the Hokies and don’t
+recognize one another. It
+• ameral bairnsaucer, from Prague No, this wasn’t a blast. It was awesome. My test team was amazing. If you wait against an scent that is
+• Last day was so amazing. I was going to lay down for some lunch on the park deck and watch contestants go nuts. Happy morning. Psychos Solid: Winning the Super Bowl
+isn’t
+• Can Customers Generation Support Field Trawler? Well, it looks like it’s gonna be well taken care of...Tousting can also apparently utilise compiled sound block and got
+some amazing gimm
+• 64 Explicit Nov 16, 2016 FIVE US SECS CONCLUSIONS On Saturday night you’ll find an amazing bunch of colleges and universities alike as they host the ’THE LAST TENSE’ panel
+for
+• Pick anything you wish for appears in new like Black Bag Revenge, Savage Comet, Bride of Waibou, Oinnibox and much more. Gamazing Of The Month Star Trade Reply
+• At 6 miles in, the Gawdover Range is an amazingly located range within Markham county, NY. I was able to flag down one during the last few kilometres and here is the fun!
+• I’m never happy about an OC for a while, since I can like them because the fact that the beautiful side has proven amazing makes sure I learned to love them more and remain
+satisfied when looking at
+Table 9: The first 10 examples produced in the first run of IMH-R on the EBM filtering GPT-2 sequences
+containing “amazing”.
+36
+Published in Transactions on Machine Learning Research (11/2022)
+As (λp/λq)x is increasing inx, for any fixedβ >0 and nonnegative integerx we have
+p(x)≤βq(x) ⇔ (λp/λq)x≤β exp(λp−λq) ⇔ x≤k
+where
+k .=
+⌊λp−λq + logβ
+log(λp/λq)
+⌋
+.
+Thus the partition function appearing in Eq. 37 is
+Zβ =
+∞∑
+i=0
+min (p(i),βq (i)) =
+k∑
+i=0
+p(i) +β
+∞∑
+i=k+1
+q(i) =Fλp(k) +β(1−Fλq(k)),
+where Fλ is the cumulative distribution function of a Poisson of rateλ.
+Given this value ofZβ, thef-divergence in Eq. 37 may now be approximated by truncating it ton terms
+for a suitably largen, provided the convex functionf does not grow too rapidly:
+Df(p,pβ)≈
+n∑
+x=0
+Pβ(x)
+Zβ
+f
+(p(x)Zβ
+Pβ(x)
+)
+.
+I Importance Sampling and Variance
+In this work, we perform many IS estimates of quantities such as acceptance rate, TVD and KL divergence.
+We report variance estimates computed using the bootstrap estimator for the experiments on debiasing
+scientist biographies (Sec. 3.2.2) and other EBMs reported in Appendix A in Table 10. We report mean±
+one standard deviation forβ values within the range used in our experiments (also see Table 2). We find
+our estimates to be accurate within reasonable variance.
+Secondly, as noted in Sec. 2.2, it is not generally possible to computeZ or its variance for any given EBM
+with certainty. This observation can put into question the validity of the above-described estimates. We note,
+however, that when we can boundP (x)/q(x) we can have formal bounds on these quantities, allowing us to
+double-check the accuracy of these estimates. In particular, this is possible whenP (x) = a(x)b(x), q(x) =
+a(x) and b(x)∈ [0,M ], as in that case we haveP (x)/q(x)≤ M. Using Popoviciu’s inequality (Popoviciu,
+1935), we know that
+Var
+[P (x)
+q(x)
+]
+≤ M2
+4 , (38)
+and thus, the IS estimator ofZ has variance
+Var
+[
+1
+N
+N∑
+i=0
+P (xi)
+q(xi)
+]
+≤ M2
+4N. (39)
+We generated 1M samples with GPT-2, and used them to compute the partition functions of the EBMs for
+pointwise constraints, with provable bounds on their variance following Eq. 39. For the 100% “amazing”
+EBM, we obtainedZ = 2.5× 10−3± 2.5× 10−7; whereas for 100% “wikileaks” we obtainedZ = 1.5×
+10−4± 2.5× 10−7. These are in agreement with the estimates in Table 10. However for our experiments
+with distributional constraints, we determinined the rather large boundM = 304868, and we would need to
+gather at least1012 samples to obtain a reasonable bound on the variance. This highlights the need for better
+proposal distributions to compute these quantities, especially considering that the number of samples that
+IS needs to compute partition function ofP (x) is inversely proportional toexp(DKL(p,q )) (Chatterjee and
+Diaconis, 2018). This is the reason why,in practice, a good proposal distribution can allow us to compute
+accurate estimates, even if that comes at the loss of the above-described formal bounds.
+37
+Published in Transactions on Machine Learning Research (11/2022)
+P β AR TVD(p,pβ ) DKL (p,pβ )
+100% amazing
+0.02 0 .08± 1.8× 10−4 0.2± 6.5× 10−3 0.3± 0.04
+0.3 7 .8× 10−3± 3.2× 10−5 0.04± 8.0× 10−3 0.05± 0.02
+2 1 .2× 10−3± 6.8× 10−6 0.01± 6.7× 10−3 0.01± 9.3× 10−3
+100% wikileaks
+7.4× 10−4 0.1± 2.1× 10−4 0.3± 5.2× 10−3 0.6± 0.03
+0.01 8 .5× 10−3± 3.7× 10−5 0.07± 7.3× 10−3 0.09± 0.02
+0.2 8 .2× 10−4± 6.6× 10−6 9.7× 10−3± 3.5× 10−3 3.9× 10−3± 1.9× 10−3
+50% female
+1× 101 0.1± 1.3× 10−4 0.02± 6.2× 10−4 0.01± 1.2× 10−3
+1× 102 0.01± 1.5× 10−5 5.9× 10−4± 2.9× 10−4 3.3× 10−4± 1.8× 10−4
+2× 103 1.1× 10−3± 1.5× 10−6 2.7× 10−7± 4.4× 10−7 −1.7× 10−8± 9.4× 10−7
+50% female + 100% science
+7× 103 0.08± 1.7× 10−4 0.3± 6.0× 10−3 0.5± 0.03
+1.1× 105 7.1× 10−3± 3.5× 10−5 0.07± 7.1× 10−3 0.08± 0.02
+6.4× 105 1.3× 10−3± 1.0× 10−5 0.02± 4.9× 10−3 9.9× 10−3± 4.8× 10−3
+50% female + 100% sports
+1.2× 105 0.07± 1.3× 10−4 0.1± 4.2× 10−3 0.2± 0.01
+7.5× 105 0.01± 3.5× 10−5 0.04± 3.8× 10−3 0.04± 6.2× 10−3
+1.2× 107 8.5× 10−4± 4.6× 10−6 4.2× 10−4± 3.2× 10−4 4.2× 10−5± 3.6× 10−5
+P β Z Z β
+100% amazing
+0.02
+2.5× 10−3± 2.5× 10−5
+0.08± 1.8× 10−4
+0.3 7 .8× 10−3± 3.2× 10−5
+2 1 .2× 10−3± 6.8× 10−6
+100% wikileaks
+7.4× 10−4
+1.4× 10−4± 1.4× 10−6
+0.1± 2.1× 10−4
+0.01 8 .5× 10−3± 3.7× 10−5
+0.2 8 .2× 10−4± 6.6× 10−6
+50% female
+1× 101
+2± 2.3× 10−3
+0.1± 1.3× 10−4
+1× 102 0.01± 1.5× 10−5
+2× 103 1.1× 10−3± 1.5× 10−6
+50% female + 100% science
+7× 103
+8× 102± 9
+0.08± 1.7× 10−4
+1.1× 105 7.1× 10−3± 3.5× 10−5
+6.4× 105 1.3× 10−3± 1.0× 10−5
+50% female + 100% sports
+1.2× 105
+1× 104± 6× 101
+0.07± 1.3× 10−4
+7.5× 105 0.01± 3.5× 10−5
+1.2× 107 8.5× 10−4± 4.6× 10−6
+Table 10: Means and standard deviation of IS estimates of acceptance rate, TVD with the target distribution
+and KL divergence to the target distribution for variousβ on various EBMs using a DPG fine-tuned proposal.
+We perform 5,000 bootstrap simulations using 1,000,000 samples each to compute the means and standard
+deviations. Values ofβ are chosen within the range used for our experiments as reported in Table 2.
+38
+Published in Transactions on Machine Learning Research (11/2022)
+Estimating Z: an example with finite mean and infinite varianceAs mentioned in footnote 6, the
+variance Varx∼q
+P(x)
+q(x) may be infinite. For instance, ifP and q are distributions satisfyingP (x)2 =q(x) on
+support x = 0, 1,... , then
+Ex∼q
+P (x)2
+q(x)2 =
+∞∑
+x=0
+P (x)2
+q(x) =
+∞∑
+x=0
+1 =∞.
+As the variance is the mean-square minus the squared-mean, it too is infinite. The conditionP 2 =q holds
+for appropriately normalized geometric distributionsp(x)∝ax and q(x)∝a2x for any 0<a< 1.
+J About the Metropolis-Hastings Algorithm
+Robert and Casella (2004, Theorem 7.4, p. 274) prove the following theorem, withf the target distribution.
+Our motivation for reproducing this result is to emphasize point (ii), which is especially relevant in the
+context of this paper.
+Theorem J.1. Suppose that the Metropolis-Hastings Markov chain(X(t)) is f-irreducible.
+(i) If h is anf-integrable function, then
+lim
+T→∞
+1
+T
+T∑
+t=1
+h(X(t)) =
+∫
+h(x)f(x) dx almost surely.
+(ii) If, in addition,(X(t)) is aperiodic, then
+lim
+n→∞
+TVD
+(
+f,
+∫
+Kn(x,·)µ(dx)
+)
+= 0
+for every initial distributionµ, whereKn(x,·) denotes the kernel forn transitions.
+Property (i) says that the average over theT first elements of asingle chain converges to the expectation
+of h(x) for x∼f, asT increases. Property (ii) is concerned with the TVD between the target distribution
+f and the distribution obtained by repeatedly running ann-step chain and outputting thenth element —
+the reset (-R) variant of the MH algorithm that we have denoted by RWMH-R or IMH-R. This distance
+converges to zero asn increases.
+K Arbitrarily Slow Proposal q
+We assume thatX = N ={0, 1, 2,... }, thatp has full support and is strictly decreasing overN.18
+Theorem K.1. Let g : (0,∞)→ [0, 1] be a strictly decreasing continuous function withlimβ→∞g(β) = 0.
+Then there exist a real numberβ0 > 0 and a proposal probability distributionq over N such that the QRS
+distribution pβ for targetp satisfies
+TVD(p,pβ)≥g(β) for allβ >β0. (40)
+tribution associated top and q at β.
+Proof. See below.
+In other words, whatever the “slowness” with whichg(β) decreases to 0, we can always find a proposalq
+that guarantees that, asymptotically,TVD(p,pβ) decreases even more slowly.19
+39
+Published in Transactions on Machine Learning Research (11/2022)
+0
+1𝑚(0)
+𝑚(1)𝑚(2)𝑚(3)𝛽0
+ℎ
+𝛽1𝛽2𝛽3
+Figure 13: Illustration of Lemma K.2.
+Proof sketch
+The proof, which we only sketch, is based on two lemmas.
+Lemma K.2. If q is a distribution overN with full support, letVβ
+.={x∈ N : p(x)/q(x)≥ β}. Let h(β)
+be any strictly decreasing continuous function from(0,∞) to [0, 1], such thatlimβ→∞ h(β) = 0. Then there
+exist someq and β1 > 0 such that
+β≥β1 ⇒ p(Vβ)≥h(β).
+Proof. For x∈ N, let m(x) .= p({x,x + 1,... }) and β(x) .= inf{β : h(β)≤ m(x)}. This is easily seen to
+imply thath(β(x)) =m(x) and thatβ(x) is strictly increasing (see Fig. 13). Then construct a distribution
+q over{0, 1, 2,... } such that for somex0≥ 1, and for anyx≥ x0, one hasq(x) .= p(x)
+β(x+1); and we set
+β1
+.=β(x0). We note that the intervals[β(x0),β (x0 + 1)), [β(x0 + 1),β (x0 + 2)),... cover the whole interval
+[x0,∞). Then consider some integer k≥ x0 and take β in the interval [β(k),β (k + 1)). For x≥ k, we
+have p(x)
+q(x) = β(x + 1)≥ β(k + 1)≥ β, hence x∈ Vβ. But p({k,k + 1,... }) = h(β(k))≥ h(β), hence
+p(Vβ)≥h(β).
+Lemma K.3. Let q be a distribution overN with full support, and letWβ
+.={x∈ N : p(x)/q(x)≥ 3β}.
+Then there exists a real numberβ2 > 0 such that
+β≥β2 ⇒ TVD(p,pβ)≥p(Wβ)/2.
+Proof. We have
+pβ(x) = p(x)∧ (βq(x))
+Zβ
+= p(x)
+Zβ
+(
+1∧
+(
+βq(x)
+p(x)
+))
+, Z β =
+∑
+x
+p(x)∧ (βq(x)).
+Hence, forx∈Wβ,
+pβ(x)
+p(x) =
+1∧
+(
+βq(x)
+p(x)
+)
+Zβ
+≤ 1
+3Zβ
+.
+Letβ2 > 0 be such thatβ≥β2⇒Zβ > 0.9. (It is easy to see that such aβ2 exists, asZβ is increasing inβ
+and converges to 1.) Then forβ≥β2 and forx∈Wβ, we havepβ(x)
+p(x) ≤ 1
+3×0.9≤ 1
+2, so that
+p(x)−pβ(x) =p(x)
+(
+1− pβ(x)
+p(x)
+)
+≥ p(x)
+2 ,
+and therefore TVD(p,pβ) =∑
+x:p(x)≥pβ(x)(p(x)−pβ(x))≥p(Wβ)/2.
+18These conditions are WLOG, as can easily be checked.
+19Based on the properties proved in the paper, we know that eventuallyTVD(p,pβ) decreases to 0.
+40
+Published in Transactions on Machine Learning Research (11/2022)
+Proof of Theorem K.1.From these two lemmas, the proof of the theorem follows easily. Indeed, leth(β′) .=
+min(1, 2g(β′/3)). Forβ′ = 3β, we haveWβ =Vβ′, and therefore, by Lemma K.3,TVD(p,pβ)≥p(Vβ′)/2,
+for β≥β2. By Lemma K.2, we havep(Vβ′)≥h(β′) = 2g(β) for β′≥β′
+1, so thatTVD(p,pβ)≥g(β) for β
+large enough thatg(β)≤ 1/2, and we conclude.
+41

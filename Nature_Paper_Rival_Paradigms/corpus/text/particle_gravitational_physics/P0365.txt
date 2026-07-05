@@ -1,0 +1,2440 @@
+--- Page 1 ---
+Eur. Phys. J. C (2017) 77:719
+DOI 10.1140/epjc/s10052-017-5306-7
+Special Article - Tools for Experiment and Theory
+Helicity antenna showers for hadron colliders
+Nadine Fischer1, Andrew Lifson1,2, Peter Skands1,a
+1 School of Physics and Astronomy, Monash University, Clayton, VIC 3800, Australia
+2 ETH Zürich, 8092 Zurich, Switzerland
+Received: 5 August 2017 / Accepted: 14 October 2017 / Published online: 29 October 2017
+© The Author(s) 2017. This article is an open access publication
+Abstract We present a complete set of helicity-dependent
+2 → 3 antenna functions for QCD initial- and ﬁnal-state radi-
+ation. The functions are implemented in the Vincia shower
+Monte Carlo framework and are used to generate showers
+for hadron-collider processes in which helicities are explic-
+itly sampled (and conserved) at each step of the evolution.
+Although not capturing the full effects of spin correlations,
+the explicit helicity sampling does permit a signiﬁcantly
+faster evaluation of ﬁxed-order matrix-element corrections.
+A further speed increase is achieved via the implementa-
+tion of a new fast library of analytical MHV amplitudes,
+while matrix elements from Madgraph are used for non-
+MHV conﬁgurations. A few examples of applications to
+QCD 2 → 2 processes are given, comparing the newly
+released Vincia 2.200 to Pythia 8.226.
+1 Introduction
+The description of bremsstrahlung processes in parton-
+shower event generators typically starts from the proba-
+bility density for unpolarised partons to emit unpolarised
+radiation, i.e., DGLAP kernels or dipole/antenna functions
+summed over outgoing and averaged over incoming polari-
+sations/helicities. One way of incorporating nontrivial polar-
+isation effects, used in Pythia [1], is to correlate the plane
+in which a gluon is produced, with the plane in which it
+subsequently branches, taking linear-polarisation effects into
+account on the intermediate propagator, and casting the result
+in terms of a non-uniform selection of the azimuthalϕ angle
+around the direction of the branching gluon, see, e.g., [2]. A
+more complete, but also more cumbersome, alternative, used
+in Herwig [3], is to keep track of spin correlations explicitly,
+using a spin-density matrix formalism [ 4–6]. In both cases,
+the nontrivial angular correlations ultimately arise from dot
+a e-mail: peter.skands@monash.edu
+products between reference vectors expressing linear polar-
+isations.
+By contrast, a helicity basis does not rely on any external
+reference vectors, and hence helicity-dependence in and of
+itself does not generate any nontrivial angular correlations.
+Nonetheless, helicity-dependent radiation functions, as used
+for ﬁnal-state radiation inVincia for a few years [7], do have
+some advantages: helicity conservation can be made explicit,
+allowing to trace helicities through the shower; unphysi-
+cal helicity conﬁgurations are prevented from contributing
+to sums and averages; and the explicit helicity assignments
+allow faster evaluations of matrix-element correction (MEC)
+factors, since only a single (or a few) helicity amplitudes need
+to be evaluated for each ME-corrected parton state [7].
+The concept of ME corrections was ﬁrst developed to
+improve the description of radiation in Pythia (then called
+Jetset) outside the collinear region to agree with ﬁrst-order
+matrix elements for e+e− → 3j e t s [8,9], and was since
+extended to correct the ﬁrst emission in a wide range of
+resonance-decay processes and some (colour-singlet) pro-
+duction processes [ 10,11]. It was also used as a compo-
+nent of the ﬁrst ME correction strategies inHerwig [12,13],
+and it forms the basis of the treatment of real corrections
+within the Powheg formalism [ 14,15]. We note that, in
+these approaches, only the ﬁrst shower emission is corrected,
+essentially by applying a multiplicative factor,
+RMEC = ME
+PS , (1)
+to the shower kernels, where ME is the relevant matrix-
+element expression (typically called “ R”i n Powheg nota-
+tion) and PS represents the (sum of) parton-shower contribu-
+tions to the given phase-space point.
+The limitation to single emissions was lifted by the devel-
+opment of iterated ME corrections [ 16],1 implemented in
+1 We note that a form of iterated ME corrections is also used throughout
+the Pythia showers to impose quark-mass corrections [ 11], but the
+123
+
+
+--- Page 2 ---
+719 Page 2 of 17 Eur. Phys. J. C (2017) 77 :719
+Vincia [17,18], again ﬁrst in the context of e+e− →
+jets [ 16] and subsequently for hadron collisions [ 18,19].
+Importantly, the most recent study in [19] extended the for-
+malism to strongly-ordered and non-Markovian shower algo-
+rithms, expanding its applicability to essentially any shower
+algorithm in modern MC generators. Although a helicity-
+dependent (and hence computationally faster) version of the
+iterated-MEC algorithm was developed for ﬁnal-state radia-
+tion [7], a fully-ﬂedged helicity-dependent version for hadron
+collisions (and for strongly-ordered non-Markovian show-
+ers) has so far been missing. The aim of this paper is to
+develop this missing piece, while simultaneously presenting
+a complete set of helicity-dependent (and positive-deﬁnite)
+antenna functions for 2 → 3 branchings for both initial- and
+ﬁnal-state radiation. In addition, some helicity conﬁgurations
+(called “maximally helicity violating”) can be expressed in
+compact analytical forms, hence we use such amplitudes
+for QCD 2 → n processes whenever possible to speed up
+the calculation further. For non-MHV conﬁgurations, we use
+matrix elements from Madgraph 4[ 20]. (Note that the use
+of Madgraph 4 puts some limitations on the conﬁgurations
+for which the relevant information for MEC factors can be
+extracted easily from the matrix elements. In particular, this
+is the case for amplitudes with multiple quark pairs. These
+limitations will be lifted by a new interface to Madgraph 5
+which is currently under development [21].)
+This article is organised as follows. In Sect. 2,w eg i v e
+an overview over the helicity-dependent shower in Vincia,
+including the extension to initial-state radiation The matrix-
+element correction formalism is reviewed in short in Sect. 3
+together with a brief introduction to the MHV amplitudes
+in Vincia. Results are presented in Sect. 4, before giving
+some concluding remarks in Sect. 5. The helicity-dependent
+antenna functions are given in Appendix A. Appendix B sum-
+marises a few changes in the Vincia code which we deem
+relevant to ensure that results obtained with the new imple-
+mentation may be interpreted correctly, in particular in com-
+parison with results obtained with earlier versions.
+2 Helicity-dependent showers
+A helicity-dependent antenna shower for ﬁnal-state radiation
+has already been introduced in [7]. The extension to hadronic
+initial states is straightforward. We start with a brief review
+of how emissions are generated and helicities selected. In
+cases where an event with unpolarised partons is showered by
+Vincia, a polariser function is ﬁrst called, which uses helicity
+matrix elements to assign explicit helicities to all partons.
+Footnote 1 continued
+resulting process-dependent nonsingular terms will still only be fully
+correct for the ﬁrst emission.
+Since the events are also assigned colour ﬂows, we ﬁrst deﬁne
+the joint probability to select a parton conﬁguration with a
+colour ﬂow i and a set of helicities h,
+P(h, i) = FC
+h
+∑
+h′ FCh′
+  
+Helicity-Selection Factor
+× LCh
+i∑
+j LCh
+j  
+Colour-Flow Selection Factor
+, (2)
+where the full-colour (FC) and leading-colour (LC) matrix
+elements squared are deﬁned by
+FCh =
+∑
+i, j
+Mh
+i Mh∗
+j (3)
+LCh
+i =| Mh
+i |2 (4)
+with Mi the amplitude for colour-ordering i.W ea l s om a k e
+use of the notation
+VCh
+i = FCh LCh
+i∑
+j LCh
+j
+(5)
+for the fraction of the full-colour helicity matrix element
+squared that is projected onto LC colour ﬂow i.
+As written here, the easiest would be to start by generating
+a helicity conﬁguration, using the ﬁrst factor in Eq. ( 2) and
+then subsequently generate a colour ﬂow using the second
+factor. For events which already have colour-ﬂow assign-
+ments, the conditional probability for choosing helicity con-
+ﬁguration h is simplest to deﬁne in terms of the redeﬁned LC
+matrix elements,
+P(h|i) = VC
+h
+i∑
+h′ VCh′
+i
+. (6)
+(If the corresponding matrix elements do not exist in Vin-
+cia, the event will remain unpolarised and showered using
+helicity-averaged and -summed antenna functions.)
+For events with explicit helicities, trial branchings are gen-
+erated just as in the helicity-independent shower, i.e., using
+unpolarised trial-antenna function overestimates. After gen-
+erating the post-branching kinematics (see, e.g., [ 17,18]),
+the total probability for accepting a branching (denoting pre-
+branching partons by AB and post-branching ones by ijk )
+2
+is:
+Paccept = Aphys
+Atrial
+=
+∑
+hi ,h j ,hk A
+(
+h A, h B; hi, h j, hk
+)
+Atrial
+, (7)
+for ﬁxed helicities h A,B of the parent partons. The sum over
+daughter helicities, hi, j,k , in the physical antenna function,
+2 This is the same labelling convention as used in theVincia reference
+for ﬁnal-state helicity showers [7].
+123
+
+
+--- Page 3 ---
+Eur. Phys. J. C (2017) 77 :719 Page 3 of 17 719
+Aphys, runs over all possible (physical) helicities for the
+ijk partons, with each term, A
+(
+h A, h B; hi, h j, hk
+)
+, being
+a helicity-dependent antenna function. To avoid clutter, and
+for ease of reference, we collect the precise forms for these
+functions in the appendix. We note that some of the func-
+tions differ (by nonsingular terms) from those used in pre-
+vious versions of Vincia, in particular those in [ 7,18]. We
+also note that the accept probability deﬁned by Eq. ( 7)i s
+in general identical to the unpolarised one (i.e., where one
+averages over h
+A and h B as well), up to nonsingular terms.
+In case of initial-state radiation, Eq. ( 7) will be multiplied
+with the accept probability for the PDF ratios, just as in the
+unpolarised case [18].
+Explicit helicities are then selected for the daughters
+according to the relative probabilities given by the antenna
+functions,
+P(h
+A, h B; hi, h j, hk) = A
+(
+h A, h B; hi, h j, hk
+)
+∑
+hi ,h j ,hk A
+(
+h A, h B; hi, h j, hk
+) ,
+(8)
+where the denominator is equal to the numerator in Eq.
+(7). Helicities are assigned to initial-state partons as well,
+using the same formalism. With the assumption that positive-
+helicity partons appear equally often as negative-helicity
+ones in the (anti)proton, the algorithm does not require any
+modiﬁcations when considering initial-state partons.
+Helicity conservation implies that, for gluon emission off
+(massless) quarks or ﬁnal-state gluons, the parent partons do
+not change their helicities. A subtlety arises, however, for
+emissions off initial-state gluons. In the perspective of for-
+wards evolution, such a branching looks like g
+I
+i → g I
+A g F
+j ,
+where superscript I (F) denotes an initial-state (ﬁnal-state)
+parton; clearly, the helicity of parton i can be inherited by
+either parton j or parton A without violating helicity con-
+servation. Hence the reader should not be confused by the
+appearance of physical initial-state antenna functions for
+which h
+A ̸= hi in Appendices A.3 and A.4, with corre-
+sponding DGLAP limits given in Appendix A.6.
+LO antenna functions such as the ones discussed here
+are of course only accurate in the single-unresolved soft
+and collinear limits. To estimate the amount of uncertainty
+caused by physical shower emissions being away from these
+limits, we use a two-pronged approach based on reweight-
+ing [ 16]: (1) variation of the nonsingular terms of the
+antenna functions to estimate how close a given branching
+is to the logarithmically-dominated region, and (2) varia-
+tions of the antenna-function renormalisation scale to esti-
+mate the potential impact of subleading-logarithmic terms.
+We emphasise that both types of variations are performed so
+that they preserve the total cross section (i.e., the variations
+appear with equal and opposite signs in real and virtual cor-
+rections, respectively [22]). The technical implementation in
+Vincia is quite similar to that in Pythia 8; see the respec-
+tive HTML User Manuals and Appendix B. The variation of
+the renormalisation scale in a helicity-dependent shower is
+performed just as for an unpolarised shower,
+α
+s(t) → αs(kt ). (9)
+Optionally, an NLO-level compensating term can be intro-
+duced for gluon emission, which forces the variation to be
+equal to the result for k = 1 through order α2
+s :
+αs(t) → αs(kt )
+[
+1 + (1 − z)α s (max (mant, kt )) b0 ln(k)
+]
+,
+(10)
+where b0 = (33 − 2nF)/6π, nF is the number of active
+ﬂavours at the scale t and mant the mass of the parent
+antenna. The prefactor z is sik /m2
+ant for ﬁnal-ﬁnal and
+m2
+ant/max(sik , m2
+ant + s jk ) for initial-initial and initial-ﬁnal
+branchings, with the post-branching invariants sij , s jk , and
+sik , The variation of the antenna functions by nonsingular
+terms,
+A
+(
+sij , s jk , m2
+ant
+)
+→ A
+(
+sij , s jk , m2
+ant
+)
++ CNS
+m2
+ant
+, (11)
+is performed such that the additional nonsingular term
+CNS/m2
+ant is distributed evenly amongst all helicity con-
+ﬁgurations for a speciﬁc antenna function, i.e. all helicity-
+dependent antenna functions obtain the same fraction of the
+nonsingular term. Note also that the nonsingular-term vari-
+ations are cancelled by ME corrections (up to the corrected
+order) and therefore only need to be carried out for uncor-
+rected orders.
+For any given (bin of a) physical observable, a large depen-
+dence onC
+NS indicates that corrections from hard matrix ele-
+ments with higher numbers of legs are needed, while a sig-
+niﬁcant dependence on the renormalisation scale indicates a
+need for further corrections at the loop level.
+Finally, it is worth emphasising that the statistical ﬂuctu-
+ations of the uncertainty variations are generally larger than
+for the central (non-varied) predictions. This is due to the
+central prediction being unweighted (in our setup) and the
+variations being computed by reweighting. See [ 23] for an
+example of how weighting (“biasing”) the central distribu-
+tion can improve the relative statistical precision of the uncer-
+tainty bands.
+3 Matrix-element corrections and MHV amplitudes in
+V
+INCIA
+3.1 Matrix-element corrections
+The GKS formalism for iterated matrix-element correc-
+tions [16] was originally based on so-called smoothly ordered
+123
+
+
+--- Page 4 ---
+719 Page 4 of 17 Eur. Phys. J. C (2017) 77 :719
+showers, with a Markovian (history-independent) choice of
+restart scale after each branching. This allows the shower
+algorithm to generate phase-space points that violate the
+nominal ordering condition of the shower, at a suppressed
+but still non-zero rate, thus ﬁlling previously inaccessible
+regions of phase space; the correct (tree-level) emission rates
+can then be obtained via matrix-element corrections just as
+in the ordered part of phase space. However, general argu-
+ments indicate that the effective Sudakov factors for the non-
+ordered histories, are probably not correct [18,24,25]. Recent
+efforts [19,25] have therefore shifted focus back to ﬁlling
+the phase space for multiple hard emissions while remain-
+ing within the paradigm of strong ordering. In particular, we
+take the strongly-ordered iterated-MEC formalism presented
+in [19] as our starting point, and adapt it to include explicit
+helicities.
+The question of Markovian vs non-Markovian behaviour
+comes about since the value of the shower evolution param-
+eter in conventional strongly-ordered showers depends on
+which parton was the last one to be emitted. This cannot be
+uniquely determined merely by considering a given parton
+conﬁguration; the value is a function of what shower his-
+tory (or path) led to the conﬁguration in question; a non-
+Markovian aspect. In the context of iterated ME correc-
+tions, non-Markovianity implies that the MEC factors con-
+tain nested sums over shower histories involving clusterings
+all the way back to the Born conﬁguration (while a Markovian
+algorithm only requires a single level of clusterings [16]).
+Within the formalism presented in [19], the splitting ker-
+nels are redeﬁned by multiplying them with the correction
+factor
+R(/Phi1n+1) = |M(/Phi1n+1)|2
+[ ∑
+/Phi1′n
+A (/Phi1n+1//Phi1′
+n) R(/Phi1′
+n)
+∑
+/Phi1′
+n−1
+/Theta1(t(/Phi1′
+n//Phi1′
+n−1)− t(/Phi1n+1//Phi1′
+n)) A
+(
+/Phi1′
+n//Phi1′
+n−1
+)
+R(/Phi1′
+n−1)
+×
+k≤1∏
+k=n−2
+⎛
+⎝∑
+/Phi1′
+k
+/Theta1(t(/Phi1′
+k+1//Phi1′
+k) − t(/Phi1′
+k+2//Phi1′
+k+1)) A
+(
+/Phi1′
+k+1//Phi1′
+k
+)
+R(/Phi1′
+k)
+⎞
+⎠
+×
+∑
+/Phi1′
+0
+/Theta1(t(/Phi1′
+1//Phi1′
+0
+) − t(/Phi1′
+2//Phi1′
+1
+)) A
+(
+/Phi1′
+1//Phi1′
+0
+)
+/Theta1(t(/Phi1′
+0) − t(/Phi1′
+1//Phi1′
+0
+))
+⏐⏐M(/Phi1′
+0)
+⏐⏐2
+] −1
+. (12)
+|M(/Phi1n+1)|2 denotes the matrix element squared of the/Phi1n+1
+state andA
+(
+/Phi1n+1//Phi1′
+n
+)
+the antenna function, associated with
+the clustering /Phi1n+1 → /Phi1′
+n. The denominator sums over all
+possible ways the shower could have produced the n + 1-
+particle state/Phi1n+1 from a given Born state/Phi1′
+0, including the
+correct weights of every shower step on the way. This yields
+the recursive structure of Eq. ( 12) and the dependence on
+the correction factors of the previous orders. In addition the
+(process-dependent) scale t(/Phi1′
+0), at which the shower starts
+the evolution off the Born state is taken into account.
+For a helicity-dependent correction, we modify Eq. ( 12)
+such that, for a given polarised /Phi1n state, the sums over the
+intermediate states /Phi1n−1 ··· /Phi10 are extended to include all
+possible helicity conﬁgurations. As an example, consider a
+possible clustering of a ﬁnal-state q ¯q pair to a gluon. In the
+unpolarised case, one term corresponding to the clustering
+q ¯q → g contributes with the respective unpolarised antenna
+function and matrix element (which both implicitly involve
+helicity sums of course). For a polarised q
++ ¯q− pair, two dif-
+ferent clustered helicity states are possible,q+ ¯q− → g+ and
+q+ ¯q− → g− , each contributing according to their antenna
+function and matrix element. The evolution variable, how-
+ever, is the same as in the unpolarised case. This concludes
+our discussion of helicity-dependent matrix element correc-
+tions.
+3.2 MHV basics
+For fast evaluation of certain types of helicity conﬁgurations
+Vincia uses maximally helicity violating (MHV) ampli-
+tudes. MHV amplitudes have the advantage of being compact
+analytical expressions which are independent of Feynman
+diagrams; see [26,27] for reviews. In this section, we brieﬂy
+introduce the concepts and notation relevant to understanding
+the conventions and properties of the small library of MHV
+amplitudes implemented in Vincia.
+In the following we consider all particles to be outgoing
+and massless. We recall that in this limit a particle’s helic-
+ity corresponds to its chirality, and deﬁne our spinors in the
+helicity basis:
+v
+∓ ( p) = u±( p) = 1
+2
+(
+1 ± γ5
+)
+u( p),
+v∓ ( p) = u±( p) = u( p)1
+2
+(
+1 ∓ γ5
+)
+. (13)
+The notation ⟨ij ⟩ and [ij ] is used for inner products of such
+spinors:
+123
+
+
+--- Page 5 ---
+Eur. Phys. J. C (2017) 77 :719 Page 5 of 17 719
+u− (i)u+( j) ≡⟨ ij ⟩=
+√
+p+
+j eiφi −
+√
+p+
+i eiφj , (14)
+u+(i)u− ( j) ≡[ ij ]=⟨ ji ⟩∗, (15)
+in terms of the (light-cone) momentum p+
+i = p0
+i + p3
+i and
+eiφi = ( p1
+i + ip 2
+i )/
+√
+p+
+i . For more details about spinor inner
+products and their properties see e.g. [ 26,27]. Note that in
+recent literature one often ﬁnds the convention [ij ]=⟨ ij ⟩∗,
+which is different to above (see e.g. [28]).
+In the all-outgoing convention, helicity conservation
+implies that at least two pairs of opposite-helicity partons
+must exist for an n-parton amplitude to be nonzero.
+3 If the
+remaining n − 4 partons are all chosen to be of the same
+helicity (+ or −), the amplitude is called maximally helic-
+ity violating (MHV), and has a remarkably simple structure.
+The ﬁrst MHV amplitude to be discovered was the all-gluon
+Parke-Taylor amplitude [29]. In the following years this was
+extended to include one [30,31] and two [32–34] quark pairs,
+as well as to the case of a quark pair and a massive vector
+boson which decays leptonically [35,36].
+All-gluon amplitudes: To use these amplitudes we ﬁrst note
+that the colour information can be factorised from the kine-
+matics. In the n-point all-gluon case we use:
+Mn(g1, g2,..., gn)
+= gn−2
+s
+∑
+σ∈Sn/Zn
+Tr(taσ(1) ··· taσ(n))An(σ( ph1
+1 ),··· ,σ( phn
+n )),
+(16)
+where gs is the strong coupling ( g2
+s = 4παs ), the nor-
+malisation convention is ta = λa√
+2 with λa being the
+generators of SU(3), pi is the gluon momentum, hi the
+gluon helicity, Tr (taσ(1) ··· taσ(1)) the colour factor and
+An(σ( ph1
+1 ) ,...,σ( phn
+n )) the kinematic part of the ampli-
+tude. The sum is over all non-cyclic permutationsσ of the par-
+ticles. The Parke–Taylor amplitude then describes the kine-
+matic part of Eq. (16) and is given by:
+An(i− , j− ) = i ⟨ij ⟩4
+⟨12⟩⟨23⟩···⟨ n1⟩, (17)
+where gluons i and j have negative helicity, and all other
+particles have positive helicity.
+One quark pair: If we add a q ¯q pair we require that the
+quark and antiquark have opposite helicities (consistent with
+the gluon having spin 1), and use the following colour basis:
+M
+n(q, g1, g2,... gn−2 ¯q)
+= gn−2
+s
+∑
+σ∈Sn−2
+(taσ(1),... taσ(n−2))ij
+3 E.g., think of ++ → ++ and cross the two incoming positive helic-
+ities to be outgoing negative ones.
+×An(qhq σ( ph1
+1 ) ,...,σ( phn−2
+n−2 )¯qh ¯q ), (18)
+where q, hq , and i (¯q, h¯q , and j) are respectively the quark
+(anti-quark) momentum, helicity, and colour index; and the
+sum is over all permutations of the gluons. If the quark and
+gluon i each have negative helicity and all other particles
+positive helicity, then the kinematic amplitude is the given
+by:
+A
+n(q− , i− , ¯q+) = ⟨qi⟩3⟨¯qi⟩
+⟨¯qq⟩⟨q1⟩⟨12⟩···⟨ (n − 2)¯q⟩, (19)
+where the numbers refer to the (colour-ordered) gluons. If
+we exchange the helicities on the quarks, it is sufﬁcient to
+exchange the exponents in the numerator:
+An(q+, i− , ¯q− ) = ⟨qi⟩⟨¯qi ⟩3
+⟨¯qq⟩⟨q1⟩⟨12⟩···⟨ (n − 2)¯q⟩. (20)
+Two quark pairs:The four-quark,n− 4 gluon colour structure
+is given by:
+Mn(q, ¯q, Q, ¯Q, g1,... gn−4) = gn−2
+s
+A0(hq, h Q, hg)
+{q ¯q}{Q ¯Q}
+×
+( ∑
+σ∈Sn−4
+(taσ(1) ··· taσ(k))q ¯Q(taσ(k+1) ··· taσ(n−4))Q ¯q
+× A(0)
+n (q, 1,..., k, ¯q, Q, k + 1,..., n − 4, ¯Q)
+− 1
+NC
+(taσ(1) ··· taσ(k′))q ¯q(taσ(k′+1) ··· taσ(n−4))Q ¯Q
+× A(1)
+n (q, 1,..., k′, ¯q, Q, k′ + 1,..., n − 4, ¯Q)
+)
+, (21)
+where {ij }=⟨ ij ⟩ for positive-helicity gluons and {ij }=
+[ ji ] for negative-helicity gluons;q and Q label the two quark
+lines; A0(hq, h Q, hg) is a kinematic function which depends
+on the helicities of the two quarks and the gluons,
+(hq, h Q, hg) A0(hq, h Q, hg)
+(+,+,+) ⟨¯q ¯Q⟩2
+(+,+,−) [qQ ]2
+(+,−,+) ⟨¯qQ ⟩2
+(+,−,−) [q ¯Q]2
+, (22)
+with opposite-helicity cases obtained using parity transfor-
+mation ⟨ij ⟩↔[ ji ]; and the two functions A(0)
+n and A(1)
+n are
+kinematic amplitudes, for which we have used the short-hand
+notation q ≡ qhq , i ≡ σ( phi
+i ) etc.:
+A(0)
+n = {q ¯Q}
+{q1}{12}···{ k ¯Q}
+{Q ¯q}
+{Q(k + 1)}{(k + 1)(k + 2)}···{ (n − 4)¯q},
+(23)
+A(1)
+n = {q ¯q}
+{q1}{12}···{ k ¯q}
+{Q ¯Q}
+{Q(k + 1)}{(k + 1)(k + 2)}···{ (n − 4) ¯Q}.
+(24)
+123
+
+
+--- Page 6 ---
+719 Page 6 of 17 Eur. Phys. J. C (2017) 77 :719
+We must sum over all possible partitions of gluons between
+the two quark colour lines, and also over all possible permuta-
+tions of gluons within those partitions. If there are no gluons
+propagating off a particular colour line, then that colour line
+is described by a Kronecker delta. Note that this decomposi-
+tion only works for the MHV conﬁguration.
+Drell-Yan, DIS, and hadronic Z decays: To create MHV
+amplitudes with a single quark pair, a single lepton pair, and
+an arbitrary number of gluons, the four-quark amplitude can
+be recycled with all gluons coming from a single quark line.
+The second quark line is now equivalent to a l¯l pair up to
+couplings and an overall propagator factor. The amplitude
+then has the form
+M
+n(hq, hl, hg)
+= ig n−4
+s
+∑
+σ∈Sn−4
+(taσ(1),... taσ(n−4))ij
+×An(qhq ,σ( ph1
+1 ) ,...,σ( phn−4
+n−4 ), ¯qh ¯q , lhl , ¯lh¯l ), (25)
+where the sum is again over all gluon permutations. The
+kinematic amplitude is given by
+An(q, 1,..., n − 4, ¯q, l, ¯l)
+=
+∑
+V=γ,Z,W±
+Ml
+V (hl, hq, hg) 1
+{q1}{12}···{ (n − 4)¯q},
+(26)
+where the braces have the same meaning as in Eq. (24), and
+the function Ml
+V is given by
+Ml
+V (hl, hq, hg) =
+A0(hl, hq, hg)[¯ll](vl
+hl )V (vq
+hq )V
+⟨l¯l⟩[¯ll]− M2
+V + i/Gamma1V MV
+, (27)
+where A0(hl, hq, hg) is given by Eq. ( 22), (vl
+hl )V ((vq
+hq )V )
+is the coupling of lepton l (quark q) with helicity hl (hq )
+to vector V , and MV and /Gamma1V are the mass and width of the
+vector boson respectively.
+Finally, we remark that in all of the above expressions, ﬂip-
+ping the helicity of every particle is equivalent to exchanging
+each ⟨ij ⟩↔[ ji ]. This concludes our brief recapitulation of
+the basics of the MHV formalism and convention choices.
+3.3 MHV within Vincia
+The MHV amplitudes that are made available in standalone
+Vincia are summarised in Table 1. Note that these ampli-
+tudes are so far only used for QCD 2 → n matrix-element
+corrections, and that the second quark pair must have a dif-
+ferent ﬂavour to the ﬁrst.
+Table 1 The types of processes available in Vincia’s MHV library
+Type of process Number of particles
+All-gluon 4–6
+1 quark pair plus gluons 4–7
+2 quark pairs plus gluons 4, 5
+1 lepton pair, 1 quark pair plus gluons 4–9
+The colour-summed squared matrix element is calculated
+using the following matrix equation:
+FC =
+∑
+ij
+A†
+σi Cij Aσj , (28)
+where FC stands for the full colour-summed matrix element
+squared as in Eq. ( 3), Cij is a colour matrix obtained by
+multiplying the colour factor from permutation σi onto the
+conjugate colour factor fromσj , and the sum is over all colour
+orders. We optimise the all-gluon amplitudes by diagonalis-
+ing C
+ij for the 4 and 5-gluon matrix elements, and partially
+diagonalising Cij for the 6-gluon matrix element as done
+in [26].
+By default, Vincia uses MHV amplitudes wherever pos-
+sible to compute its matrix-element correction factors, thus
+ensuring the fastest possible run time. However, this can be
+turned off (e.g., for cross checks with amplitudes fromMad-
+graph) using the ﬂagvincia:useMHVamplitudes.T o
+calculate an MHV ME correction, Vincia actively crosses
+the initial-state partons into the ﬁnal state, rearranges the par-
+tons into the correct colour order, calculates all of the explicit
+spinor products needed, and then calculates the matrix ele-
+ment squared.
+The calculation of ME corrections for MHV conﬁgura-
+tions exhibits the nice feature that all clustered states in Eq.
+(12) are MHV conﬁgurations as well. Helicity conservation
+does not allow ++ → − nor −− → + clusterings (in
+the all-outgoing convention). This results in clustered states
+being either MHV conﬁgurations themselves or unphysical
+states with a vanishing amplitude. Considern positive- and 2
+negative-helicity outgoing partons as an example. Here clus-
+tered states contain either n − 1 positive- and 2 negative-
+helicity partons (MHV) orn positive- and 1 negative-helicity
+partons (unphysical).
+For instructions on how to use Vincia for calculating
+spinor products or MHV amplitude in a standalone context,
+see the online user guide [37].
+3.4 Polarising events with MHV
+The fact that Vincia assigns helicities to unpolarised events,
+with relative probabilities according to the corresponding
+helicity matrix elements squared, was brieﬂy discussed in
+123
+
+
+--- Page 7 ---
+Eur. Phys. J. C (2017) 77 :719 Page 7 of 17 719
+Sect. 2. An interesting simpliﬁcation occurs when all of
+the contributing amplitudes are of the MHV kind, as is,
+e.g., the case for all QCD 2 → 2 and 2 → 3p r o -
+cesses. The simpliﬁcation follows by noting that the full-
+colour (FC) MHV matrix elements squared all have the
+following form (so long as there is at most one quark
+pair):
+FCh =| Ah
+n(1,..., n)|2
+×
+⏐⏐
+⏐⏐⏐
+∑
+σ
+1
+⟨σ(1)σ(2)⟩···⟨ σ(n)σ(1)⟩ CF(σ(1)··· σ(n))
+⏐⏐
+⏐⏐⏐
+2
+≡ Mh
+n
+⏐⏐⏐
+⏐⏐
+∑
+σ
+F(σ)
+⏐⏐⏐
+⏐⏐
+2
+, (29)
+where h is a label denoting the helicity assignments,
+Mh
+n ≡| Ah
+n(1,..., n)|2 is some function of the helicities and
+momenta, σ is the relevant set of permutations, CF is the rel-
+evant colour factor at the amplitude level, and
+⏐⏐∑
+σ F(σ)
+⏐⏐2 is
+the square of the sum over colour permutations. For example,
+in the all-gluon amplitude A
+h
+n(1,..., n) could be ⟨ij ⟩4.W e
+have therefore factored out the helicity informationMh
+n from
+the colour information. This also works for the LC matrix ele-
+ments LC
+h
+i which are given by Eq. ( 29) above without the
+sum of permutations. That is, LC h
+i = Mh
+n |F(σi)|2. Recall
+that the conditional probability deﬁned in ( 6)u s e dt op i c k
+helicities for conﬁgurations that already have colour assign-
+ments has the form:
+P(h|i) = VCh
+i∑
+h′ VCh′
+i
+= FChLCh
+i∑
+j LCh
+j
+[ ∑
+h′
+FCh′
+LCh′
+i∑
+k LCh′
+k
+] −1
+. (30)
+We can use Eq. (29) to simplify this:
+P(h|i) = Mh
+n
+⏐⏐∑
+σ F(σ)
+⏐⏐2 Mh
+n |F(σi)|2
+∑
+j Mhn
+⏐⏐F(σj)
+⏐⏐2
+×
+[ ∑
+h′
+Mh′
+n
+⏐⏐∑
+σ′ F(σ′)
+⏐⏐2 Mh′
+n |F(σi)|2
+∑
+k Mh′
+n |F(σk)|2
+] −1
+= Mh
+n
+⏐⏐∑
+σ F(σ)
+⏐⏐2 |F(σi)|2
+∑
+j
+⏐⏐F(σj)
+⏐⏐2
+×
+[ ⏐⏐∑
+σ′ F(σ′)
+⏐⏐2 |F(σi)|2
+∑
+k |F(σk)|2
+∑
+h′
+Mh′
+n
+] −1
+= Mh
+n∑
+h′ Mh′
+n
+. (31)
+This shows that our factorisation allows to use the much
+simpler expressions Mh
+n ≡| Ah
+n(1,..., n)|2 to polarise the
+process. QCD processes are non-chiral, so we explicitly cal-
+culate only half of the factors M
+h
+n to polarise them, since the
+other half are equal by parity. For the mostly-plus helicity
+case the factors Ah
+n(1,... n) are
+Process Negative-helicity particles Ah
+0(1,..., n)
+All-gluon i, j ⟨ij ⟩4
+Single Quark Pair q, i ⟨qi⟩3⟨¯qi⟩
+Single Quark Pair ¯q, i ⟨qi⟩⟨¯qi ⟩3
+Quark Pair and Lepton Pair − A0(hl, hq,+)(vl
+hl )V (vq
+hq )V
+, (32)
+while the mostly plus factors are given by the usual parity
+relation.
+Note that this also holds for the full-colour amplitudes
+used for selecting helicities at the colour-summed level,
+cf. Eq. (2),
+P(h) = FC
+h
+∑
+h′ FCh′ = Mh
+n∑
+h′ Mh′
+n
+⏐⏐∑
+σ F(σ)
+⏐⏐2
+⏐
+⏐∑
+σ′ F(σ′)
+⏐⏐2 = Mh
+n∑
+h′ Mh′
+n
+.
+(33)
+The preceding argument also works for 4-quark MHV
+amplitudes with distinct quark pairs provided one changes
+Eq. (29) to include the second colour connection. However,
+this doesn’t work for all 4-quark MHV amplitudes because
+there is an extra colour-connection when two identical quarks
+have the same helicity. Hence the colour factor depends on
+the helicity and cannot be factorised.
+3.5 Speed comparisons
+At the level of a pure shower (before ME corrections are
+imposed), the change from helicity-summed to helicity-
+sampling radiation functions requires the generation of one
+more random number pern → n+1 branching, to select the
+123
+
+
+--- Page 8 ---
+719 Page 8 of 17 Eur. Phys. J. C (2017) 77 :719
+Fig. 1 Speed comparison for helicity-independent (“Non-hel”) and
+helicity-dependent (“Hel”) showers as a function of the number of ME-
+corrected legs, for qg → qg + gluons with ˆp
+⊥min = 100 GeV, for pp
+collisions at Ecm = 10 TeV. The dashed horizontal line indicates the
+time it takes to generate MPI and hadronisation for the same events.
+Results were obtained from 10,000 events generated for each run, on
+a single 2.9 GHz Intel Core i7 processor, using the clang compiler
+(v3.9), with -O2 optimisation
+helicity of the emitted parton. This comes in addition to at
+least three random numbers for the one-particle phase space.
+All else being equal, a helicity-sampling shower should there-
+fore not be more than a factor 4/3 slower than a helicity-
+summed one. (Similar arguments hold for the initial polar-
+isation step for the hard process). However, since there are
+many common components which must be computed regard-
+less of the choice of helicity treatment, one expects the effec-
+tive slowdown of the full shower algorithm to be milder than
+this upper limit. This is also borne out by explicit tests with
+Vincia, which exhibit slowdowns of less than 10% when
+switching on helicity-sampling. (See also the ﬁrst bin of Fig.1
+below.)
+As a measure of the relative speed of helicity-dependent vs
+helicity-summed ME corrections, and the difference between
+using MHV matrix elements or Madgraph 4 ones, we con-
+sider the following speciﬁc (but fairly representative) bench-
+mark case: qg → qg Born-level processes, with a minimum
+ˆp
+⊥ of 100 GeV , inpp collisions with Ecm = 10 TeV. A tech-
+nical point is that, for this comparison, we switch g → q ¯q
+branchings off in the shower, so that the generated shower
+conﬁgurations are all of the simple qg → qg + gluons type.
+This allows us to illustrate speeds of ME corrections with up
+to three additional legs while, ifg → q ¯q branchings had been
+switched on, the current version ofVincia is restricted to ME
+corrections with up to two additional legs. (This restriction
+will be lifted in a future update.)
+Figure 1 illustrates the number of milliseconds it takes
+to generate one shower, as a function of the number of legs
+that are requested to be ME-corrected. The solid (red) line
+without symbols uses helicity-summed showers and matrix
+elements, while the two blue curves (with symbols) show
+the dependence of the helicity-dependent formalism, with
+or without enabling the library of MHV matrix elements,
+respectively. For reference, the thick dashed horizontal line
+shows the time it takes to generate multi-parton interactions
+(MPI) and hadronisation for the same events.
+4 For 0 or 1
+corrected emissions, the helicity-summed shower is actually
+slightly faster, since the Born-level polariser and the helicity
+selection in the shower take a little extra time and the ﬁrst-
+order ME corrections are very quick to evaluate even when
+summing over helicities. At two legs, however, the helicity-
+dependent formalism is up to 30% quicker (with the MHV
+library switched on) than the helicity-summed one. At three
+legs, the difference is a factor 4, with the MHV library allow-
+ing to shave an extra ∼ 15% off the shower-generation time
+relative to using only MG4 matrix elements.
+One also notices that by two corrected legs, the showering
+time is becoming comparable to the time it takes to gener-
+ate MPI and hadronisation for the events, hence this is the
+point at which the showering speed would start to be felt in
+the context of generating full events. By three corrected legs,
+the ME corrections dominate the event-generation time. The
+default in the current version ofVincia is that ME corrections
+are enabled for QCD 2 → 2 processes up to two additional
+legs; the event-generation time should therefore stay within
+roughly a factor 2 of that of the uncorrected algorithm. The
+complete set of matrix elements required for 3rd-order cor-
+rections will be provided in a future update. For hadronic Z,
+W , and H production or decay, the full set of 3rd-order matrix
+elements are already available in the current version. (We
+note that the implementation of the iterated-MEC algorithm
+itself is general and could in principle handle any number of
+legs, if provided with the required matrix elements.)
+4 Example application
+To illustrate the properties of the ME-corrected algorithm
+(and uncertainty variations) in the context of a realistic
+application, we consider showers off gg → gg Born-level
+events and comparePythia 8.226 and Vincia 2.200 on three
+observables sensitive to different aspects of the evolution:
+early branchings, late branchings, and a polarisation effect,
+respectively:
+1. Early branchings the 3-jet resolution scale, d
+23,u s i n g
+the longitudinally invariant k⊥ -jet algorithm [ 38] with
+R = 0.4. The implementation of the algorithm is adapted
+from the code used in [39], originally written by S. Höche.
+4 The thickness of the dashed line reﬂects that the helicity-dependent
+showers result in slightly longer MPI generation times due to the slightly
+slower showering off the MPI systems.
+123
+
+
+--- Page 9 ---
+Eur. Phys. J. C (2017) 77 :719 Page 9 of 17 719
+Fig. 2 Logarithmic distributions of ratios of differential jet resolutions,
+d23/d12 and d56/d12, for showering gg → gg events. Predictions of
+Pythia 8.226 and Vincia 2.200 with and without ME corrections are
+shown. The solid bands present a renormalisation-scale variation with
+k = 1/2 and 2 and the hashed bands a variation of the nonsingular terms
+with CNS =± 2
+2. Late branchings the 6-jet k⊥ resolution scale, d56, with
+the same jet algorithm as above.
+3. Gluon polarisation the angle between the event plane
+(characteristic of the originalgg → gg Born-level event)
+and the plane of a subsequent g → b¯b splitting. Here,
+the FastJet [40] implementation of the anti-k⊥ jet algo-
+rithm [41]i su s e d ,w i t hR = 0.2 (so that the b jets can
+be resolved down to small separations), and we impose
+a minimum jet p
+⊥ of 50 GeV. (For further ideas on how
+to exploit heavy-ﬂavour tags to probe g → q ¯q splittings
+at colliders, see e.g. [42,43].)
+The basic 2 → 2 QCD process is sampled with the cutˆp⊥ ≥
+500 GeV on the ﬁnal-state partons. For consistency with the
+shower α
+s parameters, Vincia’s default tune uses two-loop
+running for the strong coupling withαs(m2
+Z ) = 0.118 for the
+hard process. To compare predictions on an equal footing we
+apply the same settings for the underlying Born process in
+Pythia. To focus on the showering off the hard process all
+comparisons are done with multiparton interactions switched
+off.
+To obtain dimensionless variables, the jet resolution mea-
+sures d
+23 and d56 are normalised by a factor 1 /d12, i.e.,
+they are effectively measured relative to a scale represent-
+ing the ˆp2
+⊥ scale of the underlying Born process. 5 The
+resulting quantities exhibit a ﬁxed-order behaviour for large
+values and a Sudakov suppression for low values. Espe-
+cially for well-resolved radiation, we therefore expect these
+observables to be sensitive to low-order ME corrections, and
+hence the uncertainty associated with nonsingular-term vari-
+ations should be reduced when Vincia’s ME corrections are
+switched on. (Note: Pythia does not incorporate ME cor-
+rections for QCD 2 → 2 processes.) Parton-level results
+for showered gg → gg events are presented in Fig. 2 with
+uncertainty bands.
+The ME corrections in strongly-ordered events exhibit a
+modest effect of up to 20% for large values of d
+23/d12 and
+d56/d12, with the ME-corrected rate being larger than that of
+the pure Vincia shower. Shape differences between the pre-
+5 This is similar to how, e.g., m2
+Z is used to normalise corresponding
+observables in e+e− collisions at the Z pole.
+123
+
+
+--- Page 10 ---
+719 Page 10 of 17 Eur. Phys. J. C (2017) 77 :719
+dictions of Pythia and Vincia are visible throughout most
+of the distributions, with the uncorrectedVincia shower gen-
+erating a somewhat harder d23/d12 spectrum than Pythia.
+ME corrections increase the rate for large d56/d12 values,
+bringing the predictions of Vincia closer to that of Pythia.
+Given the different choices of shower αs parameters, evo-
+lution variable, and radiation functions, we do not consider
+this level of disagreement between the two models surprising.
+The evolution of the hard process starts at the factorisation
+scale for both showers. However, depending on the form of
+evolution variable, the hardest possible scales correspond to
+different values of d
+23.
+All predictions exhibit some rather large ﬂuctuations in
+the uncertainty bands. The dijet system with the cut ˆp⊥ ≥
+500 GeV as underlying hard process is typically accompa-
+nied by a large number of additional jets. Given the nature of
+the reweighting algorithm of [22] (and similarly for [23,44])
+this may easily result in ﬂuctuating weights. In addition we
+expect larger ﬂuctuations in the nonsingular-term variations
+for the helicity shower, compared to the helicity-independent
+one. As discussed in Sect. 2, the additional nonsingular
+terms are distributed evenly between all helicity conﬁgu-
+rations. This results in a larger spread of weights, when
+considering helicity conﬁgurations that constitute either a
+large or a small fraction of the helicity-summed antenna
+functions. To mitigate the effects of weight ﬂuctuations,
+we conclude that further development of these reweight-
+ing methods would be useful, in particular for large phase
+spaces (long shower chains). E.g., the authors in [ 23]h a v e
+demonstrated that combining biasing with reweighting can
+improve the relative statistical precision of the uncertainty
+variations, at the price of generating some reasonably well-
+behaved weights for the central (non-varied) event sam-
+ple.
+The variation of the nonsingular terms (hashed bands)
+results in a larger band around small|d
+23/d12| and |d56/d12|
+for Vincia without ME corrections, compared to Pythia.
+The ME corrections cancel the effect of varying the non-
+singular terms in the radiation functions. Consequently, the
+respective uncertainty band for Vincia with ME corrections
+is very narrow, especially ford
+23. The renormalisation-scale
+variations (shaded bands) are quite similar in size for all pre-
+dictions. They show the largest effect for small jet separation
+scales, where soft emissions and the Sudakov factor con-
+tribute to the distribution.
+We now turn to an observable where polarisation effects
+are expected to contribute. In events with two b-jets a plane
+is deﬁned by the two jets. A second plane is deﬁned by the
+gluon-jet (the sum of the two b-jets) and the beam axis. In
+Fig. 3 the angle between the two planes is shown. A ﬂat
+distribution is obtained with Pythia without gluon polar-
+isation effects in the ﬁnal-state shower and Vincia with-
+out ME corrections. However, Vincia produces an around
+Fig. 3 The angle between the plane of the two b-jets and
+the plane of the gluon jet and the beam axis. Predictions
+of Pythia 8.2.26 and Vincia 2.2.0 with and without ME
+corrections are shown. In the labelling, “pol off” refers to
+the Pythia 8 parameters TimeShower:phiPolAsym and
+TimeShower:phiPolAsymHard being switched off and “pol
+on” to the default settings, where both parameters are switched on
+15% higher total rate, compared to Pythia. We note that
+both codes generate a similar total rate of g → b¯b split-
+tings in the shower, where the gluon splittings occur “later”
+in the evolution in Pythia (i.e., preceded by a larger num-
+ber of other branchings). The b-quarks are therefore more
+likely to obtain a smaller invariant mass and might be clus-
+tered within the same jet. Together with the p⊥ and invari-
+ant mass cuts on the jets, this may cause a smaller rate of
+events with two b-jets. The polarisation effects in Pythia
+leave the total rate unchanged, but increase the amount of
+events where the angle is close to π/2. The ME correc-
+tions in Vincia change the total rate by decreasing the num-
+ber of events with splitting angles near 90
+◦. The qualita-
+tive effect is therefore the opposite of that in Pythia, where
+the total shower rate is preserved, but the region around
+90
+◦ is enhanced by the polarisation effect. We conclude
+that a measurement of this observable, and the develop-
+ment of alternative strategies for corrections beyond ﬁxed
+order (e.g., along the lines proposed in [25]), would be desir-
+able.
+5 Conclusions
+We have presented a helicity-dependent antenna shower for
+QCD initial- and ﬁnal-state radiation, implemented in the
+Vincia shower model. The iterated ME correction formal-
+ism of [7,16,18,19] has been extended to cope with helicity-
+123
+
+
+--- Page 11 ---
+Eur. Phys. J. C (2017) 77 :719 Page 11 of 17 719
+dependent clusterings and splitting kernels involving initial-
+state legs, and in this work has been applied to strongly
+ordered showers in a direct extension of the formalism pre-
+sented in [19]. We further reported on new, user-speciﬁable
+uncertainty variations in Vincia, including renormalisation-
+scale and splitting-kernel variations.
+The new approach and a library for tree-level MHV ampli-
+tudes enable a faster evaluation of MEC factors, as illustrated
+explicitly for the processqg → qg + gluons. While the pure
+shower is slightly slower due to the additional step of helicity
+selection, the evaluation of ME corrections can be done sig-
+niﬁcantly faster when only a single or a few helicity matrix
+elements need to be evaluated per trial branching, relative to
+when helicity-summed matrix elements are used.
+To illustrate the effect of the iterated ME corrections and
+uncertainty variations within the helicity-dependent shower,
+we considered a few representative observables, based on
+showered gg → gg Born-level events. As expected, ME
+corrections reduce the overall amount of variation consider-
+ably in regions of relatively hard emissions, where process-
+dependent nonsingular terms (captured by the matrix ele-
+ments) dominate over the universal logarithmic terms (cap-
+tured by the showers). In regions of large scale hierarchies,
+the uncertainty due to renormalisation-scale variations dom-
+inates and remains uncompensated by tree-level ME correc-
+tions.
+We also showed a more complex example, the angle
+between a Born-level gg → gg event plane and the plane of
+a subsequent g → b¯b splitting. In Pythia, a general imple-
+mentation of gluon polarisation effects implies an enhance-
+ment of such splittings at 90 degrees to the original event
+plane (while the total shower rate ofg → b¯b splittings is pre-
+served); while in Vincia, ME corrections dominantly act to
+suppress the overall rate ofg → b¯b splittings. Moreover, the
+suppression is most active for the most well-resolved branch-
+ings (at 90 degrees), leading to an opposite-sign effect than
+the one inPythia. We conclude that there is a complex inter-
+play between the rate and the angular dependence of these
+branchings, and intend to investigate this further in future
+studies.
+Acknowledgements AL and PS acknowledge support from the
+Monash–Warwick Alliance Development Fund Project “Collider
+Physics”. PS is the recipient of an Australian Research Council Future
+Fellowship, FT130100744.
+Open Access This article is distributed under the terms of the Creative
+Commons Attribution 4.0 International License ( http://creativecomm
+ons.org/licenses/by/4.0/), which permits unrestricted use, distribution,
+and reproduction in any medium, provided you give appropriate credit
+to the original author(s) and the source, provide a link to the Creative
+Commons license, and indicate if changes were made.
+Funded by SCOAP
+3.
+Appendix A: Helicity-dependent antenna functions
+A.1: Notation and conventions
+We use capital letters to denote partons in the pre-branching
+n-parton conﬁguration and lower-case letters to denote par-
+tons in the post-branching (n + 1)−parton conﬁguration.
+Incoming partons are denoted a, b, while ﬁnal-state partons
+are denoted i, j, k. Thus, for example, an initial-ﬁnal antenna
+branching is written AK → ajk .
+The scaled branching invariants for ﬁnal-ﬁnal antenna
+functions are
+yij = sij
+m2
+IK
+, y jk = s jk
+m2
+IK
+, and yik = sik
+m2
+IK
+, (34)
+and the energy fractions
+x j = 1 − 1
+1 − μ2
+I
+yik and xk = 1 − 1
+1 − μ2
+I
+yij , (35)
+with μI = mi/m IK . The scaled branching invariants for
+initial-ﬁnal antenna functions are
+yaj = saj
+m2
+AK + s jk
+, y jk = s jk
+m2
+AK + s jk
+, and
+yak = sak
+m2
+AK + s jk
+, (36)
+and for initial-initial antenna functions
+yaj = saj
+m2
+AB + saj + s jb
+, y jb = s jb
+m2
+AB + saj + s jb
+, and
+yAB = m2
+AB
+m2
+AB + saj + s jb
+. (37)
+Note that, for gluon-emission antennae involving massive
+parent quarks, a helicity-independent negative correction to
+the eikonal is added, with helicity-summed average:
+/Delta1aeik
+mass =− 2m2
+I
+s2
+ij
+− 2m2
+K
+s2
+jk
+. (38)
+For gluon-splitting antennae (Xg → X ¯q j qk),t h em a s s
+correction is positive:
+/Delta1asplit
+mass =
+m2
+j
+m4
+jk
+. (39)
+123
+
+
+--- Page 12 ---
+719 Page 12 of 17 Eur. Phys. J. C (2017) 77 :719
+A.2: Q ¯Q parents: gluon emission
+The helicity averages for q ¯q → qg ¯q antennae are
+FF : a(qI qK → qi g j qk)
+= 1
+m2
+IK
+[ 2yik
+yij y jk
++ y jk
+yij
++ yij
+y jk
++ 1
+]
+= 1
+m2
+IK
+[ (1 − yij )2 + (1 − y jk )2
+yij y jk
++ 1
+]
+, (40)
+II : a(¯qAqB →¯ qa g j qb)
+= 1
+sAB
+[ 2yAB
+yaj y jb
++ y jb
+yaj
++ yaj
+y jb
++ 1
+]
+= 1
+sAB
+[ (1 − yaj )2 + (1 − y jb )2
+yaj y jb
++ 1
+]
+, (41)
+IF : a(qAqK → qa g j qk)
+= 1
+sAK
+[
+(1 − yaj )2 + (1 − y jk )2
+yaj y jk
++ 3
+2 −
+y2
+aj
+2 −
+y2
+jk
+2
+]
+,
+(42)
+where the slightly different nonsingular terms chosen for the
+IF case ensure positivity of in particular the (++ → + −
++) antenna function over all of the IF phase space, while
+the nonsingular terms for the FF and II cases result from
+averaging over the corresponding helicity matrix elements
+for Z and H decays.
+The individual helicity contributions are:
+FF : a(+ +→+++ ) = 1
+m2
+IK
+[ 1
+yij y jk
+]
+, (43)
+a(++ → + − + )
+= 1
+m2
+IK
+[ (1 − yij )2 + (1 − y jk )2 − 1
+yij y jk
++ 2
+]
+, (44)
+a(+− → + + − ) = 1
+m2
+IK
+[ (1 − yij )2
+yij y jk
+]
+, (45)
+a(+− → + − − ) = 1
+m2
+IK
+[ (1 − y jk )2
+yij y jk
+]
+. (46)
+II : a(++ → + + +) = 1
+sAB
+[ 1
+yaj y jb
+]
+, (47)
+a(++ → + − + ) = 1
+sAB
+[
+y2
+AB
+yaj y jb
+]
+, (48)
+a(+− → + + − ) = 1
+sAB
+[ (1 − yaj )2
+yaj y jb
+]
+, (49)
+a(+− → + − − ) = 1
+sAB
+[ (1 − y jb )2
+yaj y jb
+]
+. (50)
+IF : a(++ → + + +) = 1
+sAK
+[ 1
+yaj y jk
+]
+, (51)
+a(++ → + − + )
+= 1
+sAK
+[ (1 − yaj )2 + (1 − y jk )2 − 1
+yaj y jk
++ 3 − y2
+aj − y2
+jk
+]
+, (52)
+a(+− → + + − ) = 1
+sAK
+[ (1 − yaj )2
+yaj y jk
+]
+, (53)
+a(+− → + − − ) = 1
+sAK
+[ (1 − y jk )2
+yaj y jk
+]
+. (54)
+A.3: QG parents: gluon emission
+The helicity averages for qg → qgg antennae are
+FF : a(qI gK → qi g j gk)
+= 1
+m2
+IK
+[ 2yik
+yij y jk
++ y jk
+yij
++ yij (1 − yij )
+y jk
++ yij + y jk
+2
+]
+= 1
+m2
+IK
+[ (1 − yij )3 + (1 − y jk )2
+yij y jk
+− 2μ2
+I
+y2
+ij
++ yik − yij
+y jk
++ 1 + yij + y jk
+2
+]
+, (55)
+II : a(qA gB → qa g j gb)
+= 1
+sAB
+[ (1 − yaj )3 + (1 − y jb )2
+yaj y jb
++
+1 + y3
+aj
+y jb (1 − yaj )
++ 2 − yaj − y jb
+2
+]
+, (56)
+IF : a(qA gK → qa g j gk)
+= 1
+sAK
+[ (1 − yaj )3 + (1 − y jk )2
+yaj y jk
++ 1 − 2yaj
+y jk
++ 3
+2 + yaj − y jk
+2 −
+y2
+aj
+2
+]
+, (57)
+IF : a(gAqK → ga g j qk)
+= 1
+sAK
+[
+(1 − y jk )3 + (1 − yaj )2
+yaj y jk
++
+1 + y3
+jk
+yaj (yAK + yaj )
++3
+2 −
+y2
+jk
+2
+]
+. (58)
+Note that for the initial-ﬁnal case two antennae, qg → qgg
+and gq → ggq ,e x i s t .
+The individual helicity contributions are:
+FF : a(++ → + + +) = 1
+m2
+IK
+[ 1
+yij y jk
++ (1 − α)(1 − y jk )
+×
+( 1 − 2yij − y jk
+y jk
+)]
+, (59)
+123
+
+
+--- Page 13 ---
+Eur. Phys. J. C (2017) 77 :719 Page 13 of 17 719
+a(++ → + − + ) = 1
+m2
+IK
+[
+(1 − yij )y2
+ik
+yij y jk
+]
+, (60)
+a(+− → + + − ) = 1
+m2
+IK
+[ (1 − yij )3
+yij y jk
+]
+, (61)
+a(+− → + − − ) = 1
+m2
+IK
+[ (1 − y jk )2
+yij y jk
++(1 − α)(1 − y jk )
+( 1 − 2yij − y jk
+y jk
+)]
+. (62)
+II : a(++ → + + +) = 1
+sAB
+[ 1
+yaj y jb
+1 − y jb
+1 − yaj − y jb
+]
+= 1
+sAB
+[ 1
+yaj y jb
++ 1
+y jb yAB
+]
+(63)
+sing→ 1
+sAB
+[ 1
+yaj y jb
++ 1
+y jb (1 − yaj )
+]
+, (64)
+a(++ → + − + ) = 1
+sAB
+1
+yaj y jb
+y3
+AB
+1 − y jb
+y3
+AB
+sAB
+[ 1
+yaj y jb
++ 1
+yaj (1 − y jb )
+]
+(65)
+sing→ 1
+sAB
+[
+y3
+AB
+yaj y jb
++ y2
+AB
+yaj
+]
+= 1
+sAB
+(1 − yaj )y2
+AB
+yaj y jb
+, (66)
+a(+− → + + − )
+= 1
+sAB
+[
+(1 − yaj )3
+yaj y jb
++
+1 − y jb − y2
+aj
+1 − y jb
+]
+(67)
+sing→ 1
+sAB
+(1 − yaj )3
+yaj y jb
+, (68)
+a(+− → + − − )
+= 1
+sAB
+1
+yaj y jb
+(1 − y jb )3
+1 − yaj − y jb
+= (1 − y jb )2
+sAB
+[ 1
+yaj y jb
++ 1
+y jb
+1
+1 − yaj − y jb
+]
+(69)
+sing→ 1
+sAB
+[ (1 − y jb )2
+yaj y jb
++ 1
+y jb (1 − yaj )
+]
+, (70)
+a(++ → + − − ) = 1
+sAB
+y3
+aj
+y jb (1 − y jb )
+1
+1 − yaj − y jb
+,
+(71)
+sing→ 1
+sAB
+y3
+aj
+y jb (1 − yaj ), (72)
+a(+− → + + + ) = a(++ → + − − ). (73)
+IF : a(++ → + + +)
+= 1
+sAK
+[ 1
+yaj y jk
++ 1 − 2yaj
+y jk
+]
+, (74)
+a(++ → + − + )
+= 1
+sAK
+[ (1 − yaj )3 + (1 − y jk )2 − 1
+yaj y jk
++ 3 − y2
+aj
+]
+, (75)
+a(+− → + + − )
+= 1
+sAK
+[ (1 − yaj )3
+yaj y jk
+]
+, (76)
+a(+− → + − − )
+= 1
+sAK
+[ (1 − y jk )2
+yaj y jk
++ 1 − 2yaj
+y jk
++ 2yaj − y jk
+]
+. (77)
+IF : a(++ → + + +)
+= 1
+sAK
+[ 1
+yaj y jk
++ 1
+yaj (yAK + yaj )
+]
+, (78)
+a(++ → + − + )
+= 1
+sAK
+[ (1 − yaj )2 + (1 − y jk )3 − 1
+yaj y jk
++ 3 − y2
+jk
+]
+, (79)
+a(+− → + + − )
+= 1
+sAK
+[ (1 − yaj )2
+yaj y jk
++ 1
+yaj (yAK + yaj )
+]
+, (80)
+a(+− → + − − ) = 1
+sAK
+[ (1 − y jk )3
+yaj y jk
+]
+, (81)
+a(++ → − − + ) = 1
+sAK
+y3
+jk
+yaj (yAK + yaj ), (82)
+a(+− → − − − ) = a(++ → − − + ). (83)
+Note that for gluons in the initial-state an additional helic-
+ity conﬁguration6 arises where the ﬁnal-state gluon inherits
+the helicity.
+A.4: GG parents: gluon emission
+The helicity averages for gg → ggg antennae are
+FF : a(gI gK → gi g j gk)
+= 1
+m2
+IK
+[ 2yik
+yij y jk
++ y jk (1 − y jk )
+yij
++ yij (1 − yij )
+y jk
++1
+2 yij + 1
+2 y jk
+]
+= 1
+m2
+IK
+[ (1 − yij )3 + (1 − y jk )3
+yij y jk
++ yik − yij
+y jk
++ yik − y jk
+yij
++ 2 + 1
+2 yij + 1
+2 y jk
+]
+, (84)
+II : a(gA gB → ga g j gb)
+6 Additional with respect to the ﬁnal-state antenna functions.
+123
+
+
+--- Page 14 ---
+719 Page 14 of 17 Eur. Phys. J. C (2017) 77 :719
+= 1
+sAB
+[
+(1 − yaj )3 + (1 − y jb )3
+yaj y jb
++
+1 + y3
+aj
+y jb (1 − yaj )
++
+1 + y3
+jb
+yaj (1 − y jb ) + 3 − 3yaj
+2 − 3y jb
+2
+]
+, (85)
+IF : a(gA gK → ga g j qk)
+= 1
+sAK
+[ (1 − yaj )3 + (1 − y jk )3
+yaj y jk
++
+1 + y3
+jk
+yaj (yAK + yaj ) + 1 − 2yaj
+y jk
++ 3 − 2y jk
+]
+. (86)
+The individual helicity contributions are:
+FF : a(+ +→+++ )
+= 1
+m2
+IK
+[ 1
+yij y jk
++ (1 − α)
+×
+(
+(1 − yij )1 − 2y jk − yij
+yij
++(1 − y jk )1 − 2yij − y jk
+y jk
+)]
+, (87)
+a(++ → + − + ) = 1
+m2
+IK
+[
+y3
+ik
+yij y jk
+]
+, (88)
+a(+− → + + − )
+= 1
+m2
+IK
+[ (1 − yij )3
+yij y jk
++(1 − α)(1 − yij )1 − 2y jk
+yij
+]
+, (89)
+a(+− → + − − )
+= 1
+m2
+IK
+[ (1 − y jk )3
+yij y jk
++(1 − α)(1 − y jk )1 − 2yij
+y jk
+]
+. (90)
+II : a(++ → + + +)
+= 1
+sAB
+[ 1
+yaj y jb
++ 1
+y jb (1 − yaj ) + 1
+yaj (1 − y jb )
+]
+,
+(91)
+a(++ → + − + ) = 1
+sAB
+y3
+AB
+yaj y jb
+, (92)
+a(+− → + + − )
+= 1
+sAB
+[ (1 − yaj )3
+yaj y jb
++ 1
+yaj (1 − y jb )
+]
+, (93)
+a(+− → + − − )
+= 1
+sAB
+[ (1 − y jb )3
+yaj y jb
++ 1
+y jb (1 − yaj )
+]
+, (94)
+a(++ → + − − )
+= 1
+sAB
+y3
+aj
+y jb (1 − yaj ), (95)
+a(++ → − − + ) = 1
+sAB
+y3
+jb
+yaj (1 − y jb ), (96)
+a(+− → + + + ) = a(++ → + − − ), (97)
+a(+− → − − − ) = a(++ → − − + ). (98)
+IF : a(++ → + + +)
+= 1
+sAK
+[ 1
+yaj y jk
++ 1 − 2yaj
+y jk
++ 1
+yaj (yAK + yaj )
+]
+, (99)
+a(++ → + − + )
+= 1
+sAK
+[ (1 − yaj )3 + (1 − y jk )3 − 1
+yaj y jk
++ 6 − 3yaj − 3y jk + yaj y jk
+]
+, (100)
+a(+− → + + − )
+= 1
+sAK
+[ (1 − yaj )3
+yaj y jk
++ 1
+yaj (yAK + yaj )
+]
+, (101)
+a(+− → + − − )
+= 1
+sAK
+[ (1 − y jk )3
+yaj y jk
++ 1 − 2yaj
+y jk
++3yaj − y jk − yaj y jk
+]
+, (102)
+a(++ → − − + ) = 1
+sAK
+y3
+jk
+yaj (yAK + yaj ), (103)
+a(+− → − − − ) = a(++ → − − + ). (104)
+Note that for gluons in the initial-state an additional helic-
+ity conﬁguration7 arises where the ﬁnal-state gluon inherits
+the helicity.
+A.5: G → ¯QQ splittings
+The helicity averages for Xg → X ¯qq antennae (ﬁnal-state
+gluon splitting) are
+FF : a(X I gK → Xi ¯q j qk)
+= 1
+2m2
+jk
+[
+(1 − x j)2 + (1 − xk)2
+]
+= 1
+2m2
+jk
+[
+y2
+ik + y2
+ij
+(1 − μ2
+I )2
+]
+,
+(105)
+IF : a(X A gK → Xa ¯q j qk) = 1
+2m2
+jk
+[
+y2
+ak + y2
+aj
+]
+. (106)
+The individual helicity contributions are:
+FF : a(X+→ X −+ )
+7 Additional with respect to the ﬁnal-state antenna functions.
+123
+
+
+--- Page 15 ---
+Eur. Phys. J. C (2017) 77 :719 Page 15 of 17 719
+= 1
+2m2
+jk
+y2
+ik
+(1 − μ2
+I )2 = (1 − x j)2
+2m2
+jk
+, (107)
+a(X+→ X +− )
+= 1
+2m2
+jk
+y2
+ij
+(1 − μ2
+I )2 = (1 − xk)2
+2m2
+jk
+. (108)
+IF : a(X+→ X −+ ) = y2
+ak
+2m2
+jk
+, (109)
+a(X+→ X +− ) =
+y2
+aj
+2m2
+jk
+. (110)
+The helicity averages for qX → g ¯qX antennae (quark
+backwards evolving to a gluon) are
+II : a(qA X B → ga ¯q j Xb)
+= 1
+sAB
+y2
+AB + (1 − yAB )2
+yaj
+, (111)
+IF : a(qA X K → ga ¯q j Xk)
+= 1
+sAK
+y2
+AK + (1 − yAK )2
+yaj
+. (112)
+The individual helicity contributions are:
+II : a(+X →+− X) = 1
+sAB
+y2
+AB
+yaj
+, (113)
+a(+X →−− X) = 1
+sAB
+(1 − yAB )2
+yaj
+, (114)
+a(− X →−+ X) = 1
+sAB
+y2
+AB
+yaj
+, (115)
+a(− X →++ X) = 1
+sAB
+(1 − yAB )2
+yaj
+. (116)
+IF : a(+X →+− X) = 1
+sAK
+y2
+AK
+yaj
+, (117)
+a(+X →−− X) = 1
+sAK
+(1 − yAK )2
+yaj
+, (118)
+a(− X →−+ X) = 1
+sAK
+y2
+AK
+yaj
+, (119)
+a(− X →++ X) = 1
+sAK
+(1 − yAK )2
+yaj
+. (120)
+The helicity averages for gX → qqX antennae (gluon
+backwards evolving to a quark) are
+II: a(gA X B → qa q j Xb) = 1
+sAB
+1 + (1 − yAB )2
+2yaj (1 − y jb ) , (121)
+IF: a(gA X K → qa q j Xk) = 1
+sAK
+1 + (1 − yAK )2
+2yaj (yAK + yaj ).
+(122)
+The individual helicity contributions are:
+II : a(+X →++ X) = 1
+sAB
+1
+2yaj (1 − y jb ), (123)
+a(+X →−− X) = 1
+sAB
+(1 − yAB )2
+2yaj (1 − y jb ), (124)
+a(− X →−− X) = 1
+sAB
+1
+2yaj (1 − y jb ), (125)
+a(− X →++ X) = 1
+sAB
+(1 − yAB )2
+2yaj (1 − y jb ). (126)
+IF : a(+X →++ X) = 1
+sAK
+1
+2yaj (yAK + yaj ), (127)
+a(+X →−− X) = 1
+sAK
+(1 − yAK )2
+2yaj (yAK + yaj ), (128)
+a(− X →−− X) = 1
+sAK
+1
+2yaj (yAK + yaj ), (129)
+a(− X →++ X) = 1
+sAK
+(1 − yAK )2
+2yaj (yAK + yaj ). (130)
+A.6: Gluon emission of initial-state gluons
+As discussed in Appendices 1 and 1, helicity conﬁgurations
+exist for which a ﬁnal-state gluon inherits the helicity of
+an initial-state gluon. Thus, the helicity of a pre-branching
+initial-state gluon, A or B, can be different from that of
+the corresponding post-branching initial-state gluon, a or b,
+without violating helicity conservation.
+For completeness, we give the DGLAP limits of antenna
+functions for gluon emission off initial-state gluons. The lim-
+its are independent of the other parent in the parent antenna.
+For initial-initial antennae the DGLAP limit corresponds to
+y
+jb = Q2
+sab
+→ 0, z = yAB = sAB
+sab
+, and yaj → 1 − z.
+(131)
+This gives the following limits of the helicity-dependent
+antenna functions in Eqs. (91)t o( 98)[ o rE q s .(63)t o( 73)]
+for a parent with + helicity,
+a(X+→ X ++ ) → 1
+Q2
+1
+z
+1
+z(1 − z)
+= 1
+Q2 PIS
+g→ gg(+→+ + ),
+a(X+→ X −+ ) → 1
+Q2
+1
+z
+z3
+1 − z
+123
+
+
+--- Page 16 ---
+719 Page 16 of 17 Eur. Phys. J. C (2017) 77 :719
+= 1
+Q2 PIS
+g→ gg(+→− + ),
+a(X+→ X −− ) → 1
+Q2
+1
+z
+(1 − z)3
+z
+= 1
+Q2 PIS
+g→ gg(+→+ − ).
+The same limits are obtained for initial-ﬁnal antennae with
+yaj = Q2
+m2
+AK + s jk
+→ 0, z = yAK
+= m2
+AK
+m2
+AK + s jk
+, y jk → 1 − z, and yak → 1. (132)
+Appendix B: Details of VINCIA implementation
+The results obtained in this paper were obtained with version
+2.2 of the Vincia code, which has been made publicly avail-
+able. For documentation, see the HTML manual and update
+notes section of the README accompanying the code. For
+ease of reference, we emphasise the following changes rela-
+tive to version 2.0 described in [18].
+• The so-called “Ariadne factor” [ 45] for gluon-splitting
+antennae has been removed completely, as it has only
+been applied to 4-jet events in hadronic Z decays and its
+inﬂuence cancels once ME corrections are used in the
+evolution.
+• T h eC M W - r e s c a l i n go fα
+s [46] is no longer applied to the
+soft-eikonal terms of the antenna functions, but rather as
+a global rescaling of /Lambda1
+QCD, independent of the type of
+branching.
+• By default the power shower approach [10,47]i su s e df o r
+hard process without QCD partons in the ﬁnal state. This
+obviates the need for a separate event sample containing
+jets associated with scales larger than the factorisation
+scale, which has been introduced in [18]. For QCD-type
+processes the shower starts the evolution at the factorisa-
+tion scale.
+• The so-called “smooth ordering” [16], which allows the
+shower to populate phase-space regions beyond the reach
+of traditional ordered showers, is no longer used. Con-
+sequently, the MECs formalism so far used in Vincia is
+no longer applicable and the MECs method for ordered
+showers of [19] is applied. See Sect. 3 f o rab r i e fr e v i e w
+of the formalism.
+• The CKKW-L merging implementation inPythia 8[ 48]
+is now also available inVincia, making use of the param-
+eters in Pythia 8. This allows to supplement the MECs
+method for ordered showers with non-shower-like events,
+as discussed in [ 19]. Note however, that it is not possi-
+ble to combine the merging procedure with the helicity-
+dependent shower.
+• Automated uncertainty variations are now user speciﬁ-
+able in the same manner as in Pythia 8[ 22], with the
+following keywords controlling the type and size of vari-
+ations in Vincia, for ﬁnal-ﬁnal (FF), initial-ﬁnal (IF),
+and initial-initial (II) antennae respectively:
+• Renormalisation-scale variations (applied to all
+antenna functions):
+ff:muRfac ; if:muRfac ; ii:muRfac.
+• Nonsingular-term variations (applied to all antenna
+functions):
+ff:cNS ; if:cNS ; ii:cNS.
+•Optionally, antenna-speciﬁc variations can be spec-
+iﬁed, which then supersede the antenna-independent
+variations. The full set of possible keywords is listed
+in Vincia’s HTML User Reference.
+•As an example, the following value (default inVin-
+cia 2.200) for theVincia:UncertaintyBands
+List string vector deﬁnes a set of four alterna-
+tive weight sets, with labels “alphaShi”, “alphaSlo”,
+“hardHi”, and “hardLo”, respectively:
+Vincia:UncertaintyBandsList = {
+alphaShi ff:muRfac=0.5 if:muRfac=0.5
+ii:muRfac=0.5,
+alphaSlo ff:muRfac=2.0 if:muRfac=2.0
+ii:muRfac=2.0,
+hardHi ff:cNS=2.0 if:cNS=2.0
+ii:cNS=2.0,
+hardLo ff:cNS=-2.0 if:cNS=-2.0
+ii:cNS=-2.0 }
+References
+1. T. Sjöstrand, S. Ask, J.R. Christiansen, R. Corke, N. Desai, P. Ilten,
+S. Mrenna, S. Prestel, C.O. Rasmussen, P.Z. Skands, An intro-
+duction to PYTHIA 8.2. Comput. Phys. Commun. 191, 159–177
+(2015). arXiv:1410.3012
+2. B.R. Webber, Monte Carlo simulation of hard hadronic processes.
+Ann. Rev. Nucl. Part. Sci. 36, 253–286 (1986)
+3. J. Bellm et al., Herwig 7.1 release note. arXiv:1705.06919
+4. I.G. Knowles, Spin correlations in parton–parton scattering. Nucl.
+Phys. B 310, 571–588 (1988)
+5. I.G. Knowles, A linear algorithm for calculating spin correlations in
+hadronic collisions. Comput. Phys. Commun. 58, 271–284 (1990)
+6. P. Richardson, Spin correlations in Monte Carlo simulations. JHEP
+11, 029 (2001). arXiv:hep-ph/0110108
+7. A.J. Larkoski, J.J. Lopez-Villarejo, P. Skands, Helicity-dependent
+showers and matching with VINCIA. Phys. Rev. D 87(5), 054033
+(2013). arXiv:1301.0933
+8. M. Bengtsson, T. Sjöstrand, Coherent parton showers versus matrix
+elements: implications of PETRA–PEP data. Phys. Lett. B185, 435
+(1987)
+123
+
+
+--- Page 17 ---
+Eur. Phys. J. C (2017) 77 :719 Page 17 of 17 719
+9. M. Bengtsson, T. Sjöstrand, A comparative study of coherent and
+noncoherent parton shower evolution. Nucl. Phys. B 289, 810
+(1987)
+10. G. Miu, T. Sjostrand, W production in an improved par-
+ton shower approach. Phys. Lett. B 449, 313–320 (1999).
+arXiv:hep-ph/9812455
+11. E. Norrbin, T. Sjostrand, QCD radiation off heavy particles. Nucl.
+Phys. B 603, 297–342 (2001). arXiv:hep-ph/0010012
+12. M.H. Seymour, Matrix element corrections to parton
+shower algorithms. Comput. Phys. Commun. 90, 95 (1995).
+arXiv:hep-ph/9410414
+13. G. Corcella, M.H. Seymour, Matrix element corrections to parton
+shower simulations of heavy quark decay. Phys. Lett. B 442, 417
+(1998). arXiv:hep-ph/9809451
+14. P. Nason, A New method for combining NLO QCD with
+shower Monte Carlo algorithms. JHEP 11, 040 (2004).
+arXiv:hep-ph/0409146
+15. S. Frixione, P. Nason, C. Oleari, Matching NLO QCD computations
+with parton shower simulations: the POWHEG method. JHEP 11,
+070 (2007). arXiv:0709.2092
+16. W.T. Giele, D.A. Kosower, P.Z. Skands, Higher-order corrections
+to timelike jets. Phys. Rev. D84, 054003 (2011). arXiv:1102.2126
+17. W.T. Giele, D.A. Kosower, P.Z. Skands, A simple shower
+and matching algorithm. Phys. Rev. D 78, 014026 (2008).
+arXiv:0707.3652
+18. N. Fischer, S. Prestel, M. Ritzmann, P. Skands, Vincia for hadron
+colliders. Eur. Phys. J. C 76(11), 589 (2016). arXiv:1605.06142
+19. N. Fischer, S. Prestel, Combining states without scale hierarchies
+with ordered parton showers. arXiv:1706.06218
+2 0 . J .A l w a l l ,P .D e m i n ,S .d eV i s s c h e r ,R .F r e d e r i x ,M .H e r q u e t ,F .M a l -
+toni, T. Plehn, D.L. Rainwater, T. Stelzer, MadGraph/MadEvent v4:
+the new web generation. JHEP 09, 028 (2007). arXiv:0706.2334
+21. V . Hirschi et al., (2017, work in progress)
+22. S. Mrenna, P. Skands, Automated parton-shower variations in
+Pythia 8. Phys. Rev. D 94(7), 074005 (2016). arXiv:1605.08352
+23. J. Bellm, S. Plätzer, P. Richardson, A. Siódmok, S. Webster,
+Reweighting parton showers. Phys. Rev. D 94(3), 034028 (2016).
+arXiv:1605.08256
+24. L. Hartgring, E. Laenen, P. Skands, Antenna showers with one-loop
+matrix elements. JHEP 10, 127 (2013). arXiv:1303.4974
+25. H.T. Li, P. Skands, A framework for second-order parton showers.
+Phys. Lett. B 771, 59–66 (2017). arXiv:1611.00013
+26. M.L. Mangano, S.J. Parke, Multiparton amplitudes in gauge theo-
+ries. Phys. Rep. 200, 301 (1991). arXiv:hep-th/0509223
+27. L.J. Dixon, Calculating scattering amplitudes efﬁciently. in QCD
+and beyond. Proceedings, Theoretical Advanced Study Institute in
+Elementary Particle Physics, TASI-95, Boulder , USA, June 4–30,
+1995, pp. 539–584 (1996). arXiv:hep-ph/9601359
+28. L.J. Dixon, A brief introduction to modern amplitude methods.
+in Proceedings, 2012 European School of High-Energy Physics
+(ESHEP 2012): La Pommeraye, Anjou, France, June 06–19, 2012,
+pp. 31–67 (2014). arXiv:1310.5353
+29. S.J. Parke, T. Taylor, An amplitude for n gluon scattering. Phys.
+Rev. Lett. 56, 2459 (1986)
+30. Z. Kunszt, Combined use of the Calkul method and N=1 super-
+symmetry to calculate QCD six parton processes. Nucl. Phys. B
+271, 333 (1986)
+31. M.L. Mangano, S.J. Parke, Quark—gluon amplitudes in the dual
+expansion. Nucl. Phys. B 299, 673 (1988)
+32. Z. Xu, D.-H. Zhang, L. Chang, Helicity amplitudes for multiple
+Bremsstrahlung in massless nonabelian gauge theories. Nucl. Phys.
+B 291, 392 (1987)
+33. J.F. Gunion, Z. Kunszt, Four jet processes: gluon-gluon scattering
+to nonidential quark–anti-quark pairs. Phys. Lett. B159, 167 (1985)
+34. J.F. Gunion, Z. Kunszt, Addendum concerning the four quark two
+gluon subprocess. Phys. Lett. B 176, 477 (1986)
+35. F.A. Berends, W.T. Giele, Recursive calculations for processes with
+n gluons. Nucl. Phys. B 306, 759 (1988)
+36. M.L. Mangano, The color structure of gluon emission. Nucl. Phys.
+B 309, 461 (1988)
+37. P. Skands et al., VINCIA user reference (2017). http://vincia.
+hepforge.org/current/share/Vincia/htmldoc/
+38. S.D. Ellis, D.E. Soper, Successive combination jet algorithm
+for hadron collisions. Phys. Rev. D 48, 3160–3166 (1993).
+arXiv:hep-ph/9305266
+39. S. Höche, S. Prestel, The midpoint between dipole and parton show-
+ers. Eur . Phys. J. C 75(9), 461 (2015). arXiv:1506.05057
+40. M. Cacciari, G.P. Salam, G. Soyez, FastJet user manual. Eur. Phys.
+J. C 72, 1896 (2012). arXiv:1111.6097
+41. M. Cacciari, G.P. Salam, G. Soyez, The anti-k(t) jet clustering algo-
+rithm. JHEP 04, 063 (2008). arXiv:0802.1189
+42. B. Nachman, g → b¯b studies at the LHC. in Proceedings, Par-
+ton Radiation and Fragmentation from LHC to FCC-ee: CERN,
+Geneva, Switzerland, November 22–23, 2016, pp. 139–143 (2017).
+arXiv:1702.01329
+43. P. Ilten, N.L. Rodd, J. Thaler, M. Williams, Disentangling heavy
+ﬂavor at colliders. arXiv:1702.02947
+44. E. Bothmann, M. Schönherr, S. Schumann, Reweighting QCD
+matrix-element and parton-shower calculations. Eur. Phys. J. C
+76(11), 590 (2016). arXiv:1606.08753
+45. L. Lönnblad, ARIADNE version 4: a program for simulation of
+QCD cascades implementing the color dipole model. Comput.
+Phys. Commun. 71, 15 (1992)
+46. S. Catani, B.R. Webber, G. Marchesini, QCD coherent branching
+and semiinclusive processes at large x. Nucl. Phys. B 349, 635
+(1991)
+47. T. Plehn, D. Rainwater, P.Z. Skands, Squark and gluino
+production with jets. Phys. Lett. B 645, 217–221 (2007).
+arXiv:hep-ph/0510144
+48. L. Lönnblad, S. Prestel, Matching tree-level matrix elements with
+interleaved showers. JHEP 03, 019 (2012). arXiv:1109.4829
+123

@@ -64,8 +64,8 @@ export function ElementReviewForm({
     }`;
 
     return (
-      <article className="auth-panel">
-        <p className="eyebrow">Identity required</p>
+      <article className="pub-auth">
+        <p className="pub-kicker">Identity required</p>
         <h1>
           {synthesisMode
             ? "Submitting a SynthesisReview requires sign in"
@@ -76,7 +76,7 @@ export function ElementReviewForm({
             ? "Unsolicited SynthesisReviews are integrative interpretations of a public AuditEpisode. You must start or join the episode first, which requires identity."
             : "ElementReviews are focused reviews of one CRWE criterion. Identity gives the review provenance, moderation state, and a durable relationship to the public audit subject."}
         </p>
-        <div className="source-actions">
+        <div className="pub-auth-actions">
           <Link
             className="primary-action"
             href={`/sign-in?return_to=${encodeURIComponent(returnTo)}`}
@@ -93,8 +93,8 @@ export function ElementReviewForm({
 
   if (done) {
     return (
-      <article className="auth-panel">
-        <p className="eyebrow">Submitted</p>
+      <article className="pub-auth">
+        <p className="pub-kicker">Submitted</p>
         <h1>
           {synthesisMode
             ? "SynthesisReview submitted"
@@ -105,7 +105,7 @@ export function ElementReviewForm({
           cited by later SynthesisReviews, challenged, moderated, or
           superseded — the record preserves all of it.
         </p>
-        <div className="source-actions">
+        <div className="pub-auth-actions">
           <Link className="primary-action" href={subjectPath}>
             Back to the public audit subject
           </Link>
@@ -131,7 +131,7 @@ export function ElementReviewForm({
 
     if (!auditSubjectId) {
       throw new Error(
-        "This work is not yet registered as an audit subject. Register it from Scholarly Works first.",
+        "This work is not yet registered as an audit subject. Register it from the Register page first.",
       );
     }
 

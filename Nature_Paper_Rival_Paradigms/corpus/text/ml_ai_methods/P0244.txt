@@ -1,0 +1,835 @@
+--- Page 1 ---
+Credit Assignment in Neural Networks through
+Deep Feedback Control
+Alexander Meulemans∗, Matilde Tristany Farinha∗, Javier García Ordóñez,
+Pau Vilimelis Aceituno, João Sacramento, Benjamin F. Grewe
+Institute of Neuroinformatics, University of Zürich and ETH Zürich
+ameulema@ethz.ch
+Abstract
+The success of deep learning sparked interest in whether the brain learns by using
+similar techniques for assigning credit to each synaptic weight for its contribution
+to the network output. However, the majority of current attempts at biologically-
+plausible learning methods are either non-local in time, require highly specific
+connectivity motifs, or have no clear link to any known mathematical optimization
+method. Here, we introduce Deep Feedback Control (DFC), a new learning method
+that uses a feedback controller to drive a deep neural network to match a desired
+output target and whose control signal can be used for credit assignment. The
+resulting learning rule is fully local in space and time and approximates Gauss-
+Newton optimization for a wide range of feedback connectivity patterns. To further
+underline its biological plausibility, we relate DFC to a multi-compartment model
+of cortical pyramidal neurons with a local voltage-dependent synaptic plasticity
+rule, consistent with recent theories of dendritic processing. By combining dynam-
+ical system theory with mathematical optimization theory, we provide a strong
+theoretical foundation for DFC that we corroborate with detailed results on toy
+experiments and standard computer-vision benchmarks.
+1 Introduction
+The error backpropagation (BP) algorithm [1, 2, 3] is currently the gold standard to perform credit
+assignment (CA) in deep neural networks. Although deep learning was inspired by biological neural
+networks, an exact mapping of BP onto biology to explain learning in the brain leads to several
+inconsistencies with experimental results that are not yet fully addressed [4, 5, 6]. First, BP requires
+an exact symmetry between the weights of the forward and feedback pathways [5, 6], also called the
+weight transport problem. Another issue of relevance is that, in biological networks, feedback also
+changes each neuron’s activation and thus its immediate output [7, 8], which does not occur in BP.
+Lillicrap et al. [9] convincingly showed that the weight transport problem can be sidestepped in
+modest supervised learning problems by using random feedback connections. However, follow-up
+studies indicated that random feedback paths cannot provide precise CA in more complex problems
+[10, 11, 12, 13], which can be mitigated by learning feedback weights that align with the forward
+pathway [14, 15, 16, 17, 18] or approximate its inverse [ 19, 20, 21, 22]. However, this precise
+alignment imposes strict constraints on the feedback weights, whereas more flexible constraints could
+provide the freedom to use feedback also for other purposes besides learning, such as attention and
+prediction [8].
+A complementary line of research proposes models of cortical microcircuits which propagate CA
+signals through the network using dynamic feedback [23, 24, 25] or multiplexed neural codes [26],
+thereby directly influencing neural activations with feedback. However, these models introduce
+∗Equal contribution
+35th Conference on Neural Information Processing Systems (NeurIPS 2021).
+
+
+--- Page 2 ---
+highly specific connectivity motifs and tightly coordinated plasticity mechanisms. Whether these
+constraints can be fulfilled by cortical networks is an interesting experimental question. Another
+line of work uses adaptive control theory [27] to derive learning rules for non-hierarchical recurrent
+neural networks (RNNs) based on error feedback, which drives neural activity to track a reference
+output [28, 29, 30, 31]. These methods have so far only been used to train single-layer RNNs with
+fixed output and feedback weights, making it unclear whether they can be extended to deep neural
+networks. Finally, two recent studies [32, 33] use error feedback in a dynamical setting to invert the
+forward pathway, thereby enabling errors to flow backward. These approaches rely on a learning rule
+that is non-local in time and it remains unclear whether they approximate any known optimization
+method. Addressing the latter, two recent studies take a first step by relating learned (non-dynamical)
+inverses of the forward pathway [21] and iterative inverses restricted to invertible networks [22] to
+approximate Gauss-Newton optimization.
+Inspired by the Dynamic Inversion method [32], we introduce Deep Feedback Control (DFC), a new
+biologically-plausible CA method that addresses the above-mentioned limitations and extends the
+control theory approach to learning [28, 29, 30, 31] to deep neural networks. DFC uses a feedback
+controller that drives a deep neural network to match a desired output target. For learning, DFC then
+simply uses the dynamic change in the neuron activations to update their synaptic weights, resulting
+in a learning rule fully local in space and time. We show that DFC approximates Gauss-Newton
+(GN) optimization and therefore provides a fundamentally different approach to CA compared to
+BP. Furthermore, DFC does not require precise alignment between forward and feedback weights,
+nor does it rely on highly specific connectivity motifs. Interestingly, the neuron model used by DFC
+can be closely connected to recent multi-compartment models of cortical pyramidal neurons. Finally,
+we provide detailed experimental results, corroborating our theoretical contributions and showing
+that DFC does principled CA on standard computer-vision benchmarks in a way that fundamentally
+differs from standard BP.
+2 The Deep Feedback Control method
+Here, we introduce the core parts of DFC. In contrast to conventional feedforward neural network
+models, DFC makes use of a dynamical neuron model (Section 2.1). We use a feedback controller to
+drive the neurons of the network to match a desired output target (Section 2.2), while simultaneously
+updating the synaptic weights using the change in neuronal activities (Section 2.3). This combination
+of dynamical neurons and controller leads to a simple but powerful learning method, that is linked to
+GN optimization and offers a flexible range of feedback connectivity (see Section 3).
+2.1 Neuron and network dynamics
+The first main component of DFC is a dynamical multilayer network, in which every neuron integrates
+its forward and feedback inputs according to the following dynamics:
+τv
+d
+dt vi(t) =−vi(t) +Wiϕ
+(
+vi−1(t)
+)
++Qiu(t) 1 ≤i≤L, (1)
+with vi a vector containing the pre-nonlinearity activations of the neurons in layeri,Wi the forward
+weight matrix,ϕa smooth nonlinearity, u a feedback input,Qi the feedback weight matrix, andτv
+a time constant. See Fig. 1B for a schematic representation of the network. To simplify notation,
+we define ri = ϕ(vi) as the post-nonlinearity activations of layer i. The input r0 remains fixed
+throughout the dynamics (1). Note that in the absence of feedback, i.e., u = 0, the equilibrium state
+of the network dynamics (1) corresponds to a conventional multilayer feedforward network state,
+which we denote with superscript ‘-’:
+r−
+i =ϕ(v−
+i ) =ϕ(Wir−
+i−1), 1≤i≤L, with r−
+0 = r0. (2)
+2.2 Feedback controller
+The second core component of DFC is a feedback controller, which is only active during learning.
+Instead of a single backward pass for providing feedback, DFC uses a feedback controller to
+continuously drive the network to an output targetr∗
+L (see Fig. 1D). Following the Target Propagation
+framework [20, 21, 22], we define r∗
+L as the feedforward output nudged towards lower loss:
+2
+
+
+--- Page 3 ---
+r∗
+L ≜ r−
+L−λ∂L(rL, y)
+∂rL
+⏐⏐⏐
+rL=r−
+L
+= r−
+L + δL, (3)
+withL(rL, y) a supervised loss function defining the task, y the label of the training sample, λa
+stepsize, and δL shorthand notation. Note that (3) only needs the easily obtained loss gradient w.r.t.
+the output, e.g., for anL2 output loss, one obtains the convex combination r∗
+L = (1−2λ)r−
+L + 2λy.
+The feedback controller produces a feedback signal u(t) to drive the network output rL(t) towards
+its target r∗
+L, using the control error e(t) ≜ r∗
+L−rL(t). A standard approach in designing a feedback
+controller is the Proportional-Integral-Derivative (PID) framework [34]. While DFC is compatible
+with various controller types, such as a full PID controller or a pure proportional controller (see
+Appendix A.8), we use a PI controller for a combination of simplicity and good performance, resulting
+in the following controller dynamics (see also Fig. 1A):
+u(t) =KI uint(t) +KP e(t), τu
+d
+dt uint(t) = e(t)−αuint(t), (4)
+where a leakage term is added to constrain the magnitude of uint. For mathematical simplicity, we
+take the control matrices equal to KI = I andKP = kpI withkp≥0 the proportional control
+constant. This PI controller adds a leaky integration of the error uint to a scaled version of the
+errorkpe which could be implemented by a dedicated neural microcircuit (for a discussion see App.
+I). Drawing inspiration from the Target Propagation framework [19, 20, 21, 22] and the Dynamic
+Inversion framework [32], one can think of the controller and network dynamics as performing a
+dynamic inversion of the output target r∗
+L towards the hidden layers, as the controller dynamically
+changes the activation of the hidden layers until the output target is reached.
+Figure 1: (A) A block diagram of the controller, where we omitted the leakage term of the integral
+controller. (B) Schematic illustration of DFC. (C) Schematic illustration of the multi-compartment
+neuron used by DFC, compared to a cortical pyramidal neuron sketch (see also Discussion). (D)
+Illustration of the output rL(t) and the controller dynamics u(t) in DFC.
+2.3 Forward weight updates
+The update rule for the feedforward weights has the form:
+τW
+d
+dtWi(t) =
+(
+ϕ(vi(t))−ϕ(Wiri−1(t))
+)
+ri−1(t)T. (5)
+This learning rule simply compares the neuron’s controlled activation to its current feedforward
+input and is thus local in space and time. Furthermore, it can be interpreted most naturally by
+compartmentalizing the neuron into the central compartment vi from (1) and a feedforward compart-
+ment vff
+i ≜ Wiri−1 that integrates the feedforward input. Now, the forward weight dynamics (5)
+represents a delta rule using the difference between the actual firing rate of the neuron,ϕ(vi), and
+its estimated firing rate,ϕ(vff
+i ), based on the feedforward inputs. Note that we assume τW to be a
+large time constant, such that the network (1) and controller dynamics (4) are not influenced by the
+weight dynamics, i.e., the weights are considered fixed in the timescale of the controller and network
+dynamics.
+3
+
+
+--- Page 4 ---
+In Section 5, we show how the feedback weightsQi can also be learned locally in time and space for
+supporting the stability of the network dynamics and the learning ofWi. This feedback learning rule
+needs a feedback compartment vfb
+i ≜Qiu, leading to the three-compartment neuron schematized
+in Fig. 1C, inspired by recent multi-compartment models of the pyramidal neuron (see Discussion).
+Now, that we introduced the DFC model, we will show that (i) the weight updates(5) can properly
+optimize a loss function (Section 3), (ii) the resulting dynamical system is stable under certain
+conditions (Section 4), and (iii) learning the feedback weights facilitates (i) and (ii) (Section 5).
+3 Learning theory
+To understand how DFC optimizes the feedforward mapping (2) on a given loss function, we link the
+weight updates (5) to mathematical optimization theory. We start by showing that DFC dynamically
+inverts the output error to the hidden layers (Section 3.1), which we link to GN optimization under
+flexible constraints on the feedback weightsQi and on layer activations (Section 3.2). In Section
+3.3, we relax some of these constraints, and show that DFC still does principled optimization by
+using minimum norm (MN) updates forWi. During this learning theory section, we assume stable
+dynamics, which we investigate in more detail in Section 4. All theoretical results of this section
+are tailored towards a PI controller, and they can be easily extended to pure proportional or integral
+control (see App. A.8).
+3.1 DFC dynamically inverts the output error
+To understand how the weight update (5) can access error information, we start by investigating the
+steady state of the network dynamics(1) and the controller dynamics(4), assuming that all weights are
+fixed (hence, a separation of timescales). As the feedback controller controls all layers simultaneously,
+we introduce a compact notation for: concatenated neuron activationsv ≜ [vT
+1,...,vT
+L]T , feedforward
+compartments vff ≜ [vff,T
+1 ,...,vff,T
+L ]T , and feedback weightsQ ≜ [QT
+1...QT
+L]T . Lemma 1 shows a
+first-order Taylor approximation of the steady-state solution (full proof in App. A.1).
+Lemma 1. Assuming stable dynamics, a small target stepsizeλ, andWi andQi fixed, the steady-state
+solutions of the dynamical systems (1) and (4) can be approximated by:
+uss = (JQ + ˜αI)−1δL +O(λ2), vss = vff
+ss +Q(JQ + ˜αI)−1δL +O(λ2), (6)
+withJ ≜
+[
+∂r−
+L
+∂v1
+,...,∂r−
+L
+∂vL
+]⏐⏐⏐
+v=v−
+the Jacobian of the network output w.r.t. all vi, evaluated at the
+network equilibrium without feedback, δL the output error as defined in (3), vff
+i,ss =Wiϕ(vi−1,ss),
+and ˜α=α/(1 +αkp).
+To get a better intuition of what this steady state represents, consider the scenario where we want to
+nudge the network activation v with ∆ v, i.e., vss = vff
+ss + ∆ v, such that the steady-state network
+output equals its target r∗
+L. With linearized network dynamics, this results in solving the linear system
+J∆ v = δL. As ∆ v is of much higher dimension than δL, this is an underdetermined system with
+infinitely many solutions. Constraining the solution to the column space of Q leads to the unique
+solution ∆ v =Q(JQ)−1δL, corresponding to the steady-state solution in Lemma 1 minus a small
+damping constant ˜α. Hence, similar to Podlaski and Machens [32], through an interplay between the
+network and controller dynamics, the controller dynamically inverts the output error δL to produce
+feedback that exactly drives the network output to its desired target.
+3.2 DFC approximates Gauss-Newton optimization
+To understand the optimization characteristics of DFC, we show that under flexible conditions on
+Qi and the layer activations, DFC approximates GN optimization. We first briefly review GN
+optimization and introduce two conditions needed for the main theorem.
+Gauss-Newton optimization [35] is an approximate second-order optimization method used in
+nonlinear least-squares regression. The GN update for the model parameters θ is computed as:
+∆ θ =J†
+θeL, (7)
+withJθthe Jacobian of the model output w.r.t. θ concatenated for all minibatch samples, J†
+θits
+Moore-Penrose pseudoinverse, and eL the output errors.
+4
+
+
+--- Page 5 ---
+Condition 1. Each layer of the network, except from the output layer, has the same activation norm:
+∥r0∥2 =∥r1∥2 =...∥rL−1∥2 ≜∥r∥2. (8)
+Note that the latter condition considers a statistic∥ri∥2 of a whole layer and does not impose specific
+constraints on single neural firing rates. This condition can be interpreted as each layer, except the
+output layer, having the same ‘energy budget’ for firing.
+Condition 2. The column space ofQ is equal to the row space ofJ.
+This more abstract condition imposes a flexible constraint on the feedback weightsQi, that generalizes
+common learning rules with direct feedback connections [16, 21]. For instance, besidesQ =JT (BP;
+[16]) andQ =J†[21], many other instances ofQ which have not yet been explored in the literature
+fulfill Condition 2 (see Fig. 2), hence leading to principled optimization (see Theorem 2). With these
+conditions in place, we are ready to state the main theorem of this section (full proof in App. A).
+Theorem 2. Assuming Conditions 1 and 2 hold, J is full rank, the task loss L is a L2 loss, and
+λ,α→0 , then the following steady-state (ss) updates for the forward weights,
+∆Wi,ss =η(vi,ss−vff
+i,ss)rT
+i−1,ss , (9)
+withηa stepsize parameter, align with the weight updates forWi for the feedforward network (2)
+prescribed by the GN optimization method with a minibatch size of 1.
+Figure 2: Randomly generated feedback
+matricesQ (blue) that satisfy Conditions
+2 and 3, and have unity norm, visualized
+by a principal component analysis, with
+density contours added for visual clar-
+ity.JT ,J†, andJT (JJT +γI)−1, γ∈
+[10−5, 102], are added, highlighting that
+the optimal feedback configurations for
+DFC (blue) span a much wider space
+compared to conventional CA methods.
+In this theorem, we need Condition 2 such that the dynam-
+ical inversionQ(JQ)−1 (6) equals the pseudoinverse of
+J and we need Condition 1 to extend this pseudoinverse
+to the Jacobian of the output w.r.t. the network weights,
+as in eq. (7). Theorem 2 links the DFC method to GN
+optimization, thereby showing that it does principled op-
+timization, while being fundamentally different from BP.
+In contrast to recent work that connects target propagation
+to GN [21, 22], we do not need to approximate the GN
+curvature matrix by a block-diagonal matrix but use the
+full curvature instead. Hence, one can use Theorem 2 in
+Cai et al. [36] to obtain convergence results for this setting
+of GN with a minibatch size of 1, in highly overparame-
+terized networks. Strikingly, the feedback path of DFC
+does not need to align with the forward path or its inverse
+to provide optimally aligned weight updates with GN, as
+long as it satisfies the flexible Condition 2 (see Fig. 2).
+The steady-state updates (9) used in Theorem 2 differ from
+the actual updates (5) in two nuanced ways. First, the plas-
+ticity rule (5) uses a nonlinearity,ϕ, of the compartment
+activations, whereas in Theorem 2 this nonlinearity is not
+included. There are two reasons for this: (i) the use of ϕ
+in (5) can be linked to specific biophysical mechanisms
+in the pyramidal cell [37] (see Discussion), and (ii) using
+ϕmakes sure that saturated neurons do not update their forward weights, which leads to better
+performance (see App. A.6). Second, in Theorem 2, the weights are only updated at steady state,
+whereas in (5) they are continuously updated during the dynamics of the network and controller.
+Before settling rapidly, the dynamics oscillate around the steady-state value (see Fig. 1D), and hence,
+the accumulated continuous updates (5) will be approximately equal to its steady-state equivalent,
+since the oscillations approximately cancel each other out and the steady state is quickly reached (see
+Section 6.1 and App. A.7). Theorem 2 needs a L2 loss function and Condition 1 and 2 to hold for
+linking DFC with GN. In the following subsection, we relax these assumptions and show that DFC
+still does principled optimization.
+3.3 DFC uses weighted minimum norm updates
+GN optimization with a minibatch size of 1 is equivalent to MN updates [21], i.e., it computes the
+smallest possible weight update such that the network exactly reaches the current output target after
+5
+
+
+--- Page 6 ---
+the update. These MN updates can be generalized to weighted MN updates for targets using arbitrary
+loss functions. The following theorem shows the connection between DFC and these weighted MN
+updates, while removing the need for Condition 1 and anL2 loss (full proof in App. A).
+Theorem 3. Assuming stable dynamics, Condition 2 holds andλ,α→0, the steady-state weight
+updates (9) are proportional to the weighted MN updates ofWi for letting the feedforward output r−
+L
+reach r∗
+L, i.e., the solution to the following optimization problem:
+arg min
+∆Wi,i∈[1,..,L]
+L∑
+i=1
+∥r−(m)
+i−1 ∥2
+2∥∆Wi∥2
+F s.t. r−(m+1)
+L = r∗(m)
+L , (10)
+withm the iteration and r−(m+1)
+L the network output without feedback after the weight update.
+Theorem 3 shows that Condition 2 enables the controller to drive the network towards its targetr∗
+L
+with MN activation changes, ∆ v = v−vff, which combined with the steady-state weight update (9)
+result in weighted MN updates ∆Wi (see also App. A.4). When the feedback weights do not have
+the correct column space, the weight updates will not be MN. Nevertheless, the following proposition
+shows that the weight updates still follow a descent direction given arbitrary feedback weights.
+Proposition 4. Assuming stable dynamics andλ,α→0, the steady-state weight updates (9) with a
+layer-specific learning rateηi =η/∥ri−1∥2
+2 lie within 90 degrees of the loss gradient direction.
+4 Stability of DFC
+Until now, we assumed that the network dynamics are stable, which is necessary for DFC, as an
+unstable network will diverge, making learning impossible. In this section, we investigate the
+conditions on the feedback weights Qi necessary for stability. To gain intuition, we linearize the
+network around its feedforward values, assume a separation of timescales between the controller and
+the network (τu≫τv), and only consider integrative control (kp = 0). This results in the following
+dynamics (see App. B for the derivation):
+τu
+d
+dt u(t) =−(JQ +αI)u(t) +δL. (11)
+Hence, in this simplified case, the local stability of the network around the equilibrium point depends
+on the eigenvalues ofJQ, which is formalized in the following condition and proposition.
+Condition 3. Given the network Jacobian evaluated at the steady state,Jss ≜
+[
+∂r−
+L
+∂v1
+,...,∂r−
+L
+∂vL
+]⏐⏐⏐
+v=vss
+,
+the real parts of the eigenvalues ofJssQ are all greater than−α.
+Proposition 5. Assumingτu≫τv andkp = 0, the network and controller dynamics are locally
+asymptotically stable around its equilibrium iff Condition 3 holds.
+This proposition follows directly from Lyapunov’s Indirect Method [38]. When assuming the more
+general case where τv is not negligible and kp > 0, the stability criteria quickly become less
+interpretable (see App. B). However, experimentally, we see that Condition 3 is a good proxy
+condition for guaranteeing stability in the general case whereτv is not negligible andkp > 0 (see
+Section 6 and App. B).
+5 Learning the feedback weights
+Condition 2 and 3 emphasize the importance of the feedback weights for enabling efficient learning
+and ensuring stability of the network dynamics, respectively. As the forward weights, and hence the
+network Jacobian,J, change during training, the set of feedback configurations that satisfy Conditions
+2 and 3 also change. This creates the need to adapt the feedback weights accordingly to ensure
+efficient learning and network stability. We solve this challenge by learning the feedback weights,
+such that they can adapt to the changing network during training. We separate forward and feedback
+weight training in alternating wake-sleep phases [39]. Note that in practice, a fast alternation between
+the two phases is not required (see Section 6).
+Inspired by the Weight Mirror method [14], we learn the feedback weights by inserting independent
+zero-mean noise ϵ in the system dynamics:
+τv
+d
+dt vi(t) =−vi(t) +Wiϕ
+(
+vi−1(t)
+)
++Qiu(t) +σϵi. (12)
+6
+
+
+--- Page 7 ---
+The noise fluctuations propagated to the output carry information from the network Jacobian,J. To
+let e, and hence u, incorporate this noise information, we set the output target r∗
+L to the average
+network output r−
+L . As the network is continuously perturbed by noise, the controller will try to
+counteract the noise and regulate the network towards the output target r−
+L . The feedback weights
+can then be trained with a simple anti-Hebbian plasticity rule with weight decay, which is local in
+space and time:
+τQ
+d
+dtQi(t) =−vfb
+i (t)u(t)T−βQi, (13)
+whereβis the scale factor of the weight decay term and where we assume that a subset of the noise
+input ϵi enters through the feedback compartment, i.e., vfb
+i =Qiu +σfbϵfb
+i . The correlation between
+the noise in vfb
+i and noise fluctuations in u provides the teaching signal forQi. Theorem 6 shows
+under simplifying assumptions that the feedback learning rule (13) drivesQi to satisfy Condition 2
+and 3 (see App. C for the full theorem and its proof).
+Theorem 6 (Short version). Assume a separation of timescales τv≪τu≪τQ,αbig,kp = 0,
+r∗
+L = r−
+L , and Condition 3 holds. Then, for a fixed input sample andσ→0, the first moment ofQ
+converges approximately to:
+lim
+σ→0
+E[Qss]∝∼JT (JJT +γI)−1, (14)
+for someγ >0. Furthermore, E[Qss] satisfies Conditions 2 and 3, even ifα= 0 in the latter.
+Theorem 6 shows that under simplifying assumptions,Q converges towards a damped pseudoinverse
+ofJ, which satisfies Conditions 2 and 3. Empirically, we see that this also approximately holds for
+more general settings whereτv is not negligible,kp > 0, and smallα(see Section 6 and App. C).
+The above theorem leaves two questions unanswered. First, it assumes that Condition 3 holds,
+however, the task of the feedback weight training is to make unstable network dynamics stable,
+resulting in a chicken-and-egg problem. The solution we use is to take αbig enough to make the
+network stable during early training, after which the feedback weights align according to (14) andα
+can be decreased. Second, Theorem 6 considers training the feedback weights to convergence over
+one fixed input sample. However, in reality many different input samples will be considered during
+learning. When the network is linear,J is the same for each input sample and eq. (14) holds exactly.
+However, for nonlinear networks,J will be different for each sample, causing the feedback weights
+to align with an average ofJT (JJT +γI)−1 over many samples.
+6 Experiments
+We evaluate DFC in detail on toy experiments to showcase that our theoretical results translate to
+practice (Section 6.1) and on a modest range of computer vision benchmarks – MNIST classification
+and autoencoding [40], and Fashion MNIST classification [41] – to show that DFC can do precise
+CA in more challenging settings (Section 6.2). Alongside DFC, we test two variants: (i) DFC-SS
+which only updates its feedforward weightsWi after the steady state (SS) of (1) and (4) is reached;
+and (ii) DFC-SSA which analytically computes the linearized steady state of (1) and (4) according to
+Lemma 1. To investigate whether learning the feedback weights is crucial for DFC, we compare for
+all three settings: (i) learning the feedback weights Qi according to (13); and (ii) fixing the feedback
+weights to the initializationQi =∏L
+k=i+1WT
+k , which approximately satisfies Condition 2 and 3 at
+the beginning of training (see App. F), denoted with suffix (fixed). For the former, we pre-train the
+feedback weights according to (13) to ensure stability. During training, we iterate between 1 epoch of
+forward weight training andX epochs of feedback weight training (if applicable), whereX∈[1, 2, 3]
+is a hyperparameter. We compare all variants to Direct Feedback Alignment (DFA) [42] as a control
+for direct feedback connectivity. DFC is simulated with the Euler-Maruyama method, which is the
+equivalent of forward Euler for stochastic differential equations [43]. We initialize the network to
+its feedforward activations (2) for each datasample and, for computational efficiency, we buffer the
+weight updates (5) and (13) and apply them once at the end of the simulation for the considered
+datasample. App. E and F provide further details on the implementation of all experiments. 2
+2PyTorch implementation of all methods is available at https://github.com/meulemansalex/deep_
+feedback_control.
+7
+
+
+--- Page 8 ---
+6.1 Empirical verification of the theory
+Figure 3 visualizes the theoretical results of Theorems 2 and 3 and Conditions 1, 2 and 3, in an
+empirical setting of nonlinear student teacher regression, where a randomly initialized teacher network
+generates synthetic training data for a student network. We see that Condition 2 is approximately
+satisfied for all DFC variants that learn their feedback weights (Fig. 3A), leading to close alignment
+with the ideal weighted MN updates of Theorem 3 (Fig. 3B). For nonlinear networks and linear direct
+feedback, it is in general not possible to perfectly satisfy Condition 2 as the network JacobianJ varies
+for each datasample, whileQi remains the same. However, the results indicate that feedback learning
+finds a configuration forQi that approximately satisfies Condition 2 for all datasamples. When the
+feedback weights are fixed, Condition 2 is approximately satisfied in the beginning of training due
+to a good initialization. However, as the network changes during training, Condition 2 degrades
+modestly, which results in worse alignment compared to DFC with trained feedback weights (Fig.
+3B).
+For having GN updates, both Conditions 1 and 2 need to be satisfied. Although we do not enforce
+Condition 1 during training, we see in Fig. 3C that it is crudely satisfied, which can be explained by
+the saturating properties of the tanh nonlinearity. This is reflected in the alignment with the ideal
+GN updates in Fig. 3D that follows the same trend as the alignment with the MN updates. Fig. 3E
+shows that all DFC variants remain stable throughout training, even when the feedback weights are
+fixed. In App. B, we indicate that Condition 3 is a good proxy for the stability shown in Fig. 3E.
+Finally, we see in Fig. 3F that the weight updates of DFC and DFC-SS align well with the analytical
+steady-state solution of Lemma 1, confirming that our learning theory of Section 3 applies to the
+continuous weight updates (5) of DFC.
+Figure 3: Results for nonlinear student-teacher regression task with layer sizes (15-10-10-5), tanh
+nonlinearities, a linear output layer, kp = 1.5,λ= 0.05, andα= 0.0015. ( A) Ratio between the
+norms ofQ projected into the row space ofJ, andQ, with a value of 1 indicating perfect compliance
+of Condition 2. (B,D,F) Angle in degrees between the concatenated parameter updates of the whole
+network and: (B) the ideal weighted MN parameter updates (Theorem 3); (D) the ideal GN parameter
+updates (Theorem 2); and (F) the DFC-SSA parameter updates (see App. F.1 for all definitions). (C)
+The standard deviation of the layer norms∥ri∥2, divided by the average layer norm, with a value of
+zero indicating perfect compliance to Condition 1. (E) The maximum real part of the eigenvalues of
+the total system dynamics matrix evaluated at equilibrium (see App. F.1), with negative real parts
+indicating local stability. For all measures, a window-average is plotted together with the window-std
+(shade). Stars indicate overlapping plots.
+In Fig. 4, we show that the alignment with MN updates remains robust forλ∈[10−3 : 10−1] and
+α∈[10−4 : 10−1], highlighting that our theory explains the behavior of DFC robustly when the
+limit of λandαto zero does not hold. When we clamp the output target to the label ( λ= 0.5),
+the alignment with the MN updates decreases as expected (see Fig. 4), because the linearization
+of Lemma 1 becomes less accurate and the strong feedback changes the neural activations more
+significantly, thereby changing the pre-synaptic factor of the update rules (c.f. eq. 9). However,
+performance results on MNIST, provided in Table 2, show that the performance of DFC remains robust
+for a wide range ofλs andαs, includingλ= 0.5, suggesting that DFC can also provide principled
+8
+
+
+--- Page 9 ---
+CA in this setting of strong feedback, which motivates future work to design a complementary theory
+for DFC focused on this extreme case.
+Figure 4: Comparison of
+the alignment between the
+DFC weight updates and
+the MN updates for
+variable values ofλ(A)
+andα(B), when
+performing the nonlinear
+student-teacher regression
+task described in Fig. 3.
+Stars indicate overlapping
+plots.
+6.2 Performance of DFC on computer vision benchmarks
+The classification results on MNIST and Fashion-MNIST (Table 1) show that the performances of
+DFC and its variants, but also its controls, lie close to the performance of BP, indicating that they
+perform proper CA in these tasks. To see significant differences between the methods, we consider
+the more challenging task of training an autoencoder on MNIST, where it is known that DFA fails
+to provide precise CA [9, 16, 32]. The results in Table 1 show that the DFC variants with trained
+feedback weights clearly outperform DFA and have close performance to BP. The low performance of
+the DFC variants with fixed feedback weights show the importance of learning the feedback weights
+continuously during training to satisfy Condition 2. Finally, to disentangle optimization performance
+from implicit regularization mechanisms, which both influence the test performance, we investigate
+the performance of all methods in minimizing the training loss of MNIST.3 The results in Table 1
+show improved performance of the DFC method with trained feedback weights compared to BP and
+controls, suggesting that the approximate MN updates of DFC can faster descend the loss landscape
+for this simple dataset.
+Table 1: Test errors (classification) and test loss (autoencoder) corresponding to the epoch with the
+best validation result (for 5000 validation samples) over a training of 100 epochs (classification) or 25
+epochs (autoencoder). Training loss after 100 epochs (MNIST train loss). We use the Adam optimizer
+[44]. Architectures: 3x256 fully connected (FC) tanh hidden layers and softmax output (classification),
+256-32-256 FC hidden layers for autoencoder MNIST with tanh-linear-tanh nonlinearities, and a
+linear output. Mean±std (5 random seeds). Best results (except BP) are displayed in bold.
+MNIST Fashion-MNIST MNIST-autoencoder MNIST (train loss)
+BP 2.08±0.15% 10 .60±0.34% 9 .42±0.09·10−2 1.53±0.19·10−7
+DFC 2.25±0.094% 11 .17±0.27% 11 .28±0.18·10−2 7.61±0.65·10−8
+DFC-SSA 2.18±0.16% 11 .28±0.27% 11 .27±0.09·10−2 4.89±1.26·10−8
+DFC-SS 2.29±0.097% 11.15±0.32% 11.21±0.04·10−2 4.80±0.70·10−8
+DFC (fixed) 2.47±0.12% 11 .62±0.30% 33 .37±0.60·10−2 1.30±0.15·10−6
+DFC-SSA (fixed) 2.46±0.11% 11 .44±0.14% 31 .90±0.77·10−2 1.73±0.39·10−6
+DFC-SS (fixed) 2.39±0.22% 11 .55±0.42% 32 .31±0.37·10−2 1.67±0.70·10−6
+DFA 2.69±0.11% 11 .38±0.25% 29 .95±0.36·10−2 7.09±1.11·10−7
+Table 2: Test errors on MNIST with variableλvalues and fixedα= 0.0015 (left), and with variable
+αvalues and fixedλ= 0.08 (right). Same experimental setting as in Table 1.
+λ DFC-SS DFC α DFC-SS DFC
+1e−3 2.26±0.11% 2 .29±0.04% 1e−4 2.31±0.12% 2 .28±0.06%
+1e−2 2.25±0.05% 2 .31±0.04% 1e−3 2.28±0.15% 2 .31±0.11%
+1e−1 2.27±0.07% 2 .30±0.06% 1e−2 2.26±0.05% 2 .32±0.12%
+0.5 2 .31±0.15% 2 .34±0.15% 1e−1 2.28±0.11% 2 .34±0.16%
+3We used separate hyperparameter configurations, selected for minimizing the training loss.
+9
+
+
+--- Page 10 ---
+7 Discussion
+We introduced DFC as an alternative biologically-plausible learning method for deep neural networks.
+DFC uses error feedback to drive the network activations to a desired output target. This process
+generates a neuron-specific learning signal which can be used to learn both forward and feedback
+weights locally in time and space. In contrast to other recent methods that learn the feedback weights
+and aim to approximate BP [14, 15, 16, 17, 26], we show that DFC approximates GN optimization,
+making it fundamentally different from BP approximations.
+DFC is optimal – i.e., Conditions 2 and 3 are satisfied – for a wide range of feedback connectivity
+strengths. Thus, we prove that principled learning can be achieved with local rules and without
+symmetric feedforward and feedback connectivity by leveraging the network dynamics. This finding
+has interesting implications for experimental neuroscientific research looking for precise patterns
+of symmetric connectivity in the brain. Moreover, from a computational standpoint, the flexibility
+that stems from Conditions 2 and 3 might be relevant for other mechanisms besides learning, such as
+attention and prediction [8].
+To present DFC in its simplest form, we used direct feedback mappings from the output controller to
+all hidden layers. Although numerous anatomical studies of the mammalian neocortex reported the
+occurrence of such direct feedback connections [45, 46], it is unlikely that all feedback pathways
+are direct. We note that DFC is also compatible with other feedback mappings, such as layerwise
+connections or separate feedback pathways with multiple layers of neurons (see App. H).
+Interestingly, the three-compartment neuron is closely linked to recent multi-compartment models
+of the cortical pyramidal neuron [23, 25, 26, 47]. In the terminology of these models, our central,
+feedforward, and feedback compartments, correspond to the somatic, basal dendritic, and apical den-
+dritic compartments of pyramidal neurons, respectively (see Fig. 1C). In line with DFC, experimental
+observations [48, 49] suggest that feedforward connections converge onto the basal compartment
+and feedback connections onto the apical compartment. Moreover, our plasticity rule for the for-
+ward weights (5) belongs to a class of dendritic predictive plasticity rules for which a biological
+implementation based on backpropagating action potentials has been put forward [37].
+Limitations and future work. In practice, the forward weight updates are not exactly equal to GN
+or MN updates (Theorems 2 and 3), due to (i) the nonlinearityϕin the weight update rule 5, (ii) non-
+infinitesimal values forαandλ, (iii) limited training iterations for the feedback weights, and (iv) the
+limited capacity of linear feedback mappings to satisfy Condition 2 for each datasample. Figs. 3 and
+4, and Table 2 show that DFC approximates the theory well in practice and has robust performance,
+however, future work can improve the results further by investigating new feedback architectures
+(see App. H). We note that, even though GN optimization has desirable approximate second-order
+optimization properties, it is presently unclear whether these second-order characteristics translate to
+our setting with a minibatch size of 1. Currently, our proposed feedback learning rule (13) aims to
+approximate one specific configuration and hence does not capitalize on the increased flexibility of
+DFC and Condition 2. Therefore, an interesting future direction is to design more flexible feedback
+learning rules that aim to satisfy Conditions 2 and 3 without targeting one specific configuration.
+Furthermore, DFC needs two separate phases for training the forward weights and feedback weights.
+Interestingly, if the feedback plasticity rule (13) uses a high-passed filtered version of the presynaptic
+input u, both phases can be merged into one, with plasticity always on for both forward and feedback
+weights (see App. C.3). Finally, as DFC is dynamical in nature, it is costly to simulate on commonly
+used hardware for deep learning, prohibiting us from testing DFC on large-scale problems such as
+those considered by Bartunov et al. [10]. A promising alternative is to implement DFC on analog
+hardware, where the dynamics of DFC can correspond to real physical processes on a chip. This would
+not only make DFC resource-efficient, but also position DFC as an interesting training method for
+analog implementations of deep neural networks, commonly used in Edge AI and other applications
+where low energy consumption is key [50, 51].
+To conclude, we show that DFC can provide principled CA in deep neural networks by actively
+using error feedback to drive neural activations. The flexible requirements for feedback mappings
+combined with the strong link between DFC and GN, underline that it is possible to do principled CA
+in neural networks without adhering to the symmetric layer-wise feedback structure imposed by BP.
+10
+
+
+--- Page 11 ---
+Acknowledgments and Disclosure of Funding
+This work was supported by the Swiss National Science Foundation (B.F.G. CRSII5-173721 and
+315230_189251), ETH project funding (B.F.G. ETH-20 19-01), the Human Frontiers Science Program
+(RGY0072/2019) and funding from the Swiss Data Science Center (B.F.G, C17-18, J. v. O. P18-03).
+João Sacramento was supported by an Ambizione grant (PZ00P3_186027) from the Swiss National
+Science Foundation. Pau Vilimelis Aceituno was supported by an ETH Zürich Postdoc fellowship.
+Javier García Ordóñez received support from La Caixa Foundation through the Postgraduate Studies
+in Europe scholarship. We would like to thank Anh Duong V o and Nicolas Zucchet for feedback,
+William Podlaski, Jean-Pascal Pfister and Aditya Gilra for insightful discussions, and Simone Surace
+for his detailed feedback on Appendix C.1.
+References
+[1] David E Rumelhart, Geoffrey E Hinton, and Ronald J Williams. Learning representations by
+back-propagating errors. Nature, 323(6088):533, 1986.
+[2] Paul J Werbos. Applications of advances in nonlinear sensitivity analysis. In System modeling
+and optimization, pages 762–770. Springer, 1982.
+[3] Seppo Linnainmaa. The representation of the cumulative rounding error of an algorithm as
+a taylor expansion of the local rounding errors. Master’s Thesis (in Finnish), Univ. Helsinki,
+pages 6–7, 1970.
+[4] Francis Crick. The recent excitement about neural networks. Nature, 337(6203):129–132, 1989.
+[5] Stephen Grossberg. Competitive learning: From interactive activation to adaptive resonance.
+Cognitive Science, 11(1):23–63, 1987.
+[6] Timothy P Lillicrap, Adam Santoro, Luke Marris, Colin J Akerman, and Geoffrey Hinton.
+Backpropagation and the brain. Nature Reviews Neuroscience, pages 1–12, 2020.
+[7] Matthew E Larkum, Thomas Nevian, Maya Sandler, Alon Polsky, and Jackie Schiller. Synaptic
+integration in tuft dendrites of layer 5 pyramidal neurons: a new unifying principle. Science,
+325(5941):756–760, 2009.
+[8] Charles D Gilbert and Wu Li. Top-down influences on visual processing. Nature Reviews
+Neuroscience, 14(5):350–363, 2013.
+[9] Timothy P Lillicrap, Daniel Cownden, Douglas B Tweed, and Colin J Akerman. Random synap-
+tic feedback weights support error backpropagation for deep learning. Nature Communications,
+7:13276, 2016.
+[10] Sergey Bartunov, Adam Santoro, Blake Richards, Luke Marris, Geoffrey E Hinton, and Timothy
+Lillicrap. Assessing the scalability of biologically-motivated deep learning algorithms and
+architectures. In Advances in Neural Information Processing Systems 31, pages 9368–9378,
+2018.
+[11] Julien Launay, Iacopo Poli, and Florent Krzakala. Principled training of neural networks with
+direct feedback alignment. arXiv preprint arXiv:1906.04554, 2019.
+[12] Theodore H Moskovitz, Ashok Litwin-Kumar, and LF Abbott. Feedback alignment in deep
+convolutional networks. arXiv preprint arXiv:1812.06488, 2018.
+[13] Brian Alexander Crafton, Abhinav Parihar, Evan Gebhardt, and Arijit Raychowdhury. Direct
+feedback alignment with sparse connections for local learning. Frontiers in Neuroscience, 13:
+525, 2019.
+[14] Mohamed Akrout, Collin Wilson, Peter Humphreys, Timothy Lillicrap, and Douglas B Tweed.
+Deep learning without weight transport. In Advances in Neural Information Processing Systems
+32, pages 974–982, 2019.
+[15] Daniel Kunin, Aran Nayebi, Javier Sagastuy-Brena, Surya Ganguli, Jonathan Bloom, and Daniel
+Yamins. Two routes to scalable credit assignment without weight symmetry. In International
+Conference on Machine Learning, pages 5511–5521. PMLR, 2020.
+[16] Benjamin James Lansdell, Prashanth Prakash, and Konrad Paul Kording. Learning to solve the
+credit assignment problem. In International Conference on Learning Representations, 2020.
+11
+
+
+--- Page 12 ---
+[17] Jordan Guerguiev, Konrad Kording, and Blake Richards. Spike-based causal inference for
+weight alignment. In International Conference on Learning Representations, 2020.
+[18] Siavash Golkar, David Lipshutz, Yanis Bahroun, Anirvan M. Sengupta, and Dmitri B.
+Chklovskii. A biologically plausible neural network for local supervision in cortical mi-
+crocircuits, 2020.
+[19] Yoshua Bengio. How auto-encoders could provide credit assignment in deep networks via target
+propagation. arXiv preprint arXiv:1407.7906, 2014.
+[20] Dong-Hyun Lee, Saizheng Zhang, Asja Fischer, and Yoshua Bengio. Difference target propaga-
+tion. In Joint european conference on machine learning and knowledge discovery in databases,
+pages 498–515. Springer, 2015.
+[21] Alexander Meulemans, Francesco Carzaniga, Johan Suykens, João Sacramento, and Benjamin F.
+Grewe. A theoretical framework for target propagation. Advances in Neural Information
+Processing Systems, 33:20024–20036, 2020.
+[22] Yoshua Bengio. Deriving differential target propagation from iterating approximate inverses.
+arXiv preprint arXiv:2007.15139, 2020.
+[23] João Sacramento, Rui Ponte Costa, Yoshua Bengio, and Walter Senn. Dendritic cortical
+microcircuits approximate the backpropagation algorithm. In Advances in Neural Information
+Processing Systems 31, pages 8721–8732, 2018.
+[24] James CR Whittington and Rafal Bogacz. An approximation of the error backpropagation algo-
+rithm in a predictive coding network with local hebbian synaptic plasticity. Neural computation,
+29(5):1229–1262, 2017.
+[25] Jordan Guerguiev, Timothy P Lillicrap, and Blake A Richards. Towards deep learning with
+segregated dendrites. ELife, 6:e22901, 2017.
+[26] Alexandre Payeur, Jordan Guerguiev, Friedemann Zenke, Blake Richards, and Richard Naud.
+Burst-dependent synaptic plasticity can coordinate learning in hierarchical circuits. Nature
+neuroscience, 24(5):1546, 2021.
+[27] Jean-Jacques E Slotine, Weiping Li, et al. Applied nonlinear control, volume 199. Prentice hall
+Englewood Cliffs, NJ, 1991.
+[28] Aditya Gilra and Wulfram Gerstner. Predicting non-linear dynamics by stable local learning in
+a recurrent spiking neural network. Elife, 6:e28295, 2017.
+[29] Sophie Denève, Alireza Alemi, and Ralph Bourdoukan. The brain as an efficient and robust
+adaptive learner. Neuron, 94(5):969–977, 2017.
+[30] Alireza Alemi, Christian Machens, Sophie Denève, and Jean-Jacques Slotine. Learning arbitrary
+dynamics in efficient, balanced spiking networks using local plasticity rules. AAAI Conference
+on Artificial Intelligence (AAAI), 2018.
+[31] Ralph Bourdoukan and Sophie Deneve. Enforcing balance allows local supervised learning in
+spiking recurrent networks. Advances in Neural Information Processing Systems, 28:982–990,
+2015.
+[32] William F Podlaski and Christian K Machens. Biological credit assignment through dynamic
+inversion of feedforward networks. Advances in Neural Information Processing Systems 33,
+2020.
+[33] Adam A Kohan, Edward A Rietman, and Hava T Siegelmann. Error forward-propagation:
+Reusing feedforward connections to propagate errors in deep learning. arXiv preprint
+arXiv:1808.03357, 2018.
+[34] Gene F Franklin, J David Powell, and Abbas Emami-Naeini. Feedback control of dynamic
+systems. Pearson London, 2015.
+[35] Carl Friedrich Gauss. Theoria motus corporum coelestium in sectionibus conicis solem ambien-
+tium, volume 7. Perthes et Besser, 1809.
+[36] Tianle Cai, Ruiqi Gao, Jikai Hou, Siyu Chen, Dong Wang, Di He, Zhihua Zhang, and Liwei
+Wang. A gram-gauss-newton method learning overparameterized deep neural networks for
+regression problems. arXiv preprint arXiv:1905.11675, 2019.
+[37] Robert Urbanczik and Walter Senn. Learning by the dendritic prediction of somatic spiking.
+Neuron, 81(3):521–528, 2014.
+12
+
+
+--- Page 13 ---
+[38] A. M. Lyapunov. The general problem of the stability of motion. International Journal of
+Control, 55(3):531–534, 1992. doi: 10.1080/00207179208934253.
+[39] Geoffrey E Hinton, Peter Dayan, Brendan J Frey, and Radford M Neal. The" wake-sleep"
+algorithm for unsupervised neural networks. Science, 268(5214):1158–1161, 1995.
+[40] Yann LeCun. The mnist database of handwritten digits. http://yann. lecun. com/exdb/mnist/,
+1998.
+[41] Han Xiao, Kashif Rasul, and Roland V ollgraf. Fashion-mnist: a novel image dataset for
+benchmarking machine learning algorithms. arXiv preprint arXiv:1708.07747, 2017.
+[42] Arild Nøkland. Direct feedback alignment provides learning in deep neural networks. In
+Advances in neural information processing systems, pages 1037–1045, 2016.
+[43] Simo Särkkä and Arno Solin. Applied stochastic differential equations, volume 10. Cambridge
+University Press, 2019.
+[44] Diederik P Kingma and Jimmy Ba. Adam: A method for stochastic optimization. 3rd Interna-
+tional Conference on Learning Representations, ICLR 2015, San Diego, CA, USA, May 7-9,
+2015, Conference Track Proceedings, 2014.
+[45] Leslie G Ungerleider, Thelma W Galkin, Robert Desimone, and Ricardo Gattass. Cortical
+connections of area v4 in the macaque. Cerebral Cortex, 18(3):477–499, 2008.
+[46] Kathleen S Rockland and Gary W Van Hoesen. Direct temporal-occipital feedback connections
+to striate cortex (v1) in the macaque monkey. Cerebral cortex, 4(3):300–313, 1994.
+[47] Blake A Richards and Timothy P Lillicrap. Dendritic solutions to the credit assignment problem.
+Current opinion in neurobiology, 54:28–36, 2019.
+[48] Matthew Larkum. A cellular mechanism for cortical associations: an organizing principle for
+the cerebral cortex. Trends in neurosciences, 36(3):141–151, 2013.
+[49] Nelson Spruston. Pyramidal neurons: dendritic structure and synaptic integration. Nature
+Reviews Neuroscience, 9(3):206–221, 2008.
+[50] T Patrick Xiao, Christopher H Bennett, Ben Feinberg, Sapan Agarwal, and Matthew J Marinella.
+Analog architectures for neural network acceleration based on non-volatile memory. Applied
+Physics Reviews, 7(3):031301, 2020.
+[51] Janardan Misra and Indranil Saha. Artificial neural networks in hardware: A survey of two
+decades of progress. Neurocomputing, 74(1-3):239–255, 2010.
+[52] Eliakim H Moore. On the reciprocal of the general algebraic matrix. Bull. Am. Math. Soc., 26:
+394–395, 1920.
+[53] Roger Penrose. A generalized inverse for matrices. In Mathematical proceedings of the
+Cambridge philosophical society, volume 51, pages 406–413. Cambridge University Press,
+1955.
+[54] Kenneth Levenberg. A method for the solution of certain non-linear problems in least squares.
+Quarterly of applied mathematics, 2(2):164–168, 1944.
+[55] Stephen L Campbell and Carl D Meyer. Generalized inverses of linear transformations. SIAM,
+2009.
+[56] Nicol N Schraudolph. Fast curvature matrix-vector products for second-order gradient descent.
+Neural computation, 14(7):1723–1738, 2002.
+[57] Guodong Zhang, James Martens, and Roger B Grosse. Fast convergence of natural gradient
+descent for over-parameterized neural networks. In Advances in Neural Information Processing
+Systems 32, pages 8080–8091, 2019.
+[58] H Sebastian Seung. How the brain keeps the eyes still. Proceedings of the National Academy of
+Sciences, 93(23):13339–13344, 1996.
+[59] Alexei A Koulakov, Sridhar Raghavachari, Adam Kepecs, and John E Lisman. Model for a
+robust neural integrator. Nature neuroscience, 5(8):775–782, 2002.
+[60] Mark S Goldman, Joseph H Levine, Guy Major, David W Tank, and HS Seung. Robust
+persistent neural activity in a model integrator with multiple hysteretic dendrites per neuron.
+Cerebral cortex, 13(11):1185–1195, 2003.
+13
+
+
+--- Page 14 ---
+[61] Mark S Goldman, A Compte, and Xiao-Jing Wang. Neural integrator models. Encyclopedia of
+neuroscience, pages 165–178, 2010.
+[62] Sukbin Lim and Mark S Goldman. Balanced cortical microcircuitry for maintaining information
+in working memory. Nature neuroscience, 16(9):1306–1314, 2013.
+[63] D Bejarano, Eduardo Ibargüen-Mondragón, and Enith Amanda Gómez-Hernández. A stability
+test for non linear systems of ordinary differential equations based on the gershgorin circles.
+Contemporary Engineering Sciences, 11(91):4541–4548, 2018.
+[64] James Martens and Roger Grosse. Optimizing neural networks with kronecker-factored approx-
+imate curvature. In Proceedings of the 32nd International Conference on Machine Learning,
+pages 2408–2417, 2015.
+[65] Aleksandar Botev, Hippolyt Ritter, and David Barber. Practical gauss-newton optimisation
+for deep learning. In Proceedings of the 34th International Conference on Machine Learning,
+pages 557–565. JMLR. org, 2017.
+[66] Xavier Glorot and Yoshua Bengio. Understanding the difficulty of training deep feedfor-
+ward neural networks. In Proceedings of the thirteenth international conference on artificial
+intelligence and statistics, pages 249–256. JMLR Workshop and Conference Proceedings, 2010.
+[67] Adam Paszke, Sam Gross, Soumith Chintala, Gregory Chanan, Edward Yang, Zachary DeVito,
+Zeming Lin, Alban Desmaison, Luca Antiga, and Adam Lerer. Automatic differentiation in
+pytorch. 2017.
+[68] James S Bergstra, Rémi Bardenet, Yoshua Bengio, and Balázs Kégl. Algorithms for hyper-
+parameter optimization. In Advances in neural information processing systems, pages 2546–
+2554, 2011.
+[69] James Bergstra, Dan Yamins, and David D Cox. Hyperopt: A python library for optimizing the
+hyperparameters of machine learning algorithms. In Proceedings of the 12th Python in science
+conference, pages 13–20. Citeseer, 2013.
+[70] Richard Liaw, Eric Liang, Robert Nishihara, Philipp Moritz, Joseph E Gonzalez, and Ion
+Stoica. Tune: A research platform for distributed model selection and training. arXiv preprint
+arXiv:1807.05118, 2018.
+[71] Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan,
+Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, Alban Desmaison, Andreas
+Kopf, Edward Yang, Zachary DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy,
+Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chintala. Pytorch: An imperative style,
+high-performance deep learning library. In Advances in Neural Information Processing Systems
+32, pages 8024–8035. Curran Associates, Inc., 2019.
+[72] R Angus Silver. Neuronal arithmetic. Nature Reviews Neuroscience, 11(7):474–489, 2010.
+[73] Katie A Ferguson and Jessica A Cardin. Mechanisms underlying gain modulation in the cortex.
+Nature Reviews Neuroscience, 21(2):80–92, 2020.
+[74] Matthew E Larkum, Walter Senn, and Hans-R Lüscher. Top-down dendritic input increases the
+gain of layer 5 pyramidal neurons. Cerebral cortex, 14(10):1059–1070, 2004.
+[75] Richard Naud and Henning Sprekeler. Burst ensemble multiplexing: A neural code connecting
+dendritic spikes with microcircuits. bioRxiv, page 143636, 2017.
+[76] Yoshua Bengio, Dong-Hyun Lee, Jorg Bornschein, Thomas Mesnard, and Zhouhan Lin. Towards
+biologically plausible deep learning. arXiv preprint arXiv:1502.04156, 2015.
+14

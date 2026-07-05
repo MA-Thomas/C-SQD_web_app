@@ -1,0 +1,979 @@
+Detecting and correcting false transients in calcium imaging
+Jeffrey L. Gauthier1, Sue Ann Koay2, Edward H. Nieh2, David W. Tank2,3,4, Jonathan W. 
+Pillow2,5, Adam S. Charles6,7,8,9
+1Department of Biology, Swarthmore College, Swarthmore, PA, USA.
+2Princeton Neuroscience Institute, Princeton University, Princeton, NJ, USA.
+3Bezos Center for Neural Circuit Dynamics, Princeton University, Princeton, NJ, USA.
+4Department of Molecular Biology, Princeton University, Princeton, NJ, USA.
+5Department of Psychology, Princeton University, Princeton, NJ, USA.
+6Department of Biomedical Engineering, Johns Hopkins University, Baltimore, MD, USA.
+7Kavli Neuroscience Discovery Institute, Johns Hopkins University, Baltimore, MD, USA.
+8Center for Imaging Science, Johns Hopkins University, Baltimore, MD, USA.
+9Mathematical Institute for Data Science, Johns Hopkins University, Baltimore, MD, USA.
+Abstract
+Population recordings of calcium activity are a major source of insight into neural function. 
+Large datasets require automated processing, but this can introduce errors that are difficult to 
+detect. Here we show that popular time course-estimation algorithms often contain substantial 
+misattribution errors affecting 10–20% of transients. Misattribution, in which fluorescence is 
+ascribed to the wrong cell, arises when overlapping cells and processes are imperfectly defined 
+or not identified. To diagnose misattribution, we develop metrics and visualization tools for 
+evaluating large datasets. To correct time courses, we introduce a robust estimator that explicitly 
+accounts for contaminating signals. In one hippocampal dataset, removing contamination reduced 
+the number of place cells by 15%, and 19% of place fields shifted by over 10 cm. Our methods 
+are compatible with other cell-finding techniques, empowering users to diagnose and correct a 
+potentially widespread problem that could alter scientific conclusions.
+Correspondence and requests for materials should be addressed to David W. Tank or Adam S. Charles. dwtank@princeton.edu; 
+adamsc@jhu.edu.
+Author contributions
+J.L.G. and A.S.C. developed and applied analysis methods; J.L.G., S.A.K. and E.H.N. performed imaging experiments; all authors 
+wrote the paper.
+Additional information
+Extended data is available for this paper at https://doi.org/10.1038/s41592-022-01422-5.
+Supplementary information The online version contains supplementary material available at https://doi.org/10.1038/
+s41592-022-01422-5.
+Peer review information Nature Methods thanks Philipp Berens and the other, anonymous, reviewer(s) for their contribution to the 
+peer review of this work. Primary Handling Editor: Nina V ogt, in collaboration with the Nature Methods team.
+Reprints and permissions information is available at www.nature.com/reprints.
+Competing interests
+The authors declare no competing interests.
+HHS Public Access
+Author manuscript
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Published in final edited form as:
+Nat Methods. 2022 April ; 19(4): 470–478. doi:10.1038/s41592-022-01422-5.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Advances in understanding nervous system function have relied on large-scale optical 
+imaging of activity at cellular resolution. As improvements in calcium imaging technology 
+have allowed for larger, longer and more numerous recording sessions 1–8, it has become 
+difficult to manually identify every active cell in every movie frame, making automated cell 
+finding an indispensable tool. Automation, however, separates users from raw data, and thus 
+it has the potential to mask errors.
+The principal goal of calcium imaging analysis is to assign a fluorescence time course 
+to each source of activity6 (for example, cell bodies, dendrites, axons, and neuropil), 
+and scientific conclusions often hinge on the accuracy of these time courses. Typically, 
+the spatial extent or ‘profile’ of each source is first identified, either manually or 
+automatically3,9–12 (for naming conventions, see glossary in Supplementary Table 1). 
+Inferring time courses from raw fluorescence, however, is automated, for example, by 
+averaging pixels within regions of interest9,10 or using more complex algorithms3,11.
+When source profiles overlap, they can cause mutual time course contamination, and 
+therefore most methods aim to tease apart activity in overlapping sources13–16. In this work, 
+we focus on contamination from non-neuropil sources, such as overlapping dendrites or cell 
+bodies. Although evaluation metrics have been developed to check for contamination10,11,17, 
+they tend to be global rather than individual, and thus are unable to assess individual 
+transients. Here we investigate the origin and effects of time course-estimation errors 
+in two-photon imaging and develop tools to quantify and remedy such errors. We first 
+examine a brain region where errors are particularly likely to occur: the CA1 region of the 
+hippocampus, where cell bodies are densely packed with thick apical dendrites13. We closely 
+examine source data to motivate quantitative metrics to identify contamination and then 
+introduce a time course-estimation algorithm to explicitly model and filter out contaminating 
+signals. We show that our method eliminates over 90% of contaminating activity while 
+preserving over 90% of true activity.
+Results
+False transients occur and can impact scientific conclusions.
+We first considered how accurately time courses capture fluorescence in an example dataset 
+from the dorsal CA1 (ref. 18). We identified source profiles using constrained non-negative 
+matrix factorization (CNMF)19 and estimated time courses by fitting source profiles to each 
+frame independently with least squares19.
+In one patch containing 52 identified sources (Fig. 1a), the profiles resembled cells in the 
+average image, which suggests that the algorithm accurately identified real cells. Similarly, 
+the source time courses matched the expected statistics of calcium dynamics in CA1: a 
+baseline punctuated by transient increases (Fig. 1b). To evaluate whether these transients 
+correctly correspond to activity, we examined the original movie in the spatial and temporal 
+vicinity of each transient. Specifically, we computed the ‘transient profile’ (a weighted 
+average of the transient frames) to show which movie pixels gave rise to the transient. 
+Transient profiles often resembled the source profile (Fig. 1b, transients 1–4), confirming 
+Gauthier et al. Page 2
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+correct attribution (‘true transients’), but some transient profiles bore no resemblance to the 
+source profile (Fig. 1b, transients 5–8), indicating misattribution (‘false transients’).
+For a more complete assessment, a human expert examined all 33,090 transients across 
+1,325 sources using a custom graphical interface (Extended Data Figs. 1 and 2 and 
+Supplementary Figs. 1–3). Most transients were confidently classified as true (67%) or 
+false (13%). Others (20%) fell into more complex categories to be considered later. Many 
+identified sources (66%) contained at least one false transient, and, for some sources 
+(9%), the majority of transients were false (Fig. 1c). We also observed contamination in 
+inferred spikes (Fig. 1c). The amplitude distributions of true and false transients were 
+largely overlapping across all sources (Fig. 1d) and within each source (Fig. 1e). Manual 
+classification was comparable between different graders (Extended Data Fig. 3).
+To understand the extent of misattribution, we examined transients found by several 
+algorithms: CNMF with different parameter settings (Supplementary Fig. 10), Suite2P3 
+(Supplementary Fig. 11), in-house source localization from the Allen Institute run on 
+data from the Mouse Brain Observatory (Supplementary Table 3 and https://help.brain-
+map.org/display/observatory/Documentation) and semi-automated source localization20 
+(Supplementary Table 3). Contamination levels varied with labeling density, source shapes 
+and optical properties, with greater contamination generally occurring when labeled cells 
+were densely packed and near major crossing dendrites. Despite this trend, contamination 
+was consistently 15–20% across all methods and datasets that we tested, with the exception 
+of the sparsely labeled cortex. Thus contamination is likely to be widely prevalent, including 
+in published studies of large-scale calcium imaging.
+False transients can affect scientific conclusions in several ways. First, cross-talk can 
+produce spurious correlations in activity, creating a misleading picture of network 
+organization (Fig. 1f). Second, contamination can change apparent coding properties. For 
+example, place cells are typically active in a small part of the environment location21, such 
+as a virtual linear track18. An important question in place coding is how many discrete fields 
+each cell maintains22, but false transients can create additional firing fields (Fig. 1g). To 
+help mitigate the effects of false transients, we turn next to developing tools to identify and 
+remove contamination.
+Quantifying contamination.
+We first developed summary measures to approximate the level of contamination within a 
+dataset. Distinguishing true and false transients is based on the assumption that the pattern 
+of bright pixels in a movie frame should look similar to the source profile during a true 
+transient but not during a false transient. We measured similarity by taking the Pearson 
+correlation between the source profile and the transient profile (Fig. 2a,b). As expected, true 
+transients have a higher correlation than false transients, and a single threshold generally 
+provides accurate separation, even across different sources within the same movie (Fig. 2c).
+Although this measure can distinguish transients that are clearly true or false, more complex 
+activity patterns also occur. For example, true and false activity can occur simultaneously 
+in ‘mixed’ transients (Fig. 2d). In addition, some source profiles identified by cell finding 
+Gauthier et al. Page 3
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+are artifacts that do not correspond to any source in the movie. These can arise from motion 
+or the merging of multiple sources (Fig. 2d, bottom). Our measures aim to classify both 
+kinds of errors as false transients, although it should be noted that some true activity is 
+consequently rejected. The correlations of mixed and artifact transients are generally similar 
+to those of false transients (Fig. 2e and Supplementary Fig 4); therefore, the correlation 
+threshold is reasonably accurate for these categories. Additional metrics, for example, two-
+dimensional (2D) Ljung–Box quantile (LBQ) tests of residual spatial independence, can 
+trade off better artifact rejection for lower overall performance (Extended Data Fig. 4).
+To overcome these limitations, we also developed a secondary quantification. If the 
+‘contamination rate’ is the fraction of transients classified as false, we define the 
+‘contamination severity’ as the ratio of unexplained fluorescence to total fluorescence. 
+Contamination severity allows us to distinguish the various causes of false classification 
+(Fig. 2a,b,e). Plotting contamination rate versus severity visually summarizes misattribution 
+across sources (Fig. 2f and Supplementary Fig. 5). Each plot region supports a particular 
+conclusion about the quality of source estimation. The lower–left quadrant contains sources 
+that are largely accurate. The lower–right quadrant indicates a subtle mismatch in estimating 
+the source profile, implying low contamination. Sources located in the upper sections suffer 
+more severe contamination, and the horizontal axis indicates whether contamination is 
+rare (left) or frequent (right). This visualization, the frequency and level of contamination 
+(FaLCon) plot, thus provides a bird’s eye view of contamination in a dataset or across 
+datasets (Methods).
+Geometric intuition for contamination filtering.
+While the metrics developed thus far can give an overall sense of contamination and 
+the software tools allow detailed manual inspection and classification, these alone are 
+incomplete solutions. Both require parsing activity into discrete transients, which is not 
+always appropriate or possible, and manual inspection is not entirely reproducible and often 
+prohibitively time consuming. Moreover, any keep-or-reject scheme cannot untangle the true 
+and false activity within mixed transients. To address these shortcomings, we introduce an 
+automated time course estimator that models contamination explicitly to remove it on a 
+frame-by-frame basis. Before fully describing this model, we briefly explore a geometric 
+intuition for how false transients can be removed.
+Consider a two-pixel movie (Fig. 3a). Each frame is a point in 2D, and each source profile 
+shape is a line through the origin. A true transient would be a point near the line (Fig. 
+3b), while a false transient would be far away (Fig. 3c). Assuming independent, identically 
+distributed Gaussian noise, the optimal activity estimator finds the profile scaling (that is, 
+point on the line) that minimizes the summed squared error (Fig. 3d). For a true transient, 
+least squares produce a good fit. For a false transient, however, the added fluorescence 
+erroneously pushes the fit away from zero.
+This error can be avoided by reducing the cost of positive residuals23, creating a skewed 
+least-squares cost function (Fig. 3e). This skewed cost function reproduces the least squares 
+fit to a true transient, while not registering the false transient. Having illustrated the 
+Gauthier et al. Page 4
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+fundamental principle underlying our approach, we now construct an explicit model of 
+contamination and develop an estimator to prevent it from affecting source time courses.
+Sparse emulation of unknown dictionary objects model and algorithm.
+Beginning with the standard model, we add a term for fluorescence that does not 
+arise from known cell shapes (Fig. 4a). This unexplained fluorescence is modeled as a 
+sum of narrow Gaussian kernels with independent, exponentially distributed amplitudes. 
+Linear superpositions of these kernels can capture the shape of almost any contaminating 
+fluorescence. This procedure, which we name sparse emulation of unknown dictionary 
+objects (SEUDO), removes contamination by absorbing unexplained fluorescence into 
+‘SEUDO cells’ built of Gaussian kernels.
+Mathematically, we denote the observed fluorescence image y(t) in frame t restricted to the 
+spatial location of neuron n as
+yn(t) = Φ a(t) + b(t) + ϵ(t), (1)
+where a(t) ≥ 0 is the vector of activation levels for known sources, Φ denotes their spatial 
+profiles, b(t) ≥ 0 is the image of structured contamination and ϵ(t) is the unstructured noise 
+vector. We consider each frame t and neuron n independently, and so omit these indices for 
+clarity. The contamination b is assumed to be non-negative, spatially correlated and spatially 
+sparse and to be non-zero with probability P. Thus we model b=W c, where c≥ 0 is sparse 
+(that is, mostly zeros) and W represents a dictionary of positive 2D Gaussian kernels that 
+induce spatial correlations.
+Our model motivates the estimator
+a = arg min
+a
+min f(a), g(a) , (2)
+where f(a) is the least-squares estimator for a and g(a) minimizes the partial least absolute 
+shrinkage and selection operator (LASSO)
+g(a) = min
+c ≥ 0
+y − Φa − W c 2
+2
++ α c 1 + β , (3)
+for constants α = 2σ2λ and β = − 2 σ2 log 1
+P − 1 + N log(1/ λ)  and where N is the number 
+of pixels, λ is the mean parameter for the exponential distribution of c and σ2 is the noise 
+variance. The estimate minimizes f(a) and g(a) separately and then takes the value of a at the 
+smaller of the two. SEUDO thus resembles a likelihood test on the presence of unexplained 
+fluorescence. Visualizing the SEUDO estimator in the case of a two-pixel movie (Fig. 4b–e) 
+shows that it matches the skewed cost function described earlier (Fig. 3e), providing an 
+intuition for how SEUDO is able to remove contamination while preserving true activity.
+As with many algorithms, SEUDO is strongly affected by parameter choice. The parameters 
+are the Gaussian kernel radius, the probability of contamination P, the exponential 
+Gauthier et al. Page 5
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+parameter λ and the noise variance σ2. The kernel radius, which determines the spatial scale 
+of contamination, can be estimated directly from the movie frames. The three remaining 
+parameters appear as only two coefficients: α and β (equation (3)). Effectively, α is the 
+per-kernel cost and β is a constant cost whenever kernels are used. If the overall cost of 
+kernels is sufficiently high, they are not used and SEUDO reverts to least squares (Extended 
+Data Fig. 5a, right). If the cost is sufficiently low, kernels are always used, diminishing or 
+eliminating all transients (Extended Data Fig. 5a, left). In an optimal regime, true transients 
+are retained, while false transients are removed (Extended Data Fig. 5a, center). Because 
+SEUDO is relatively insensitive to P, we sweep λ and σ2 for a pair of example transients 
+to reveal the optimal regime (Extended Data Fig. 5b). To facilitate this process in other 
+datasets, we have developed several tools for manual or automatic parameter selection 
+(Methods).
+Application to CA1 data.
+We next applied SEUDO to CA1 data to observe its effects on neural coding properties 
+(Fig. 1). Running SEUDO on one source (Fig. 5a) almost completely eliminated false 
+transients, while true activity remained largely intact. Generally there is a trade-off between 
+removing false transients and preserving true transients. We illustrate SEUDO’s trade-off 
+for this source by varying λ while holding σ2 constant, sweeping out a receiver operating 
+characteristic (ROC)-like curve (Fig. 5b). Because some applications are insensitive to 
+transient amplitude, we also considered transient detection, finding that SEUDO achieved 
+100% accurate discrimination for this source (Fig. 5b).
+To evaluate SEUDO more generally, we applied the same parameters to the entire movie, 
+in which we classified 26,327 transients from 1,149 sources as true or false with high 
+confidence. For the best λ value, >90% of false transients were rejected, while >90% of 
+true transients were retained, demonstrating that parameters generalize well across sources. 
+Varying σ2 produced nearly identical discrimination, albeit with different optimal λ values 
+(Extended Data Fig. 6). We observed similar results for profiles and time traces from 
+Suite2p3 (Supplementary Fig. 9; 96.6% of false transients were removed, and 91.8% of true 
+transients were retained).
+As a baseline for comparison, we also performed decontamination using framewise Pearson 
+correlations. For transient detection, SEUDO provided superior separation of true and false 
+activity (Fig. 5c). When measuring preserved transient area, however, performances of 
+the two algorithms were more similar (Supplementary Fig. 8), which can be reconciled 
+by observing that transient area can be reduced while still preserving transient shape and 
+duration (for example, Fig. 5a). Importantly, the correlation criterion cannot distinguish 
+mixed transients, a limitation of any accept-or-reject classification.
+An advantage of SEUDO is the ability to model mixed transients. In one example (Fig. 
+5d), the source was initially active (frame 20), but before its activity completely decayed, 
+two other overlapping cell bodies became active (frames 30–50). The least-squares time 
+course includes activity of both the source and the contamination. The SEUDO time course, 
+Gauthier et al. Page 6
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+however, more accurately estimates the source activity, as verified by manual inspection of 
+source-only (cyan) and contamination-only (magenta) pixels.
+Finally, we revisited the effect of contamination on scientific conclusions (Fig. 1f,g). 
+For the case of spuriously high correlation (r = 0.333 ± 0.09, 95% confidence interval; 
+P < 1 × 10 −36, two-sided test for non-zero correlation, comparing all 41,756 frames), 
+SEUDO removed all but a minimal trace of residual correlation (r = 0.018 ± 0.1, 95% 
+confidence interval; P < 0.0005, two-sided test for non-zero correlation; Fig. 6a). Removing 
+false correlations also had global effects, qualitatively altering standard characterizations of 
+neural populations, including the clustering alignment and the spectral decay of the data 
+matrix (Extended Data Fig. 7).
+For the place cell with the additional false spatial field (Fig. 1g), SEUDO removed the false 
+field almost completely (Fig. 6b) while maintaining the true field. When considering all 
+cells with significant place fields (P < 0.05, test for significant spatial modulation, Methods) 
+before and after SEUDO (Fig. 6c and Supplementary Fig. 13), 17.5% were no longer place 
+cells after decontamination and 18 place cells were not found until false transients were 
+removed. Moreover, an additional 18.7% of place cells had their fields shift substantially 
+(>10 cm), further changing the characterization of the neural population.
+Discussion
+Automated cell finding has enabled researchers to access the rich information available in 
+two-photon calcium imaging. Here, we introduce algorithms and software to verify and 
+correct the time courses extracted from large movies. To obtain a global impression based on 
+discretized transients, summary plots and coarse classification can be used to approximate 
+the extent of contamination. In cases in which contamination is present, we provide several 
+avenues for addressing it. When only a few cells need to be corrected or checked, a software 
+interface allows for rapid manual classification. For correction of a large dataset or to ensure 
+reproducibility, we further developed a robust time course-estimation technique, SEUDO. 
+Because SEUDO operates on individual frames, it does not require discretizing activity into 
+transients, and, by modeling contamination, it can tease apart mixtures of true and false 
+activity.
+Importantly, SEUDO is a post hoc analysis and thus can be combined with other cell-finding 
+procedures (for example, refs. 3,10–12,24). In cases in which time courses and source shapes 
+are identified together3,19, future development might allow SEUDO to be embedded directly 
+into the algorithm.
+To make SEUDO easier to adopt, we aimed to minimize the need for parameter tuning 
+and to optimize code execution. For FaLCon plots, users only specify one parameter, the 
+correlation threshold, which can be estimated from a small test set. Similarly, SEUDO 
+requires only two parameters beyond typical preprocessing. We further provide parameter-
+selection tools via receiver operating characteristic curve visualization and BayesOpt25. 
+Because SEUDO can be performed on each cell and frame independently, our software 
+Gauthier et al. Page 7
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+defaults to analyzing small spatiotemporal segments in parallel, resulting in, for example, a 
+runtime of <5 min for a block of 52 cells over 41,756 frames (23 min at 30 Hz).
+We have also characterized the limitations of SEUDO. Although SEUDO cannot generate 
+false transients, it can err in two ways: reducing true activity or failing to remove false 
+activity. The latter occurs when there is a mismatch in the contamination statistics assumed 
+by SEUDO, as in the case of neuropil, although other algorithms have been developed 
+to address neuropil contamination. Alternatively, SEUDO may reduce true activity when 
+source profiles do not match observed activity. This can occur at low-light levels or 
+when profile shapes change over time, for example, due to axial drift. Thus, for extended 
+recordings, SEUDO should be applied separately per session to ensure source profiles are 
+stationary.
+SEUDO differs from past methods in two important ways. First, the interference model 
+b=W c is high dimensional (dim(c) = dim( b) = N) and flexible, as the elements of W
+are smaller than neurons and can thus adapt to any shape. The dimensionality and 
+flexibility requires the regularizing sparsity penalty over c in g(a) to constrain the solution. 
+Similar additive terms (for example, Suite2p, CNMF–CaImAn) are low dimensional 
+(dim(c) ≪ dim( b)) and lack the flexibility to adapt to false transient shapes. The second 
+difference is the additive parameter β. While a constant in the optimization, β does help to 
+preserve the true transient shapes. Setting β to 0 lowered the rates of false transient rejection 
+(maximum decrease of ~0.06 in false transient rate) and of transient area preservation 
+(maximum decrease of ~0.15; Supplementary Fig. 18). β has this effect by ensuring that 
+SEUDO cells are not used if the noisy data shape is similar enough to the profile shape, 
+thereby preventing unnecessary explanation of variance via a nonexistant W c.
+These considerations point to what might seem like a paradox: because kernels can construct 
+any shape, what is to stop them from explaining known source profiles? Compressive 
+sensing has explored sparse estimation using over-complete dictionaries and provides 
+theoretical accuracy guarantees on the LASSO estimator26. Essentially, two structures can 
+be demixed (profiles and kernels) if they are oriented in sufficiently different directions in 
+fluorescence space. Because kernels are highly localized, they can be distinguished from 
+source profiles when the latter are sufficiently large.
+Errors in annotating large datasets are not limited to calcium imaging. Electrophysiologists 
+have long faced similar challenges in spike sorting27–31, and it has become standard practice 
+to include metrics for contamination. Two-photon imaging studies might also benefit from 
+similar practices.
+SEUDO could likely be improved or extended in several ways. For example, framewise 
+SEUDO does not include priors over the spatial and temporal properties of contamination, 
+nor does it account for neuropil23,32. To better distinguish neural activity from noise, 
+temporal smoothing or additional spatial structure in W c could be introduced by modifying 
+f(x) and g(x) in equation (2). More broadly, there might be applications in other domains for 
+modeling contamination as non-negative structured interference (for example, one-photon 
+calcium imaging23, spike sorting31 or hyperspectral imagery33).
+Gauthier et al. Page 8
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+online content
+Any methods, additional references, Nature Research reporting summaries, source data, 
+extended data, supplementary information, acknowledgements, peer review information; 
+details of author contributions and competing interests; and statements of data and code 
+availability are available at https://doi.org/10.1038/s41592-022-01422-5.
+Methods
+Experimental procedures and data acquisition.
+All experiments were performed in compliance with the Guide for the Care and Use 
+of Laboratory Animals (https://www.aaalac.org/resources/theguide.cfm). Specific protocols 
+were approved by the Princeton University Institutional Animal Care and Use Committee.
+To obtain large-scale population recordings of activity, transgenic mice expressing 
+genetically encoded calcium indicators were surgically implanted with a chronic window 
+that allowed optical access to the region under study. To image in CA1, the implant was 
+designed as described previously13. At the time of surgery, mice were 7–15 weeks of age, 
+and all mice were male. Mice were maintained on a reverse light cycle, and imaging was 
+performed during the dark phase. In holding rooms, ambient temperatures were 69–72 
+°F with 30–70% humidity. GCaMP3 expression in CA1 was obtained with the mouse 
+line C57BL/6J-Tg (Thy1-GCaMP3) GP2.11Dkim/J (Jackson Laboratory strain 028277)34, 
+and expression of the calcium indicator GCaMP6f in CA1 was obtained by crossing two 
+mouse lines: Ai93-D;CaMKII α-tTA (Igs7tm93.1(tetO-GCaMP6f)Hze Tg(Camk2a-tTA)1Mmay/J, 
+Jackson Laboratory stock 024108) and Emx1-Cre (B6.129S2-Emx1tm1(cre)Krj/J, Jackson 
+Laboratory stock 005628). To image in the cortex, we obtained expression of GCaMP6f by 
+crossing three strains: Emx1-Cre (B6.129S2-Emx1tm1(cre)Krj/J, Jackson Laboratory stock 
+005628), CaMK2-tTA (B6.Cg-Tg(Camk2a-tTA)1Mmay/DboJ, Jackson Laboratory stock 
+007004) and TITL-GCaMP6f (Ai93;B6.Cg-Igs7tm93.1(tetOGCaMP6f)Hze/J, Jackson Laboratory 
+stock 024103).
+Activity was measured using two-photon laser scanning microscopy employing resonant 
+galvanometer scan mirrors at a frame rate of 30 Hz. Raw data were processed and collected 
+using ScanImage version 5 (Invidrio). To measure spatially modulated activity in CA1 
+neurons, mice were trained to run on a virtual linear track18.
+Identifying source profiles and transient times.
+CA1 dataset labeled with GCaMP3.—Motion correction and source profile 
+identification were performed as described previously18. Briefly, the movie was spatially 
+divided into a grid of 36 submovies, and each was analyzed separately. Source profiles were 
+identified using CNMF19 (MATLAB, 2016 version) or Suite2p3 (MATLAB, downloaded 2 
+April 2019, version 1.0.0.0), and source time courses were computed using least squares (see 
+below).
+Because of small axial deflections18, a motion artifact time course was subtracted from each 
+source time course before filtering (median length, 10) and thresholding (zeroing points less 
+Gauthier et al. Page 9
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+than four times the robust standard deviation). Any contiguous period of above-threshold 
+activity lasting at least six frames (0.2 s) was considered a transient. These same steps were 
+applied to identify transients across all algorithms.
+Datasets labeled with GCaMP6f.—Subpixel motion correction was performed via 
+either local (CA1 dataset) or global (MMA dataset) correlation-based shifts11. Source 
+profiles and time courses were identified using CNMF19. For each source time course, two 
+candidate thresholds were computed: the 95th percentile of time course values, and 11 times 
+the robust standard deviation. Of these two values, the larger was used. Any contiguous 
+period of above-threshold activity lasting at least 15 frames (0.5 s) was considered a 
+transient.
+Least-squares time course estimation.
+Most automated calcium segmentation methods estimate time courses via a regularized 
+least-squares method3,10,19,24. If Y ∈ ℝN × T is the fluorescence movie with N pixels and 
+T frames and Φ ∈ ℝ N × M is the matrix containing the spatial profiles for all M isolated 
+sources, we compute the M×T matrix of per-source fluorescences A as
+A = arg min
+A
+Y − Φ F
+2
++ R(A) , (4)
+where R(A) is the regularization that imparts additional information about the expected time 
+course structure. We seek to bypass the idiosyncrasies of each algorithm by focusing on time 
+course estimation based purely on the Gaussian noise model without regularization, that is, 
+least-squares fitting:
+A = arg min
+A
+Y − ΦA F
+2
+. (5)
+Transient profiles.
+To calculate the transient profile, consider the fluorescence movie data Y cropped to the 
+spatial extent of the source profile and to the temporal extent of the transient. We then seek 
+the best representation of Y that has the same time course as the source’s transient activity 
+over the duration of the event, which we denote as ℎ. This is accomplished by solving the 
+optimization program
+xtp = arg min
+x
+Y − xℎT
+F
+2
+, (6)
+that is, we are looking for the spatial pattern that best projects the time course into the data. 
+The solution to this optimization program xtp is the transient profile. The solution to this 
+optimization is xtp = Y ℎ/ ℎ 2
+2
+, that is, the weighted sum of frames where the ith frame is 
+weighted by the ith element of the transient time course, normalized by the total magnitude 
+of the transient event.
+Gauthier et al. Page 10
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Manual classification.
+Manual classification was performed by human experts (A.S.C. and J.L.G.) visually 
+comparing the shapes of source profiles and transient profiles. Transient profiles that 
+contained the same shape as the source profile but not other sources were classified as 
+true. Those containing only sources different from the source profile were classified as false. 
+Transients with a mixture of true and false transients were classified as mixed. Transients 
+in which no spatial structure was visible or that appeared ambiguous were left unclassified. 
+Sources for which the profile shape did not match any transient profiles (for example, 
+fused sources) or sources that appeared to arise from a motion artifact were labeled as 
+artifacts. To better resolve edge cases, small spatial blurring was applied at times to highlight 
+low-amplitude structures.
+For the CA1 dataset labeled with GCaMP3 as well as the dataset recorded in the visual 
+cortical area MMA, all sources were manually classified. For the CA1 dataset labeled with 
+GCaMP6f, 10% of sources were randomly selected for manual classification.
+Contamination severity.
+The contamination-severity metric seeks to quantify the fraction of fluorescence not 
+explained by the source profile. We thus define two residuals for every transient. The first 
+is the full residual, which is the result of subtracting the contributions of all source profiles 
+(columns of the pixels-by-sources matrix Φ) from the pixels-by-frames fluorescence movie 
+Yik during the ith transient of source k:
+rik = vec Y ik − ΦAi , (7)
+where Ai is the sources-by-frames matrix of estimated temporal activity for each source and 
+each transient frame. The second is the residual subtracting off the contributions of all the 
+sources except the source profile in question, that is, removing the column of Φ and the row 
+of Ai corresponding to the source that the transient was assigned to:
+rik = vec Y ik − ΦAik = vec rik + ϕkaik
+T
+, (8)
+where Φk = ϕ1, …, ϕk − 1, ϕk + 1, …, ϕM  and Aik = ai1, …, ai(k − 1), ai(k + 1), …, aiM  are the sets of all 
+other sources and all other time courses, respectively, ϕk is the profile for the kth source and 
+aik is the time course for the kth source during the ith transient. The contamination severity 
+computes the amount of residual energy in all suspect transients (that is, those that fail the 
+correlation or the LBQ test) as a fraction of the residual discounting the source:
+RRk =
+∑i ∈ Γ rik 2
+2
+∑i ∈ Γ rik 2
+2 =
+∑i ∈ Γ rik 2
+2
+∑i ∈ Γ rik 2
+2
++ ∑i ∈ Γ ϕkai
+T
+F
+2 . (9)
+When the residual is small and the source is active, the contamination severity is low; 
+however, when the source is not active with respect to the residual size (that is, significant 
+activity remains), then the contamination severity is high. To make the contamination 
+Gauthier et al. Page 11
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+severity more resistant to noise, a low-pass Gaussian filter with one-pixel standard deviation 
+is applied.
+Spatial Ljung–Box quantile test.
+The LBQ test is a statistical test of whether a model with d degrees of freedom captures 
+the autocorrelation structure of a time series, if x(t) is the time series and r(t) is the model 
+residual. If x(t), r(t) have length N, and c(l) = corr( r(t), r(t − l)) is the autocorrelation at lag l, 
+then the LBQ test calculates the quantile statistic
+Q = N(N + 2) ∑
+l = 1
+L c(l)
+N − l . (10)
+If r(t) values are not correlated, then Q should have a χ2 distribution with L degrees of 
+freedom. Consequently, a simple quantile test can be used to determine whether we can 
+significantly rule out this null hypothesis. Specifically, we test whether Q > q(1 − ζ, d) for a 
+given significance level ζ, which, if true, rules out the null hypothesis. For spatial data, that 
+is, xi,j, ri,j of size M×N, we can expand the test statistic to be
+Q = MN(MN + 2) ∑
+(l, k) ∈ Γ
+ck, l
+(M − k)(N − l) , (11)
+where ck,l is the spatial autocorrelation function at lags k and l, and Γ ⊆ [1, M] × [1, N] are the 
+set of lags to be tested. With this change, the quantile test above remains the same, aside 
+from adjusting the degrees of freedom to account for the increased dimensionality. For all 
+plots in this work, we set d to be the number of active pixels in the profile and test the set of 
+lags between three and seven lags inclusively. This latter choice ensures that blurring from 
+the motion-correction process (which can blur neighboring pixels together) will not bias the 
+results. Finally, we run all the tests at a significance level of ζ= 0.01.
+Frequency and level of contamination plots across datasets.
+The rate-versus-severity plot can also provide comparisons across datasets, for example, 
+comparing to densely labeled CA1 data with GCaMP6f (Supplementary Fig. 6) and sparsely 
+labeled cortical neurons (Supplementary Fig. 7). Compared to Fig. 2f, it is obvious that 
+the second CA1 dataset suffers from even more extreme contamination, while the cortical 
+dataset suffers little contamination (Supplementary Table 2).
+SEUDO algorithm motivation.
+We seek to use the observed movie frame y and source profiles Φ to identify the source 
+activity a (that is, the time course value in this frame). Accounting only for the known 
+source profiles, the least-squares estimate of a is
+aprofiles = arg min
+a
+y − Φa 2
+2 .
+Gauthier et al. Page 12
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+The SEUDO algorithm also considers an alternative case, one in which the movie frame 
+contains fluorescence from unknown sources in addition to the known profiles. To prevent 
+unknown sources from contaminating the estimate of a, SEUDO fits a set of 2D Gaussian 
+kernels, W, multiplied by a vector comprising each kernel’s activation level c. The fit also 
+incorporates cost terms α and β to impose sparseness, as unknown sources are expected to 
+be spatially compact shapes such as cell bodies or neurites. Thus the estimate of a given by 
+fitting both profiles and kernels is as follows:
+aprofiles and kernels, c = arg min
+a, c ≥ 0
+y − Φa − W c 2
+2 + α c 1 + β .
+SEUDO then uses the estimate with the lowest cost:
+aSEUDO = aprofiles if f aprofiles ≤ g aprofiles and kernels
+aprofiles and kernels if f aprofiles > g aprofiles and kernels
+where f( ⋅ ) and g( ⋅ ) are the least-squares cost and the LASSO cost, respectively. We note 
+that this procedure can be written as
+aSEUDO = arg min
+a
+min f(a), g(a) .
+We now expand these terms to provide a more detailed optimization. In the first case, we 
+assume that no contamination occurs; therefore, the maximum-likelihood estimator can be 
+written as
+aprofiles = argmax
+a
+1
+2πσ2
+N
+2
+exp − y − Φa 2
+2
+2σ2 (12)
+= arg min
+a
+y − Φa 2
+2
++ 2σ2 N
+2 log 2πσ2 . (13)
+In the latter case, we must estimate both the known profiles’ activity a, along with the 
+unknown and structured contamination W c. To model this unknown term, we assume that 
+W is a dictionary of 2D Gaussian kernels and c is a set of weights, one for each kernel. 
+To achieve sparseness and non-negativity, we model the multivariate exponential c with 
+parameter λ. For simplicity, we will also make W square, so that the dimensionality of b and 
+c are the same (that is, one kernel per movie pixel). We can consider an estimator in this case 
+as a mixed maximum a posteriori and the maximum-likelihood estimator (or a maximum a 
+posteriori estimator with an improper uniform prior over a) as
+Gauthier et al. Page 13
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+aprofiles and kernels, c
+= arg max
+a, c ≥ 0
+λN
+2πσ2
+N
+2
+exp − y − Φa − W 2
+2
+2σ2 e−λ c 1 (14)
+= arg min
+a
+y − Φa − W 2
+2
++ 2σ2λ c 1
++2σ2 N
+2 log 2πσ2 − 2σ2Nlog(λ) .
+(15)
+These two sub-estimators motivate the form of the SEUDO algorithm, where we fit each 
+model and then compare the cost functions of each estimator to find the ‘better fit’. 
+In this way, because the term 2σ2 N
+2 log 2πσ2  appears in both cost functions, it drops 
+out of the final SEUDO cost. We further penalize the use of using the estimator that 
+includes both a and c that can be interpreted as a log probability of contamination. 
+Combining all these terms results in the SEUDO estimator, with constants α = 2σ2λ and 
+β = − 2 σ2 log 1
+P − 1 + Nlog(λ) . This interpretation allows the SEUDO parameters to be 
+approximately expressed as model parameters that can be estimated more readily from data 
+(for example, the noise variance).
+SEUDO is closely related to log-likelihood ratio tests. In essence, the likelihoods of the 
+model with and without SEUDO cells are compared (Gaussian likelihoods that result in 
+least-squares losses), and the L1 norm over the SEUDO coefficients c stand in place of, for 
+example, the number of coefficients used as a penalizing term in information criteria such as 
+the AIC or the BIC.
+SEUDO implementation.
+As SEUDO is a convex optimization very similar to a constrained LASSO, we can 
+implement SEUDO using well-studied first-order optimization methods35,36. To incorporate 
+the specifics of this optimization, namely the non-negativity of c and the fact that a is 
+unregularized, we leverage the fast and flexible Templates for First Order Conic Solvers 
+package (version 1.4.1)36. To compensate for the high-dimensional model in the inference, 
+SEUDO can be run locally for each profile independently. This reduces both the overall 
+dimension of the vector c to infer and enables parallelization over profiles.
+Performing SEUDO.
+To evaluate SEUDO, we applied it to the CA1 dataset labeled with GCaMP3. SEUDO was 
+performed separately on each of the 36 blocks. Each source was analyzed separately, and 
+only for movie frames in which a substantial transient was identified using least squares. 
+Pixels were only included for analysis if they fell within a rectangular region centered on 
+the source profile; the rectangle was defined as the minimum bounding rectangle plus a 
+radius of three pixels in all directions. Except when otherwise indicated, parameters for 
+SEUDO were λ= 10, σ2 = 0.002 and P = 0.00001, and the Gaussian kernel radius was equal 
+Gauthier et al. Page 14
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+to 3. Before performing the SEUDO procedure, the movie was slightly denoised by taking a 
+rolling average of three frames. To run SEUDO on the binary profiles returned by Suite2p, 
+we first used the binary profiles and time traces to infer the non-binary spatial profile maps 
+for each component.
+SEUDO parameter optimization.
+To facilitate parameter selection, we provide several tools, both supervised and 
+unsupervised, to help identify the optimal parameter regime for a given dataset. First, 
+we provide software that enables rapid manual classification of transients, building up an 
+example set that can be used to automatically identify optimal parameters, either through an 
+exhaustive parameter search or using BayesOpt25.
+Estimating the Gaussian spatial kernel width.
+We have implemented estimation of the Gaussian spatial kernel in two ways: a simple 
+heuristic and via optimization. For the heuristic, we take Fourier transforms of individual 
+movie patches and estimate the width of the resulting frequency transform’s diameter. Under 
+the sum-of-Gaussian kernel model, the frequency transform should contain a Gaussian shape 
+with a width the inverse of the Gaussian kernel width. Thus we fit a mixture of two Gaussian 
+shapes to the data to account for the small spatial frequency and the more uniform noise 
+(wide in frequency). The narrow diameter represents the inverse of the Gaussian kernel 
+diameter in space. The second method used BayesOpt25, which jointly optimizes over all 
+parameters. Both methods resulted in comparable estimates, and so we opted for the simple, 
+computationally efficient heuristic.
+Framewise correlation decontamination algorithm.
+As a baseline, time courses were decontaminated using the profile correlations. For each 
+source, a small spatial subset of the movie was considered. In each frame, the Pearson 
+correlation was computed between the movie and the source profile. If this correlation fell 
+below threshold, the time course was set to 0. The threshold was varied from −1 to 1, and 
+transient detection was applied to the time course.
+Transient metrics.
+Two quality measures were used to evaluate the various time course estimates (least squares, 
+SEUDO, least squares decontaminated with framewise correlation and regularized least 
+squares). The only frames considered were ones in which a substantial transient was 
+observed in the least-squares estimate. Results were averaged over all true transients and 
+all false transients separately (as per expert classification).
+The first measure was the fraction of transient area preserved in comparison to that of least 
+squares. If 
+∑t atest
++ (t)
+∑t alsq
++ (t)  is the rectified time course estimated by the technique being tested, and 
+alsq+(t) is the rectified least-squares time course, the fraction of transient area preserved is
+Gauthier et al. Page 15
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+∑t atest
++ (t)
+∑t alsq
++ (t) .
+The second measure simply evaluated whether the transient was still present. In this case, 
+transient detection was applied to the entire time course. If at least one transient occurred in 
+the period of the least-squares transient, then that transient was considered kept. Otherwise 
+the transient was considered rejected.
+Place cell statistics.
+Whether a cell exhibited a spatially modulated field was defined by how much information 
+its activity provided about the animal’s location in the environment18. Briefly, the observed 
+activity was randomly shuffled many times. The amount of spatial information from each 
+shuffle was accumulated into a null distribution, and, if the observed activity had sufficiently 
+high spatial information (within the top 5% of shuffles), it was considered to be a place cell.
+Reporting Summary.
+Further information on research design is available in the Nature Research Reporting 
+Summary linked to this article.
+Data availability
+The data that support the findings of this study, including the CA1 raw imaging data, 
+identified source profiles and time traces from automated cell-finding algorithms and manual 
+annotations of transients, are available on the Open Science Framework at https://osf.io/
+zt54q/.
+Code availability
+All algorithms described are available in a MATLAB-based software suite. The software 
+also includes several graphical user interfaces (GUIs) to facilitate visualization and 
+parameter optimization. For example, one GUI displays transients for manual classification 
+(Extended Data Fig. 2). Users can also interact with this GUI to specify which transients are 
+true, false or mixed or identify artifact sources. Other GUIs (not shown) facilitate comparing 
+different sets of parameters to optimize performance. All software is available under the 
+MIT license and can be downloaded from https://github.com/adamshch/SEUDO.
+Gauthier et al. Page 16
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Extended Data
+Extended Data Fig. 1 |. Example classified transient profiles for a single source from mouse CA1 
+found using CNMF.
+Each panel is titled with the Pearson correlation between the source profile and transient 
+profile.
+Gauthier et al. Page 17
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Extended Data Fig. 2 |. user interface for manual classification of transients.
+For detailed description, see software documentation in the GIT repository https://
+github.com/adamshch/SEUDO.
+Gauthier et al. Page 18
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Extended Data Fig. 3 |. Comparison of manual annotation for two graders on the same 1,834 
+transients.
+Confusion matrices showing the number of transients graded in different ways by each 
+reviewer (left) and the total percentage of transients in each bin (right).
+Gauthier et al. Page 19
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Extended Data Fig. 4 |. Algorithm to classify transients as true or false using the spatial Ljung-
+Box quartile test instead of the correlation metric.
+A: Schematic for how the transient profile residual autocorrelation is computed. B: Two 
+example transients, shown to illustrate difference in residual for true and false transients. 
+C: Classification of four example transients using the LBQ test. D: results of the LBQ test 
+on transients classified by human expert. Left: results of the test applied to true and false 
+transients for various values of α. right: results of the test applied to all four transient types.
+Gauthier et al. Page 20
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Extended Data Fig. 5 |. Effect of SEUDO parameters.
+A: Activity estimated by SEUDO and least squares for one true transient (top row) and one 
+false transient (bottom row) using several types of estimation (column labels). Images and 
+traces show estimated amplitude of the source profile (green) and sum of fitted Gaussian 
+kernels (magenta). B: Sum of activity ascribed to the source profile (green) and Gaussian 
+kernels (magenta) for the true transient (left) and the false transient (right). Each subplot 
+shows results for one set of parameters. roman numerals indicate parameter regimes shown 
+in A.
+Gauthier et al. Page 21
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Extended Data Fig. 6 |. Performance of SEUDO as σ2 was varied over three orders of 
+magnitude, for the same sources and quantified in the same way as in Fig. 5c.
+Each subplot shows performance for the value of σ2 indicated in the title and the shown 
+values of λ (green points). Also plotted for comparison are the collection of points taken 
+from all subplots (gray points).
+Gauthier et al. Page 22
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Extended Data Fig. 7 |. Removing false transients can impact global summaries of activity.
+Here, time courses were sorted into 5 clusters using K-means (best clustering over 50 
+random seeds). A-B: SEUDO time courses were more highly consolidated (that is, fewer 
+clusters contained more of the neurons) as compared to the time-traces with contamination. 
+C: A confusion matrix depicts that a small number of cluster relabelings accounted for much 
+of the changes in SEUDO time courses.
+Gauthier et al. Page 23
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Supplementary Material
+Refer to Web version on PubMed Central for supplementary material.
+Acknowledgements
+We thank L. Meshulam, P.D. Rich, A. Giovannucci and E. Pnevmatikakis for helpful comments on the manuscript 
+and M. Lewis for developing the SEUDO acronym. J.L.G. was funded by NIH NRSA 1F32NS077840-01A1. 
+A.S.C. was supported by the NIH BRAIN Initiative (R01 MH115750). J.W.P. was supported by grants from the 
+Simons Collaboration on the Global Brain (SCGB AWD543027), the NIH BRAIN Initiative (R01 MH115750) 
+and a U19 NIH-NINDS BRAIN Initiative award (5U19NS104648). D.W.T. was supported by grants from the 
+Simons Collaboration on the Global Brain (SCGB 328057) and a U19 NIH-NINDS BRAIN Initiative award 
+(5U19NS104648).
+References
+1. Denk W, Strickler JH & Webb WW Two-photon laser scanning fluorescence microscopy. Science 
+248, 73–76 (1990). [PubMed: 2321027] 
+2. Dombeck DA, Khabbaz AN, Collman F, Adelman TL & Tank DW Imaging large-scale neural 
+activity with cellular resolution in awake, mobile mice. Neuron 56, 43–57 (2007). [PubMed: 
+17920014] 
+3. Pachitariu M. et al. Suite2p: beyond 10,000 neurons with standard two-photon microscopy. Preprint 
+at bioRxiv 10.1101/061507 (2016).
+4. Dana H. et al. Thy1-GCaMP6 transgenic mice for neuronal population imaging in vivo. PLoS ONE 
+9, e108697 (2014). [PubMed: 25250714] 
+5. Madisen L. et al. Transgenic mice for intersectional targeting of neural sensors and effectors with 
+high specificity and performance. Neuron 85, 942–958 (2015). [PubMed: 25741722] 
+6. Chen T-W et al. Ultrasensitive fluorescent proteins for imaging neuronal activity. Nature 499, 295–
+300 (2013). [PubMed: 23868258] 
+7. Badura A, Sun XR, Giovannucci A, Lynch LA & Wang SSH Fast calcium sensor proteins for 
+monitoring neural activity. Neurophotonics 1, 025008 (2014). [PubMed: 25558464] 
+8. Song A. et al. V olumetric two-photon imaging of neurons using stereoscopy (vTwINS). Nat. 
+Methods 14, 420–426 (2017). [PubMed: 28319111] 
+9. Dombeck DA, Graziano MS & Tank DW Functional clustering of neurons in motor cortex 
+determined by cellular resolution imaging in awake behaving mice. J. Neurosci 29, 13751–13760 
+(2009). [PubMed: 19889987] 
+10. Mukamel EA, Nimmerjahn A. & Schnitzer MJ Automated analysis of cellular signals from 
+large-scale calcium imaging data. Neuron 63, 747–760 (2009). [PubMed: 19778505] 
+11. Giovannucci A. et al. CaImAn: an open source tool for scalable calcium imaging data analysis. 
+eLife 8, e38173 (2019). [PubMed: 30652683] 
+12. Mishne G, Coifman RR, Lavzin M. & Schiller J. Automated cellular structure extraction in 
+biological images with applications to calcium imaging data. Preprint at bioRxiv 10.1101/313981 
+(2018).
+13. Dombeck DA, Harvey CD, Tian L, Looger LL & Tank DW Functional imaging of hippocampal 
+place cells at cellular resolution during virtual navigation. Nat. Neurosci 13, 1433–1440 (2010). 
+[PubMed: 20890294] 
+14. Lecoq J. et al. Visualizing mammalian brain area interactions by dual-axis two-photon calcium 
+imaging. Nat. Neurosci 17, 1825–1829 (2014). [PubMed: 25402858] 
+15. Kerr JN, Greenberg D. & Helmchen F. Imaging input and output of neocortical networks in vivo. 
+Proc. Natl Acad. Sci. USA 102, 14063–14068 (2005). [PubMed: 16157876] 
+16. Harris KD, Quiroga RQ, Freeman J. & Smith SL Improving data quality in neuronal population 
+recordings. Nat. Neurosci 19, 1165–1174 (2016). [PubMed: 27571195] 
+17. Malik WQ, Schummers J, Sur M. & Brown EN Denoising two-photon calcium imaging data. PloS 
+ONE 6, e20490 (2011). [PubMed: 21687727] 
+Gauthier et al. Page 24
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+18. Gauthier JL & Tank DW A dedicated population for reward coding in the hippocampus. Neuron 
+99, 179–193 (2018). [PubMed: 30008297] 
+19. Pnevmatikakis EA et al. Simultaneous denoising, deconvolution, and demixing of calcium imaging 
+data. Neuron 89, 285–299 (2016). [PubMed: 26774160] 
+20. Peron SP, Freeman J, Iyer V , Guo C. & Svoboda K. A cellular resolution map of barrel cortex 
+activity during tactile behavior. Neuron 86, 783–799 (2015). [PubMed: 25913859] 
+21. O’Keefe J. Place units in the hippocampus of the freely moving rat. Exp. Neurol 51, 78–109 
+(1976). [PubMed: 1261644] 
+22. Henriksen EJ et al. Spatial representation along the proximodistal axis of CA1. Neuron 68, 127–
+137 (2010). [PubMed: 20920796] 
+23. Inan H, Erdogdu MA & Schnitzer M. Robust estimation of neural signals in calcium imaging. 
+In Advances in Neural Information Processing Systems (eds Guyon I, et al.) 2905–2914 (NIPS, 
+2017).
+24. Petersen A, Simon N. & Witten D. SCALPEL: extracting neurons from calcium imaging data. 
+Ann. Appl. Stat 12, 2430–2456 (2018). [PubMed: 30510612] 
+25. Martinez-Cantin R. BayesOpt: a Bayesian optimization library for nonlinear optimization, 
+experimental design and bandits. J. Mach. Learn. Res 15, 3735–3739 (2014).
+26. McCoy MB & Tropp JA Sharp recovery bounds for convex demixing, with applications. Found. 
+Comput. Math 14, 503–567 (2014).
+27. Hill DN, Mehta SB & Kleinfeld D. Quality metrics to accompany spike sorting of extracellular 
+signals. J. Neurosci 31, 8699–8705 (2011). [PubMed: 21677152] 
+28. Won DS, Chong DY & Wolf PD Effects of spike sorting error on information content in multi-
+neuron recordings. In First International IEEE EMBS Conference on Neural Engineering 618–621 
+(IEEE, 2003).
+29. Ecker AS et al. Decorrelated neuronal firing in cortical microcircuits. Science 327, 584–587 
+(2010). [PubMed: 20110506] 
+30. Cohen MR & Kohn A. Measuring and interpreting neuronal correlations. Nat. Neurosci 14, 811–
+819 (2011). [PubMed: 21709677] 
+31. Pillow JW, Shlens J, Chichilnisky E. & Simoncelli EP A model-based spike sorting algorithm for 
+removing correlation artifacts in multi-neuron recordings. PloS ONE 8, e62123 (2013). [PubMed: 
+23671583] 
+32. Keemink SW et al. FISSA: a neuropil decontamination toolbox for calcium imaging signals. Sci. 
+Rep 8, 3493 (2018). [PubMed: 29472547] 
+33. Bioucas-Dias JM et al. Hyperspectral unmixing overview: geometrical, statistical, and sparse 
+regression-based approaches. IEEE J. Sel. Top. Appl. Earth Obs. Remote Sens 5, 354–379 (2012).
+34. Rickgauer JP, Deisseroth K. & Tank DW Simultaneous cellular-resolution optical perturbation and 
+imaging of place cell firing fields. Nat. Neurosci 17, 1816–1824 (2014). [PubMed: 25402854] 
+35. Tibshirani R. Regression shrinkage and selection via the lasso. JR Stat. Soc. Series B Methodol 58, 
+267–288 (1996).
+36. Becker SR, Candès EJ & Grant MC Templates for convex cone problems with applications to 
+sparse signal recovery. Math. Program. Comput 3, 165 (2011).
+Gauthier et al. Page 25
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Fig. 1 |. False transients occur and can interfere with scientific conclusions.
+a, Left, mean fluorescence image from a subset of an in vivo two-photon imaging movie 
+showing mouse CA1 pyramidal cells genetically expressing the calcium indicator GCaMP3. 
+right, spatial profiles of the 52 sources identified by CNMF in this movie, each in a different 
+color. b, Time courses (top) of eight transients assigned to one source (top inset image) 
+and their respective transient profiles (bottom). Classification as true or false was performed 
+manually by a human expert. c, Occurrence of true activity in a set of 1,325 simultaneously 
+recorded sources. Top, the fraction of transients that were classified as true (only for sources 
+with at least one classified transient). Bottom, equivalent data for spikes that were inferred 
+from classified transients as returned by CNMF (only for sources with at least 1,000 spikes 
+inferred from classified transients). d, Peak amplitudes of true and false transients for the 
+Gauthier et al. Page 26
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+same sources as in c. e, Median peak amplitude of true and false transients for each source, 
+only shown for sources with at least five true and five false transients. The purple ‘X’ 
+indicates the mean over sources. f, Top and middle, two source profiles and their respective 
+time courses during a brief period of the movie. Bottom, transient profile for source 2 (left) 
+and the same image shown with increased contrast and overlaid outlines of source profiles 
+(right). The arrowhead indicates part of source 2 fluorescence that was not captured by its 
+profile. g, Top, six transient profiles (right) assigned to the same source (left). Outlines show 
+profiles from this source and an adjacent source. Bottom, spatially averaged activity of this 
+source while the mouse traversed a virtual linear track. Arrowheads indicate the transients 
+shown above.
+Gauthier et al. Page 27
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Fig. 2 |. Quantitative metrics for evaluating transients.
+a, Schematic of how the transient profile and transient profile residual are computed. b, 
+Three transients (rows) for one source; the source profile is at the far left. Shown for 
+each transient are the human classification (true, false or mixed), the transient profile with 
+Gaussian blurring to highlight structure (radius 1 pixel), the correlation (corr.) metric value, 
+the transient residual (shown with two color maps) and the contamination (contam.)-severity 
+metric. AU, arbitrary units. c, Performance of automatic classification using the correlation 
+metric. d, Top, example of a transient with mixed activity (movie frames are shown as 
+three-frame averages). Bottom, example of an artifact profile arising from the fusion of 
+two cell bodies. Left images show source profile with and without contour, and right 
+images show two representative transient profiles with contour overlaid. e, Distribution of 
+correlation values (top) and contamination severity (bottom) for transient categories defined 
+by human classification. f, Center, FaLCon plot for 1,325 sources identified in one movie of 
+Gauthier et al. Page 28
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+CA1 (same dataset as shown in Fig. 1a) at a correlation threshold of 0.5. For axis definitions, 
+see text and the Methods. Each point is one source; color shows human classification. Left 
+and right, for each of four example sources, images show the source profile (single panel) 
+and all transient profiles (grouped panels). Inset dot colors reveal human classification of 
+each transient (gray indicates transients that could not be confidently classified).
+Gauthier et al. Page 29
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Fig. 3 |. Geometric intuition for the proposed solution.
+a, Visualization of a simulated source profile in a two-pixel movie. Left, dashed line 
+shows points corresponding to possible scalings of this profile. right, brightness versus pixel 
+number for one scaling of this profile. b, A true transient represented as a point (left) and 
+a plot of brightness (right). c, Equivalent plots for a false transient. d, Left, contour lines of 
+the least-squares (LSQ) cost function. Middle and right, best fit of the source profile (gold 
+point and gold outline) using least squares. e, Left, contour lines of a hypothetical robust 
+cost function. Middle and right, best fit of the source profile (green point and green outline) 
+using the robust cost function.
+Gauthier et al. Page 30
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Fig. 4 |. Explicit model of unexplained fluorescence.
+a, Schematic of two models for calcium imaging data. In a typical model, source time course 
+weights (gold) are estimated using only known profile shapes. In our model, time course 
+weights (green) are estimated using a procedure that accounts for unexplained fluorescence 
+(magenta). b, Probability distribution of the SEUDO residual computed via numerical 
+integration (unexplained fluorescence plus noise) in the case of a two-pixel movie. Left 
+and center, individual components. Right, full residual. Max, maximum. c, Gaussian kernel 
+spatial profiles (top) and amplitude distribution (bottom). d, Calculated cost for the objective 
+function defined by SEUDO. Left and center, individual terms. Right, full cost; the boundary 
+between the ℓ2 term and the LASSO term (f and g in equation (2)) is the lower cost. e, The 
+full cost in d displays LASSO-like behavior for large positive residuals and least-squares-
+type behavior for small and negative residuals.
+Gauthier et al. Page 31
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Fig. 5 |. SEuDo performance on a full population of sources.
+a, Comparison of 36 transient time courses estimated by least squares (gold) or SEUDO 
+(green, λ= 30, σ2 = 0.002). Within each category (human-classified true or false), transients 
+are sorted by duration. b, Summary of SEUDO performance for five λ values when applied 
+to the transients shown in a. c, Performance of SEUDO (green), a simple framewise 
+correlation metric (gray) and regularized least-squares time course estimation (brown). 
+SEUDO was performed using the same parameter sets as in b. The correlation metric was 
+applied using 101 correlation thresholds ranging from −1 to 1 (Methods). The regularized 
+least-squares method was CNMF. d, Detailed analysis of one transient with overlapping true 
+Gauthier et al. Page 32
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+and false activity. Shown movie frames are downsampled tenfold to highlight when different 
+cells become active. Cyan and magenta traces are the mean pixel value in the respective 
+rectangular regions shown at the left. The SEUDO time course was computed using the 
+same parameter set as in a.
+Gauthier et al. Page 33
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript
+Fig. 6 |. SEuDo can correct errors affecting scientific results.
+a, Top and middle, time courses for two simultaneously recorded cells with mutual 
+contamination as estimated by least squares and SEUDO. Bottom, scatterplot comparing 
+time courses of the same two cells over all 41,756 frames, shown separately for each 
+estimation technique. b, Top, spatially averaged activity for the source depicted in Fig. 1g, 
+shown separately when the time course was estimated by least squares or SEUDO. Bottom, 
+the difference between least squares and SEUDO. c, Histogram, changes in place cell 
+location after applying SEUDO. Inset, number of cells characterized as place cells (P < 0.05, 
+test for significant spatial modulation, Methods) using time traces obtained by least squares 
+or SEUDO.
+Gauthier et al. Page 34
+Nat Methods. Author manuscript; available in PMC 2023 December 12.
+Author Manuscript Author Manuscript Author Manuscript Author Manuscript

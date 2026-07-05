@@ -1,0 +1,1764 @@
+--- Page 1 ---
+Journal of Machine Learning Research 22 (2021) 1-38 Submitted 4/20; Revised 12/20; Published 1/21
+From Fourier to Koopman: Spectral Methods for Long-term
+Time Series Prediction
+Henning Lange helange@uw.edu
+Department of Applied Mathematics
+University of Washington
+Seattle, WA 98195-4322, USA
+Steven L. Brunton sbrunton@uw.edu
+Department of Mechanical Enigineering
+University of Washington
+Seattle, WA 98195-4322, USA
+J. Nathan Kutz kutz@uw.edu
+Department of Applied Mathematics
+University of Washington
+Seattle, WA 98195-4322, USA
+Editor: Ryan Adams
+Abstract
+We propose spectral methods for long-term forecasting of temporal signals stemming from
+linear and nonlinear quasi-periodic dynamical systems. For linear signals, we introduce an
+algorithm with similarities to the Fourier transform but which does not rely on periodicity
+assumptions, allowing for forecasting given potentially arbitrary sampling intervals. We
+then extend this algorithm to handle nonlinearities by leveraging Koopman theory. The
+resulting algorithm performs a spectral decomposition in a nonlinear, data-dependent basis.
+The optimization objective for both algorithms is highly non-convex. However, expressing
+the objective in the frequency domain allows us to compute global optima of the error sur-
+face in a scalable and eﬃcient manner, partially by exploiting the computational properties
+of the Fast Fourier Transform. Because of their close relation to Bayesian Spectral Analy-
+sis, uncertainty quantiﬁcation metrics are a natural byproduct of the spectral forecasting
+methods. We extensively benchmark these algorithms against other leading forecasting
+methods on a range of synthetic experiments as well as in the context of real-world power
+systems and ﬂuid ﬂows.
+1. Introduction
+Forecasting of time series data is fundamental to almost every discipline in science and engi-
+neering, with applications in oceanography, epidemiology, meteorology, economics, etc (Arm-
+strong, 1985). Indeed, time-series analysis has been historically a core discipline in statisti-
+cal sciences where prediction accuracy and uncertainty quantiﬁcation are critical for charac-
+terizing the underlying complex dynamical system measured. Such future state predictions
+also play a fundamental role in control theory where improved forecasting can in turn im-
+prove the latency time of control laws (Box et al., 2015). While there are a host of eﬀective
+c⃝2021 Henning Lange, Steve L. Brunton, and J. Nathan Kutz.
+License: CC-BY 4.0, see https://creativecommons.org/licenses/by/4.0/. Attribution requirements are provided
+at http://jmlr.org/papers/v22/20-406.html.
+
+
+--- Page 2 ---
+Lange, Brunton, Kutz
+short-time forecasting methods (Hamilton, 1994), generic mathematical architectures that
+allow for stable long-term forecasts, while mitigating compounding errors, are lacking.
+The fundamental problem of forecasting has generated a diverse set of approaches for
+producing future state predictions and uncertainty metrics. Most of the pre-existing ap-
+proaches are of the following type: a parameterized functionfΘ : RT ′×N → RN is introduced
+and tasked with predicting the next temporal snapshot given a collection of previous ones
+by minimizing some loss function with respect to the parameters Θ. Prominent mem-
+bers of this family of approaches include Box-Jenkins models (Box et al., 2015; Pankratz,
+2009), for example ARIMA or SARIMAX, and several neural network approaches, includ-
+ing Recurrent Neural Networks, such as Long Short-Term Memory (LSTM) (Hochreiter
+and Schmidhuber, 1997), Gated Recurrent Units (Chung et al., 2014) and most Echo State
+Networks (Jaeger, 2007), as well as Reservoir Computing approaches (Paquot et al., 2012)
+and hybrid approaches that combine wavelets and Neural Networks (Jiang and Adeli, 2005).
+Since fΘ usually only allows one to obtain an estimate of the value the signal will take in the
+next time step, in order to allow for long-term forecasting, estimates must be recursively fed
+back into fΘ. The main drawback of approaches that recursively perform one-step-ahead
+predictions, i.e. an approach that iteratively performs a succession of local decisions, is that
+errors compound over time.
+In this work, ideas from operator theory, signal processing, and machine learning are
+combined to (i) derive generic and, under some conditions, optimal algorithms for long-term
+forecasting that do not require knowledge of the dynamics and that mitigate compounding
+errors, and (ii) derive practical error bounds and uncertainty metrics of the resulting algo-
+rithms as functions of noise and amounts of data provided. Because the contributions in
+this work touch multiple disciplines, they can be understood from diﬀerent perspectives.
+From the viewpoint of signal processing, we leverage Bayesian Spectral Analysis (Bret-
+thorst, 2013) and derive an algorithm that performs a Fourier decomposition in an optimal
+nonlinear oscillatory basis. This nonlinear basis is learned from data and is optimal in the
+least-squares sense. Because of a symmetry relationship, we can leverage the Fast Fourier
+Transform to obtain model parameters in a fast and scalable way.
+When adopting a Machine Learning perspective, because the theoretical and practical
+contributions of this work are primarily based on Koopman theory (Mezi´ c, 2015), they
+can be understood by analogy to Cover’s theorem, which enabled the breakthroughs that
+have led to the development of Kernel Methods (Scholkopf and Smola, 2001) and Deep
+Learning (LeCun et al., 2015). Succinctly, Cover’s theorem states that for any data set of
+ﬁnite length there always exists a nonlinear transformation such that in the transformed
+space, the data can be described by linear methods, i.e. it is linearly separable. Analogously,
+Koopman theory postulates that any nonlinear dynamical system can be lifted by a time-
+invariant but nonlinear function into a space in which its time evolution can be described
+by linear methods, i.e. by a linear dynamical system (Kutz et al., 2016). This analogy is
+depicted graphically in Fig. 1.
+For ﬁnite amounts of data, Cover’s and Koopman’s theorem can be made to hold in
+a trivial way by projecting the data into an N dimensional space, where N denotes the
+number of data points. For Cover’s theorem, a nonlinear function can be devised that
+maps the n-th data point to the indicator vector that is 0 everywhere except for the n-th
+position, where it is 1. By doing so, every ﬁnite data set can be made linearly separable by
+2
+
+
+--- Page 3 ---
+Spectral Methods for Long-term Time Series Prediction
+x1
+x2
+y1
+y2
+y3
+x1
+x2
+y1
+y2
+y3
+Figure 1: Top: Left shows the phase portrait of a nonlinear system that can be described
+as a linear system in three dimensions, as shown in the right panel. Bottom: The
+exclusive-or problem does not have a linear solution in 2D, but does in 3D.
+constructing a weight vector w ∈ RN that is 1 for all data points belonging to one class
+and 0 for the other, i.e. by simply enumerating the training set. Similarly, Koopman’s
+theorem can be made true in an N dimensional space by the means of the discrete Fourier
+transform. Since sine and cosine pairs are linear dynamical systems and every sequence
+of N equidistantly sampled data points can be explained by N equidistant Fourier modes.
+However, both trivial solutions are not useful in practical scenarios since they do not allow
+for generalization. Note that the inability of the trivial solution of Koopman’s theorem to
+generalize stems from implicit periodicity assumptions of the discrete Fourier transform.
+We will show later how these implicit periodicity assumptions can be broken in order to
+allow for generalization.
+We leverage Koopman theory for forecasting by constructing the linear Koopman op-
+erator that characterizes the time evolution of a dynamical system, even chaotic systems.
+However in practice, such chaotic systems result in a Koopman operator that is inﬁnite
+dimensional. In this work, we focus our investigation on systems for which a ﬁnite dimen-
+sional Koopman operator exists (Brunton et al., 2016b), and furthermore restrict the scope
+to systems that preserve energy, or persist over long times, i.e. quasi-periodic systems.
+Mathematically speaking, we require the following property of the time series data xt:
+lim
+T→∞
+F[f−1(x1), ..., f−1(xT )] =
+N∑
+n=1
+δ(ω − kn)
+3
+
+
+--- Page 4 ---
+Lange, Brunton, Kutz
+where F is the Fourier transform, f is a function, and f−1 its pre-image, and ﬁnite N.
+When systems fulﬁll these properties, we show empirically that stable long-term forecasting
+can be accomplished.
+2. Fourier and Forecasting
+When Fourier studied heat transfer in the early 19th century, he discovered that solutions to
+the heat equation can be simply represented as a superposition of sines and cosines (Fourier,
+1822). This ﬁnding was generalized and ultimately resulted in what is known today as
+the Fourier Transform. In the 1960s, Cooley and Tukey (re)discovered the Fast Fourier
+Transform (FFT), which allows for the computation of coeﬃcients of the discrete Fourier
+transform in O(T log T ) given a signal sampled at T equidistant points in time (Cooley and
+Tukey, 1965). The computational speed up relies on evaluating the Fourier transform at
+integer multiples of 1
+T , which in turn implicitly assumes that the signal is periodic with
+period T , since
+xt+T =
+N∑
+n=1
+ane−j2π(t+T ) n
+T = xt
+This assumption, unfortunately, makes the FFT unsuitable for forecasting anything but
+strictly T -periodic signals. However, in the following, we will treat the FFT as a computa-
+tionally eﬃcient optimization tool that, in conjunction with gradient descent, allows us to
+ﬁt a linear dynamical system yt to an observed signal xt. The strategy is as follows: Given
+an optimization problem, we will derive an expression for a loss as a function of model
+parameters in the frequency domain and then use the FFT to evaluate the loss and pick
+optimal parameters. This strategy is similar to the initial idea of Fourier, i.e. to express an
+otherwise diﬃcult problem in the frequency domain in which ﬁnding a solution is signiﬁ-
+cantly easier. As we will show later, the diﬃculty of ﬁnding a solution in time-domain stems
+from the fact that the optimization objective is highly non-convex. However, note that in
+order to leverage the computational eﬃciency of the FFT, implicit periodicity assumption
+are being made. While these periodicity assumptions bring about computational eﬃciency,
+they prohibit forecasting but they can easily be broken by subsequently applying gradient
+descent to improve an initial guess provided by the FFT.
+Let yt ∈ Rm be measurements of a linear dynamical system, i.e. yt = Byt−1. The goal is
+to infer an optimal linear mapping between a measured signal xt ∈ Rn and yt. Speciﬁcally,
+the goal is to solve:
+minimize E(A, B) =
+T∑
+t=1
+(xt − Ayt)2
+subject to yt = Byt−1
+Since we assume xt to be quasi-periodic, we in turn assume B to have strictly imaginary
+eigenvalues. For the continuous time solution of yt, the following holds:
+yt =
+n∑
+i=1
+(li · y0) rieλit (1)
+4
+
+
+--- Page 5 ---
+Spectral Methods for Long-term Time Series Prediction
+where li, ri and λi denote the ith left and right eigenvector and the ith eigenvalue of B,
+respectively. Note, because eigenvalues and eigenvectors of real-valued square matrices come
+in conjugate pairs, we can rewrite equation (1) as:
+yt =
+n/2∑
+i=1
+(li · y0) rieλit + ((li · y0) ri)∗e−λit
+=
+n/2∑
+i=1
+bieλit + b∗
+i e−λit
+Since we assume λi to be strictly imaginary, let λi = jωi. We can further simplify:
+yt =
+n/2∑
+i=1
+2Re(bi) cos(ωit) + 2Im(bi) sin(ωit)
+= 2
+[
+Re(b1) · · · Re(bn/2) Im(b1) · · · Im(bn/2)
+]
+
+
+cos(ω1t)
+...
+cos(ωn/2t)
+sin(ω1t)
+...
+sin(ωn/2t)
+
+
+= 2B
+[cos(⃗ ωt)
+sin(⃗ ωt)
+]
+Without loss of generality, because A is a free-parameter of the optimization problem,
+we can omit 2B and absorb this into A:
+yt =
+[cos(⃗ ωt)
+sin(⃗ ωt)
+]
+:= Ω(⃗ ωt) (2)
+Thus, under the assumption that B only has imaginary eigenvalues, we can rewrite the
+minimization problem in the following way:
+Li(A, ⃗ ω, t) := [(xt)i − (AΩ(⃗ ωt))i]2
+L(A, ⃗ ω, t) = ||xt − AΩ(⃗ ωt)||2
+2 (temporally local loss)
+=
+n∑
+i=1
+Li(A, ⃗ ω, t)
+E(A, ⃗ ω) =
+T∑
+t=1
+L(A, ⃗ ω, t) =
+T∑
+t=1
+n∑
+i=1
+Li(A, ⃗ ω, t) (global loss) (3)
+The question arises which optimization procedure to employ to solve (3) for ⃗ ω. Note
+that the assumption of suitable convexity required for gradient descent to perform well does
+5
+
+
+--- Page 6 ---
+Lange, Brunton, Kutz
+not hold. This can be understood by realizing that the sensitivity of the loss with respect
+to ⃗ ωgrows linearly in time which in turn can be understood easily by investigating the
+gradients of the loss with respect to ⃗ ω.
+∂L(A, ⃗ ω, t)
+∂⃗ ω = 2t
+[− sin(⃗ ωt)
+cos(⃗ ωt)
+]
+[xt − AΩ(⃗ ωt)]
+This implies that the magnitude of gradients grows linearly with time which in turn
+entails that gradient descent disproportionately considers the loss function of temporal
+snapshots close to T . This eﬀect can also be understood by realizing that L(A, ⃗ ω, t) is
+periodic in 2π
+t with respect to ⃗ ωwhich follows directly from the properties of the sine and
+cosine functions, since:
+L(A, ⃗ ω+ 2π
+t , t) = ||xt − AΩ((⃗ ω+ 2π
+t )t)||2
+2
+= ||xt − AΩ(⃗ ωt)||2
+2
+= L(A, ⃗ ω, t)
+Note that this entails that the temporally local loss functions close to T will oscillate
+rapidly and therefore create local minima in which gradient descent will get stuck.
+In order to overcome these issues, we will derive an algorithm that under some conditions
+ﬁnds global minimizers by performing coordinate descent on E(A, ⃗ ω). Coordinate descent
+updates model parameters in a sequential fashion starting with an initial guess of ⃗ ω(0).
+ω(k)
+i = arg min
+ωi
+E(ω(k)
+1 , .., ω(k)
+i−1, ωi, ω(k−1)
+i+1 , .., ω(k−1)
+m )
+Under some conditions (Tseng, 2001), for k = 1, 2, 3, ..., ⃗ ω(k) converges to a minimizer
+of E. We will now show that the update-step in the direction of ωi can be performed in
+a computationally eﬃcient manner using the FFT. Let Mi = {A, ω1, .., ωi−1, ωi+1, .., ωm},
+i.e. the set of all model parameters except ωi. We will derive an analytic expression for
+E(ωi; Mi) in the frequency domain which allows us, by applying the FFT, to compute the
+entire error surface and pick the optimal value for ωi.
+Let Ll(ωi; Mi, t) be the temporally local loss as a function of only ωi, i.e. while keeping
+all other model parameters ﬁxed and only considering the lth dimension of the loss and let
+I(i) = {1, .., i − 1, i + 1, .., i + n/2 − 1, i + n/2 + 1, .., n} be the set of all indices sans i and
+i + n/2 := i2, then:
+Ll(ωi; Mi, t) = [(xt)l − (AΩ(⃗ ωt))l]2
+= [(xt)l −
+∑
+k∈I(i)
+Al,kΩ(⃗ ωt)k
+  
+=R(i)t,l
+−Al,i cos(ωit) − Al,i2 sin(ωit)]2
+6
+
+
+--- Page 7 ---
+Spectral Methods for Long-term Time Series Prediction
+Note that R(i) deﬁnes the residual that captures the diﬀerence between Ayt and xt but
+ignores all terms that involve ωi.
+El(ωi; Mi) :=
+∑
+t
+Ll(ωi; Mi, t)
+=
+∑
+t
+(R(i)l,t − Ai,l cos(ωit) − Ai2,l sin(ωit))2
+=
+∑
+t
+[R(i)2
+l,t − A2
+i,l cos2(ωit) − A2
+i2,l sin2(ωit)
+− 2R(i)l,tAi,l cos(ωit) − 2R(i)l,tAi2,l sin(ωit)
++ 2Ai,lAi2,l cos(ωit) sin(ωit)] (4)
+We proceed by investigating this loss function at extrema of A.
+∂El(ωi; Mi)
+∂Ai,l
+=
+∑
+t
+−2Ai,l cos2(ωit) − 2R(i)l,t cos(ωit) + 2Ai2,l cos(ωit) sin(ωit)
+∂El(ωi; Mi)
+∂Ai2,l
+=
+∑
+t
+−2Ai2,l sin2(ωit) − 2R(i)l,t sin(ωit) + 2Ai,l cos(ωit) sin(ωit)
+From ∂El(ωi;Mi)
+∂Ai,l
+= 0 and ∂El(ωi;Mi)
+∂Ai2,l
+= 0, we can derive the following respectively:
+Ai2,l
+∑
+t
+cos(ωit) sin(ωit) =
+∑
+t
+Ai,l cos2(ωit) + R(i)l,t cos(ωit) (5)
+Ai,l
+∑
+t
+cos(ωit) sin(ωit) =
+∑
+t
+Ai2,l sin2(ωit) + R(i)l,t sin(ωit) (6)
+Plugging both of these ﬁndings into (4) yields:
+El(ωi; Mi) =
+∑
+t
+[R(i)2
+l,t − R(i)l,tAi,l cos(ωit) − R(i)l,tAi2,l sin(ωit)]
+Since our goal is to employ the FFT to evaluate E(ωi; Mi), we assume that all ωi = k
+T
+with k ∈ N. This entails that∑T
+t cos2(ωit) =∑T
+t sin2(ωit) = T /2,∑T
+t cos(ωit) sin(ωit) = 0.
+We can then deduce from (5) and (6) respectively, that:
+Ai,l = 2R(i)l,t cos(ωit)
+T
+Ai2,l = 2R(i)l,t sin(ωit)
+T
+Therefore:
+El(ωi; Mi) =
+T∑
+t
+R(i)2
+l,t − 2
+T (
+T∑
+t
+R(i)l,t cos(ωit))2 − 2
+T (
+T∑
+t
+R(i)l,t sin(ωit))2
+7
+
+
+--- Page 8 ---
+Lange, Brunton, Kutz
+Let ˆR(i)l,ωi be the Fourier transform of R(i)l,t, then:
+E(ωi; Mi) =
+n∑
+l
+(
+T∑
+t
+R(i)2
+l,t − 2
+T Re(ˆR(i)l,ωi)2 − 2
+T Im(ˆR(i)l,ωi)2)
+=||R(i)||F −
+n∑
+l
+2
+T |ˆR(i)l,ωi|2
+Thus, there is a symmetry relationship between the error surface and the Fourier coef-
+ﬁcients of the residual. This symmetry is sketched in Figure 2. In the following, we will
+exploit this symmetry by using the FFT to locate the valley of global optimum ofE(ωi; Mi)
+with precision 1/T in a computational eﬃcient way. Note that precision of 1 /T usually suf-
+ﬁces to locate the global optimum for reasonably sized data set. If this precision should not
+suﬃce, it is always possible to oversample the FFT by appending zeros in time domain.
+0.0 0.2 0.4 0.6 0.8 1.0 1.2 1.4
+i
+E( i; Mi)
+|FT[R(i)]|2
+|FFT[R(i)]|2
+Figure 2: Symmetry between the squared error, i.e. E(ωi; Mi), and the Fourier transform of
+the residual. Colloquially speaking, the absolute value of the Fourier coeﬃcients
+moved up and ﬂipped on the x-axis constitutes the error surface.
+2.1 Breaking periodicity
+As laid out earlier, when computing the FFT of the residual, i.e. when evaluating E(ωi; Mi)
+at integer multiples of 1
+T , implicit periodicity assumptions that are harmful for the purpose
+of forecasting are being made. However, we can exploit the FFT to locate the valley in which
+the global minimum resides and then apply gradient descent to improve this initial guess
+and thereby breaking periodicity assumptions. The procedure is depicted graphically in
+Figure 3 and algorithmically in Algorithm 1. Because gradients with respect to frequencies
+grow linearly with time (sin(ωt)′ = t cos(ωt)), the learning rate with respect to the frequency
+vector ⃗ ωneed to be scaled byT in order to ensure stability of the gradient descent procedure.
+8
+
+
+--- Page 9 ---
+Spectral Methods for Long-term Time Series Prediction
+T
+Time
+Time domain
+refined guess
+signal
+inital guess
+Frequency
+Inital guessRefined guess
+Frequency/error domain
+Squared Error
+FFT
+Figure 3: Graphical depiction on how the FFT and gradient descent are combined to extract
+global minima of the error surface. The FFT is employed to generate an initial
+guess of the valley in which the global optimum resides, then subsequently this
+initial guess is reﬁned by gradient descent.
+Algorithm 1 Learning a linear oscillator from data
+Randomly initialize ⃗ ωand A
+while not converged do
+for i ∈ {1, .., n} do
+ωi ← arg minωi E(ωi; Mi) (using the FFT)
+while not converged do
+ωi ← ωi − α
+T
+∂E(ωi;Mi)
+∂ωi
+⊿ Reﬁne initial guess via GD
+end while
+A ← (ΩT Ω)−1ΩTX ⊿ Optimize A using pseudo-inverse
+end for
+end while
+The technique described in Algorithm 1 overcomes the weaknesses of the respective
+optimization techniques. Note that, as described earlier, while gradient descent from a
+random initial starting point will overemphasize temporally local losses close to T , the FFT
+will do the opposite. In order to fulﬁll the periodicity assumption, temporally local losses
+at the edges, i.e. close to 0 and T , will usually be underemphasized. While gradient descent
+can ‘get stuck’ in local minima and generally struggles with the fact that the sensitivity with
+respect to the precision of the model parameters grows linearly with time, the FFT relies on
+periodicity assumptions in order to be computationally eﬃcient. In a sense, gradient descent
+and the Fast Fourier Transform are local and global optimization techniques respectively
+and in this work, we combines global and local techniques to arrive at a global minimizer
+in a computationally eﬃcient manner.
+9
+
+
+--- Page 10 ---
+Lange, Brunton, Kutz
+2.2 Connection to Spectral Leakage and Bayesian Spectral Analysis
+Consider the case when xt and yt are one- and two-dimensional respectively. In that case,
+R(1) = xt which entails that
+E(ω) =
+∑
+ω′
+ˆx(ω′)2 − 2
+T |ˆx(ω)|2
+Thus, the error of the model is closely linked to the Fourier coeﬃcients. In a sense, this
+augments the traditional view of the semantics of the Fourier coeﬃcients. In the traditional
+understanding, the signal is assumed to exhibit a continuous spectrum and the real and
+imaginary parts of Fourier coeﬃcients denote the amplitude of the corresponding sines and
+cosines.
+Consider the signal xt = cos(ωt). The Fourier transform of xt is a Dirac delta function
+centered at ±ω. However, the discrete Fourier transform of a ﬁnite amount of equidistant
+samples from xt will exhibit sinc-shapes. This eﬀect, usually referred to as spectral leak-
+age (Lyon, 2009), has been studied extensively in the signal processing community. Spectral
+leakage occurs when computing the FFT with ﬁnite amounts of data and can be explained
+in the following way: A signal of ﬁnite length can be understood as the product of an
+inﬁnitely long signal and the rect function stretched to T . Because rect and sinc functions
+are Fourier pairs and multiplication in time domain is equivalent to a convolution in fre-
+quency domain, for quasi-periodic systems, the FFT will locally exhibit the shape of the
+sinc function. Thus, given ﬁnite amounts of data, the FFT will appear to be continuous
+even though the data generating process, in the limit, exhibits a discontinuous frequency
+spectrum. This reasoning also explains why combining the FFT and gradient descent is
+a promising strategy: The error surface is globally non-convex but because sinc functions
+are suitably convex, there is local convexity. The FFT overcomes global non-convexity and
+gradient descent exploits local convexity.
+The amount of data provided inﬂuences the width and height of the sinc function. As
+T increases, the height increases and width decreases. This entails that the more data is
+provided, the higher the precision with which the frequencies can be extracted from data.
+This view coincides and is to some degree analogous to the work by E.T. Jaynes (Jaynes,
+1987) and Bayesian Spectral Analysis (Bretthorst, 2013). In Bayesian Spectral Analysis, a
+probabilistic model of the signals spectrum is assumed and posterior inference is performed
+in order to obtain the most likely model parameters given the data. Interestingly, if one
+assumes the signal to be a simple harmonic oscillation corrupted by Gaussian noise with
+unknown frequency ω, the DFT provides suﬃcient statistics of the probability that a speciﬁc
+frequency is present in the data. Assume X1:T is zero-mean unit-variance and sampled at
+T equidistant points in time and ˆx(ω) its Fourier transform, then it can be shown that:
+p(ω|X1:T , σ) ∝ exp
+[|ˆx(ω)|2
+σ2
+]
+(7)
+p(ω|X1:T ) ∝
+[
+1 − 2|ˆx(ω)|2
+T
+]1− T
+2
+(8)
+10
+
+
+--- Page 11 ---
+Spectral Methods for Long-term Time Series Prediction
+12H1D1W
+E( i)
+12H1D1W
+E( i| = 2
+24 )
+Figure 4: Top: The error surface when no previous frequencies have been selected. Red ‘x’
+mark the 50 frequencies with the lowest error. Bottom: The same error surface
+but when daily patterns have been explained away.
+with, if known, σ denoting the standard deviation of the Gaussian noise corrupting the
+signal. Because the squared error is closely linked to the probability of the Gaussian distri-
+bution, this result may come as no surprise to some.
+Furthermore, note that the application of coordinate descent in the way described in
+Algorithm 1 has the property of ‘explaining away’. Because of spectral leakage, even if
+the true latent process exhibits a frequency spectrum that is a superposition of Dirac delta
+functions, the Fourier transform will exhibit sinc-like shapes. Thus, a na¨ ıve approach that
+computes the error surface and extracts the k frequencies associated with the smallest error
+might select frequencies that can be explained away by a single frequency. However, by
+sequentially selecting frequencies, entire sinc-shapes are deleted. This is shown graphically
+in Figure 4.
+2.3 Related Work
+The class of algorithms that bears the highest resemblance to the introduced algorithm is
+Dynamic Mode Decomposition (Schmid, 2010) (DMD). DMD was ﬁrst introduced to extract
+the dynamic behavior in ﬂuid ﬂows but has since been applied in various ﬁelds, such as epi-
+demiology (Proctor and Eckhoﬀ, 2015), acoustics (Song et al., 2013), neuroscience (Brunton
+et al., 2016a), combustion modeling (Moeck et al., 2013) and video processing (Erichson
+et al., 2019a). A strong connection between DMD and Koopman theory has been established
+in the past. Speciﬁcally, DMD approximates the Koopman operator when the observables
+are restricted to direct measurements of the state variable (Rowley et al., 2009; Mezic, 2013;
+Tu et al., 2014; Brunton et al., 2016b; Kutz et al., 2016).
+The goal of DMD is to discover a low-dimensional linear system that captures most
+of the dynamic behavior of a potentially high dimensional phenomenon. Given temporal
+snapshots xt, DMD ﬁrst applies a dimensionality reduction technique and subsequently
+learns parameters of a linear system. Let Z1 and Z2 denote the collection of low-dimensional
+temporal snapshots starting at 1 to T − 1 and 2 to T respectively. The parameters of the
+11
+
+
+--- Page 12 ---
+Lange, Brunton, Kutz
+linear system are usually obtained by means of pseudo-inverse, i.e. by solving Z2 = AZ1.
+In a sense, the algorithm introduced earlier can be understood as a scalable and stable way
+to perform the second step of DMD, i.e. to learn parameters of the low-dimensional linear
+system, however by the means of FFT instead of pseudo-inverse. This is also reﬂected in
+the parameterization of the linear system. While DMD extracts a matrix A, our algorithm
+extracts a vector of frequencies ⃗ ω.
+One of the main challenges for DMD-like algorithms is the fact that, under the assump-
+tion of merely measurement noise, the pseudo-inverse estimator of A is biased (Hemati
+et al., 2017; Dawson et al., 2016). Note that this bias can be explained by the fact that
+the pseudo-inverse estimator performs one-step-ahead predictions. This challenge has been
+acknowledged in the research community and approaches have been proposed to mitigate
+this problem, most notably with the introduction of optimized DMD (Chen et al., 2012) and
+de-biasing techniques (Hemati et al., 2017). However, solving the optimized DMD objective
+proves diﬃcult (Askham and Kutz, 2018). Note that the optimization objective introduced
+in equation (3) is equivalent to the optimized DMD objective with the additional constraint
+that eigenvalues λi come in conjugate pairs and are strictly imaginary which ultimately
+allows to obtain a globally optimal and unbiased estimator in the direction of ωi. The
+fact that this frequency estimator is unbiased under the assumption of merely measurement
+noise is easy to understand and in the following we will give the intuition why this is true but
+the reader is referred to pre-existing work in Bayesian Spectral Analysis (Bretthorst, 2013)
+for a more thorough treatment of the issue. For a signal corrupted by measurement noise,
+the following holds: xe(t) = x(t) + ϵ(t). As long as Cov(ϵ(t1), ϵ(t2)) = 0 and E[ϵ(t)] = 0,
+the Fourier transform of ϵ(t) is ϵ(t) which entails, because the Fourier transform is linear,
+that adding noise in time domain is equivalent to adding noise in frequency domain. Thus,
+measurement noise does not add bias but uncertainty.
+Note that previously a strong connection between the Fourier Transform and DMD
+(Chen et al., 2012) has been shown. In (Chen et al., 2012), the authors advocate not to
+subtract the mean of the data to avoid reducing DMD to the DFT to ultimately avoid
+the pitfalls of the DFT, i.e. making harmful and unnecessary periodicity and stationarity
+assumptions. In this work, enforcing stationarity is a design goal and, as pointed out
+earlier, periodicity assumptions are broken by the subsequent application of gradient descent
+in order to obtain frequencies that are not periodic in T . Note that the assumption of
+stationarity is an inductive bias and from data alone, it is usually impossible to determine
+whether a slow increase in the signal is caused by an upward trend or a slow frequency.
+Furthermore, the introduced algorithm allows to model n-dimensional signals composed
+of m frequencies with m > n . Note that the original DMD formulation does not allow
+this because the dimensionality of the signal is directly tied to the number of frequencies
+that can potentially be extracted. However, approaches to mitigate this problem have been
+introduced based on mostly delay embeddings (Tu et al., 2014; Brunton et al., 2016a, 2017;
+Kamb et al., 2018; Pan and Duraisamy, 2019b). Our algorithm naturally allows one to
+model low-dimensional signals without these additional steps.
+12
+
+
+--- Page 13 ---
+Spectral Methods for Long-term Time Series Prediction
+a)
+b)
+Figure 5: Two signals that both exhibit linearly decaying but inﬁnite frequency spectra.
+3. Koopman and Forecasting
+Consider the two signals depicted in Figure 5. It is easy to show analytically that both
+signals exhibit linearly decaying but inﬁnite frequency spectra. However, one could argue
+that both signals consist of only a single oscillatory pattern that is however not easily ex-
+pressed by sines and cosines. This raises the question of whether expanding the signal in
+the basis of sines and cosines is the correct choice and what a better choice of oscillatory
+basis functions is. Note that optimal basis functions for the two signals are most likely
+diﬀerent which implies that the choice of basis functions is dependent on the signal.
+In the following, we will derive an algorithm based on Koopman theory that tries to
+answer these questions. Speciﬁcally, we will derive an algorithm that performs a frequency
+decomposition in a nonlinear basis. The nonlinear oscillatory basis as well as a least-
+squares ﬁt is learned jointly from data. The algorithm will retain the notions of frequency
+and periodicity and will therefore provide some feedback to practitioners of the duration
+of the extracted patterns. Because the resulting algorithm is closely linked to the Fourier
+transform, we will show how the Fast Fourier Transform can be leveraged to obtain model
+parameters in a computationally eﬃcient and scalable manner similar to approach intro-
+duced earlier, in spite of non-convexities and nonlinearities.
+Koopman theory postulates that any nonlinear dynamical system can be lifted into the
+space of observable functions ψ, in which the system evolves linearly. Speciﬁcally, it can be
+shown that there always exists a K such that:
+ψ(xt) = kt = Kkt−1 = Kψ(xt−1) (9)
+with K commonly referred to as the Koopman operator. Note that the Koopman operator
+and therefore kt might be inﬁnite dimensional and that ψ and K are usually unknown.
+Even if K and ψ were known, forecasting xt would still not be trivial because even
+though one could evolve kt into the future, transforming knowledge of future values of kt
+into knowledge of xt is complicated. This is why in the past, ψ was often assumed to be
+invertible. Additionally, it was assumed that ψ can be approximated by a function (as
+opposed to a functional). In the following, we will show that these assumptions severely
+limit the applicability of Koopman theory. Speciﬁcally, we will show that these assumption
+imply that if xt takes the same value for two points in time t1 and t2, future values xt1+1
+13
+
+
+--- Page 14 ---
+Lange, Brunton, Kutz
+and xt2+1 must be equal. Or mathematically speaking, xt1 = xt2 ⇐ ⇒ xt1+1 = xt2+1.
+xt1 = xt2 ⇐ ⇒ f(xt1) = f(xt2) ( f is function and invertible)
+Evolving f(xt) into the future using the Koopman operator yields:
+f(xt1+1) = Kf(xt1) = Kf(xt2) = f(xt2+1) ⇐ ⇒ xt1+1 = xt2+1
+By making the assumption of invertibility and that ψ can be approximated by a func-
+tion, even very simple systems such as xt = cos( t) cannot be lifted into a space where it
+evolves linearly. Let t1 = π
+2 and t2 = 3π
+2 , which implies that xt1 = 0 = xt2. However,
+xt1+1 < 0 and xt2+1 > 0. Note that lifting xt into a space where it evolves linearly is trivial
+using a functional (as opposed to function): Let ψ(f) =
+[f
+f′
+]
+, then ψ(xt) =
+[cos(t)
+sin(t)
+]
+which
+evolves linearly.
+In order to overcome these limitations but still allow for forecasting of xt, we make
+slightly diﬀerent assumptions. In order to allow for forecasting, we assume ψ to be invertible
+but we only assume that ψ−1 can be approximated by a function f. Therefore:
+xt = f(kt) with kt = Kkt−1 (10)
+Additionally, similar to the reasoning laid out earlier, we assumeK to have strictly imag-
+inary eigenvalues, which in turn implies that, if kt is being projected onto the eigenvectors
+of K, the following holds:
+kt =
+[cos(⃗ ωt)
+sin(⃗ ωt)
+]
+:= Ω(⃗ ωt) (11)
+3.1 Nonlinear Frequency Decomposition
+By making the above mentioned assumptions, we arrive at an interpretation of Koopman
+theory that bears resemblance to the Fourier transform. Speciﬁcally, while the Fourier
+transform expands a signal xt into a possibly inﬁnite sum of sines and cosines, the trans-
+formation that results from our interpretation of Koopman theory explains the signal as a
+nonlinear function of sines and cosines. Thus, it explains the signal in a nonlinear oscil-
+latory basis but because we assume the nonlinear function f to be time-invariant, notions
+of frequency and periodicity persist, i.e., if Ω( ⃗ ωt) is periodic with period P , then f(Ω(⃗ ωt))
+will also be periodic with period P .
+xt = AΩ(⃗ ωt) (Fourier)
+xt = f(Ω(⃗ ωt)) (Koopman)
+Let f be parameterized by Θ. The minimization problem we wish to solve is therefore:
+minimize E(⃗ ω,Θ) =
+T∑
+t=1
+(xt − fΘ(Ω(⃗ ωt)))2 (global loss) (12)
+=
+T∑
+t=1
+L(⃗ ω,Θ, t) (sum of temporally local losses)
+14
+
+
+--- Page 15 ---
+Spectral Methods for Long-term Time Series Prediction
+In the following, we will derive computationally eﬃcient strategies to solve this optimization
+problem. Again, similar to the algorithm introduced earlier, coordinate descent will be per-
+formed on (12). We will show how a global minimizer in the direction of ωi can be obtained
+in a computationally eﬃcient manner using the FFT. Note that optimizing E in the di-
+rection of Θ can be achieved eﬃciently using Dynamic Programming, speciﬁcally using the
+Backpropagation algorithm, whose implementation is trivial in programming packages that
+allow for automatic diﬀerentiation. However, the question of how to optimize ⃗ ωremains.
+Let Mi = {Θ, ω1, .., ωi−1, ωi+1, .., ωm}, i.e. the set of all model parameters except ωi.
+Let L(ωi; Mi, t) be the loss as a function of solely ωi, i.e. while keeping all other model
+parameters ﬁxed. Recall that L(ωi; Mi, t) is periodic in 2π
+t . The periodicity property follows
+directly from characteristics of the sine and cosine function:
+sin((ωi + 2π
+t )t) = sin(ωit + 2π) = sin(ωit)
+Thus, in a span of 2 π, a temporally local loss function at t repeats itself t-times as shown
+graphically in Figure 6. It is therefore suﬃcient to compute the loss in the ﬁrst period
+and then extrapolate this knowledge by simple repetition. Equipped with this knowledge
+an eﬃcient strategy can be devised: Each temporally local loss function is sampled at N
+equidistant points between 0 and 2π
+t :
+for n = 1, .., N s n = n
+N
+2π
+t
+Si,t[n] = L(sn; Mi, t) (13)
+Note that this step can be carried out in parallel and is therefore surprisingly fast and
+that for every i and t, Si,t[n] is periodic with period N. In order to obtain the global
+loss E(⃗ ω,Θ), in a subsequent step, the temporally local loss functions are summed up by
+repeating the loss at time point t, t times and then aligning the sampling intervals. This
+seemingly easy step proves challenging because of the diﬀerent scales of the samples drawn
+from the local loss functions. However, because summation requires that temporally local
+loss functions to be repeated and interpolated, this step can be performed eﬃciently in
+frequency domain ( O(T log T )) by zero-stuﬃng and zero-padding respectively, avoiding the
+computational burden of a na¨ ıve time-domain implementation (O(T 2)).
+Repeating the local loss functions can be achieved eﬃciently by inserting t-many 0’s in
+between values of the FFT of the samples drawn ( zero-stuﬃng). Then, in order to match
+scales, temporally local loss functions are interpolated by appending 0’s in frequency domain
+(zero-padding).
+Therefore:
+for k = 0, .., K Si,t[k] =
+N∑
+n=1
+Si,t[n]e−jπ nk
+K (14)
+For the frequency spectrum of the global loss function then holds:
+for l = 0, .., KT Ei(l) =
+T∑
+t=1
+K∑
+k=0
+Si,t[k]δ(tk − l) (15)
+15
+
+
+--- Page 16 ---
+Lange, Brunton, Kutz
+L( , , t = 1)
+L( , , t = 2)
+L( , , t = 3)
+0 0.5
+ 1.5
+ 2
+L( , , t = 4)
+Figure 6: The temporally local loss function at time t oscillates with period 2π
+t . In order
+to reconstruct the global loss, it is suﬃcient to evaluate each local loss function
+within the ﬁrst period.
+Algorithm 2 Learning a nonlinear oscillator from data
+Randomly initialize ⃗ ωand Θ
+while not converged do
+for i ∈ {1, .., n} do
+Compute Si,t[k] ⊿ Based on (13) and (14)
+E ← [0]TK
+for t ∈ {1, .., T} do
+for k ∈ {0, ..,2N } do
+E[tk] ← E[tk] + Si,t[k] ⊿ Implements (15)
+end for
+end for
+ωi ← arg minω F[E](ω)
+while not converged do
+ωi ← ωi − α
+T
+∂E(ωi|⃗ ω)
+∂ωi
+⊿ Reﬁne initial guess of ωi
+end while
+for a couple of iterations do
+Θ ← Θ − α∂E(⃗ ω,Θ)
+∂Θ ⊿ Gradient descent on Θ
+end for
+end for
+end while
+16
+
+
+--- Page 17 ---
+Spectral Methods for Long-term Time Series Prediction
+Thus, similar to the previously introduced algorithm, we derived a computationally
+eﬃcient expression for the frequency spectrum of the error function which allows us to
+obtain the approximate location of the optimal parameter ωi. This initial guess is then
+reﬁned using gradient descent. The resulting algorithm is described in Algorithm 2.
+3.2 Related Work
+The fact that any nonlinear dynamical system can be lifted by the means of observables
+into a space where its time evolution can be described by linear methods was ﬁrst intro-
+duced by Koopman for Hamiltonian systems (Koopman, 1931) and later generalized to
+continuous-spectrum systems (Koopman and Neumann, 1932). Even then it was of con-
+siderable importance as a building block for advances in ergodic theory (Birkhoﬀ, 1931;
+Neumann, 1932b; Birkhoﬀ and Koopman, 1932; Neumann, 1932a; Moore, 2015). Interest
+in Koopman theory was renewed by work by Mezi´ c (2005); Budiˇ si´ c et al. (2012); Mezic
+(2013). More recent theoretical advances in Koopman theory e.g. include generalization of
+the Hartman-Grobman theorem to the entire basin of attraction of equilibrium points or
+periodic orbits (Lan and Mezi´ c, 2013).
+Recent applied research has focused on algorithms to estimate the Koopman operator
+from data. Most of these approaches rely on auto-encoder structures (Otto and Rowley,
+2019; Lusch et al., 2018; Yeung et al., 2019; Wehmeyer and No´ e, 2018; Takeishi et al., 2017).
+The optimization objective is usually constituted of terms that encourage linearity in the
+latent space as well as reconstruction performance and is usually solved by means of gradi-
+ent descent. These approaches have been extended in various ways. For example, Bayesian
+Neural Networks as encoders were utilized to extend Koopman theory to the probabilistic
+setting (Pan and Duraisamy, 2019a) whereas Champion et al. (2019) relaxed the linearity
+requirement and allowed for sparse dynamics in the latent space. These approaches usually
+do not consider linearity in Koopman-space a constraint but rather the optimization objec-
+tive. This usually results in latent spaces that are approximately and only locally linear.
+On top of that, unstable eigenvalues often cause diﬃculties. In Erichson et al. (2019b),
+stable eigenvalues are encouraged through additional regularization by means of Lyapunov
+stability. In this work, on the other hand, global linearity and stability are constraints of
+the optimization objective, i.e. all solutions are globally linear and stable by construction
+without the need for any additional regularization. Furthermore, in this work, we show that
+the global optimization objective is highly non-convex limiting the practicality of gradient
+descent and show how solutions can be obtained in frequency domain.
+The Fourier and Koopman Forecast algorithms are also tangentially related to phase
+retrieval (PR) algorithms (Fienup, 1982; Saxton, 2013; Metzler et al., 2018). These al-
+gorithms usually assume partial knowledge in time and/or Fourier domain and the goal
+is to reconstruct missing phase information. PR algorithms ﬁnd application in wavefront
+sensing, beam shaping, optical encryption, optical refraction tomography, x-ray coherent
+diﬀractive imaging, etc. Whereas PR assumes partial knowledge in Fourier and/or time
+domain and the goal is inference of unknown phase quantities, the Koopman/Fourier algo-
+rithms assume full knowledge in time domain and the objective is prediction. Similarly to
+the Koopman/Fourier algorithm, PR methods oftentimes solve their objective function in
+an alternating fashion, i.e. by iteratively updating unknown quantities in time and then
+17
+
+
+--- Page 18 ---
+Lange, Brunton, Kutz
+Fourier domain. However, unlike the methods described in this paper, PR algorithm do
+not seem to be confronted with the problem of obtaining optimal frequencies for time-series
+prediction from data.
+4. Algorithmic properties
+In this section, basic properties of the algorithms are derived.
+4.1 Universal approximation capabilities
+4.1.1 Finite data
+We will show that even the linear Fourier-based algorithm has universal approximation
+capabilities for ﬁnite data sets. More formally, we show by construction that there always
+exists ﬁnite model parameters that can explain any ﬁnite data set. Note that this property is
+not very useful in practice because the solution does not allow to generalize as it implicitly
+assumes that the signal is periodic in T . It is included here because it is analogous to
+Cover’s theorem. Similarly to Cover’s theorem, colloquially speaking, we will show that
+even the linear Fourier-based algorithm can always overﬁt on the training set. Analogous
+to Cover’s theorem, the proof requires projecting the data into an N-dimensional space. In
+summary, Cover’s theorem and the Fourier-based algorithm both have trivial solutions in
+N dimensions that however do not generalize.
+Lemma 1 (Finite data: Universal approximation capabilities) Assume T equidis-
+tant samples x1, ..., xT . There always exist ﬁnite-dimensional ⃗ ωand A such that, AΩ(ωt) =
+xt. Proof by construction: Choose M = T /2 and for i = 1, .., M let ωi = 2πi
+T . Let O ∈ RT×T
+the matrix whose ith and (i + T /2)th rows constitute cos(ωit) and sin(ωit) evaluated at
+t = 1, .., T, respectively. What is left to show is that O forms a basis of RT which follows
+directly from
+i ̸= j :
+T∑
+t=1
+sin(2πit
+T ) sin(2πjt
+T ) = 0
+i ̸= j :
+T∑
+t=1
+cos(2πit
+T ) cos(2πjt
+T ) = 0
+i ̸= j :
+T∑
+t=1
+sin(2πit
+T ) cos(2πjt
+T ) = 0
+4.1.2 Infinite data
+However, when the signal is assumed to be inﬁnite, we will show that the Koopman-based
+algorithm is more expressive compared to its Fourier counterpart. Speciﬁcally, we will show
+that there are signals for which the Fourier algorithm would require inﬁnite model size,
+while the Koopman algorithm allows for a ﬁnite parameterization. The signal for which
+this is shown is a simple square wave.
+18
+
+
+--- Page 19 ---
+Spectral Methods for Long-term Time Series Prediction
+Lemma 2 (Inﬁnite data) Let % denote the modulo operator and consider the time-discrete
+system that evolves according to the following equations:
+xt =
+
+
+
+1, for t%4 = 0
+1, for t%4 = 1
+0, otherwise
+It is well known that the discrete-time Fourier transform of xt is linearly decaying but
+inﬁnite. The system can however be modeled with a simple nonlinear function f and a single
+frequency:
+f(x) =
+{
+1, for x > 0
+0, otherwise
+xt = f(cos( π
+2 t))
+4.2 Error bounds
+In the following, practical error bounds for the Fourier algorithm will be derived as a function
+of prediction horizon, noise and amount of data provided.
+Lemma 3 (Fourier: Linear-in-time error bounds) Let xt(⃗ ω) = AΩ(⃗ ωt) =∑N/2
+i=1 Ai cos(ωit)+∑N
+i=N/2+1 Ai sin(ωit) ∈ R. Given number of data points T , number of frequencies N/2 and
+noise variance σ2, for the prediction error at horizon t then holds:
+|ˆxt(⃗ ω) − ˆxt(⃗ ω∗)| ∈ O
+( t√
+T 3 N σ2
+)
+Proof.
+|xt(⃗ ω) − xt(⃗ ω∗)| = |
+N/2∑
+i=1
+Ai cos(ωit) +
+N∑
+i=N/2+1
+Ai sin(ωit) −
+N/2∑
+i=1
+Ai cos(ω∗
+i t) +
+N∑
+i=N/2+1
+Ai sin(ω∗
+i t)|
+≤
+N/2∑
+i=1
+|Ai|| cos(ωit) − cos(ω∗
+i t)| +
+N∑
+i=N/2+1
+|Ai|| sin(ωit) − sin(ω∗
+i t)|
+Note that sin(ωt) and cos(ωt) are Lipschitz continuous with constant t, therefore:
+| sin(ωit) − sin(ω∗
+i t)| ≤ t|ωi − ω∗
+i |
+| cos(ωit) − cos(ω∗
+i t)| ≤ t|ωi − ω∗
+i |
+Because of that:
+|xt(⃗ ω) − xt(⃗ ω∗)| ≤ t
+N∑
+i=1
+|Ai||ωi − ω∗
+i |
+19
+
+
+--- Page 20 ---
+Lange, Brunton, Kutz
+From Bayesian Spectral Analysis, we know the standard deviation of the uncertainty
+with which the frequencies can be resolved. As was derived in Jaynes (1987):
+ω = ω∗ ± σ2
+|A|
+√
+48
+T 3
+Assume ωi was resolved within ρ standard deviations of ω∗
+i , then:
+ω∗
+i − ρ σ2
+|Ai|
+√
+48
+T 3 ≤ ωi ≤ ω∗
+i + ρ σ2
+|Ai|
+√
+48
+T 3
+|ωi − ω∗
+i | ≤ ρ σ2
+|Ai|
+√
+48
+T 3
+Combining results yields:
+|ˆxt(⃗ ω) − ˆxt(⃗ ω∗)| ≤ t
+N∑
+i=1
+|Ai||ωi − ω∗
+i | ≤ ρ t√
+T 3
+N∑
+i=1
+√
+48σ2
+|ˆxt(⃗ ω) − ˆxt(⃗ ω∗)| ∈ O
+( t√
+T 3 N σ2
+)
+Thus, the Fourier algorithm scales super-linearly with the amount of data provided and
+degrades linearly with noise variance and prediction horizon t.
+4.3 Convergence and stability: Unknown phase problem
+As described earlier, because the Fourier and Koopman methods rely on coordinate descent,
+they inherit the convergence properties of the optimization algorithm. Coordinate ascent
+has known requirements for convergence that are however hard to verify in reality (Beck
+and Tetruashvili, 2013; Spall, 2012). Note that both algorithms obtain optimal frequencies
+ωi in sequence and optimize either A (Fourier) or Θ (Koopman) jointly. The question arises
+to which degree guesses of frequencies and either A or Θ aﬀect the stability and convergence
+of the respective algorithms.
+4.3.1 Fourier
+In the case of the Fourier algorithm, a ‘bad guess’ of A does not aﬀect the optimality of the
+subsequent guess of ωi. This follows directly from the fact that when deriving the symmetry
+relationship between the error surface and the Fourier coeﬃcients, an analytic solution for
+optimal A, i.e. a solution to ∂E
+∂A = 0, was obtained which led to the elimination ofA from the
+objective function. That is why, the initial guess of A does not aﬀect subsequent guesses of
+ωi. The question to which degree guesses of {ωj}i̸=j aﬀect the guess ωi remains. The answer
+to the question is linked to the number of data points provided. The more data is provided,
+the smaller the ‘radius of inﬂuence’ of the respective frequencies. This is due to the fact
+that larger amounts of data lead to slimmer and peakier sinc-functions in Fourier domain,
+and the fact that two frequencies are independent if their sinc-function do not overlap. This
+also implies that in the limit of T → ∞, guesses of {ωj}i̸=j do not inﬂuence ωi because the
+20
+
+
+--- Page 21 ---
+Spectral Methods for Long-term Time Series Prediction
+12H 24H 0.5W 1W
+Period
+Figure 7: The error surface E(ω, Θ) of a signal exhibiting daily, weekly and seasonal pat-
+terns. In this case fΘ is an untrained Neural Network.
+corresponding sinc-functions have become Dirac deltas. These properties make the Fourier
+algorithm stable and easy to use in practice. After the number of frequencies N are selected
+by either domain knowledge, cross-validation or any hyper-parameters optimization scheme,
+the algorithm almost always converges to the same solution given appropriate scaling of the
+data and a small enough learning rate.
+4.3.2 Koopman
+Unfortunately, this story is diﬀerent for the Koopman algorithm. Because of the non-
+linearity f, the ‘radius of inﬂuence’ of frequencies is much harder to reason about. That
+is why we conjecture that whether or not guesses of {ωj}i̸=j aﬀect guesses of ωi is data
+dependent. From experience, frequency guesses seem to not inﬂuence each other much.
+However, because analytical solution to optimal Θ, i.e. ∂E
+∂Θ = 0, are unavailable for most
+non-linear functions fΘ and numerically computing the optimal parameters Θ for every
+value that ωi can take is computationally extremely expensive, ‘bad initial guesses’ of Θ
+inﬂuence subsequent guesses of ωi. However, the way in which this pathology manifests
+itself is fortunately structured. Figure 7 shows the error surface E(ω) with respect to a
+signal that exhibits daily, weekly and seasonal patterns given a neural network with random
+weights, i.e. Θ was initialized randomly. It is easy to see that correct frequencies can be
+identiﬁed. However, there is a price to pay for the non-linearity of f, namely that the
+correct frequency merely cause the error function to deviate from its plateau. Thus, even
+an upward spike in the error function can indicate a correct frequency. We call this issue the
+unknown phase problem. Training the Neural Network for some iterations or rerunning the
+experiments from diﬀerent initial conditions often alleviates this problem. A heuristic that
+signiﬁcantly improves numerical stability is to ﬂip spikes into a common direction followed
+by the application of a Gaussian ﬁlter G, i.e. E# = G(|E − median(E)|). These properties
+make the Koopman method more diﬃcult to use in practice but, as we will show in the
+next section, successful application of the Koopman algorithm can signiﬁcantly improve
+performance on noisy and high dimensional data.
+21
+
+
+--- Page 22 ---
+Lange, Brunton, Kutz
+5. Experiments
+The code for the Fourier- and Koopman forecasting algorithms is available at https://
+github.com/helange23/from_fourier_to_koopman.
+5.1 Synthetic experiments
+In the following, the eﬃcacy of the algorithms is probed on synthetic tasks and compared
+to the Long-Short Term Memory (LSTM) (Hochreiter and Schmidhuber, 1997). LSTM is a
+trainable nonlinear ﬁlter and one of the de facto standard tools to model time series. LSTMs
+were initially developed to mitigate the problem of exploding or vanishing gradients by
+choosing a speciﬁc neural architecture that ensures constant error ﬂow. Note that exploding
+gradients is also a problem we faced but instead mitigated by employing the FFT.
+5.1.1 Forecasting nonlinear oscillators under measurement noise
+In order to probe the performance of the resulting algorithms in long-term forecasting of
+nonlinear oscillators under measurement noise, a synthetic time series is created. Speciﬁ-
+cally, we choose a strongly nonlinear signal resembling data at an hourly rate with daily
+patterns that is corrupted by Gaussian noise, i.e.:
+xt = sin
+(2π
+24 t
+)17
++ ϵt
+In a ﬁrst experiment, we vary the amount of training data provided to the models and
+keep the noise variance ﬁxed at 0.2. Each model is provided with 2000, 4000, 6000 and 8000
+samples of xt and the performance at predicting the next 10 4 snapshots is evaluated. For
+the LSTMs, a 5-layer 20-unit network comprising 15301 parameters was chosen. For long-
+term predictions, previously predicted snapshots are recursively fed back into the network.
+The LSTM is compared to the Koopman algorithm with a 3-layer decoder with roughly
+the same number of parameters (16384) and a single frequency. The Fourier algorithm was
+instantiated with 8 frequencies and therefore 24 parameters.
+The left panel of Figure 8 shows the Relative Cumulative Error as a function of the
+prediction horizon and the amount of provided training data. We deﬁne the Relative Cu-
+mulative Error as:
+RCE(h) =
+∑T +h
+t=1 (xt − ˆxt)2
+∑T +h
+t=1 x2
+t
+(16)
+For the sake of readability, the right panel shows the performance of only the Fourier-
+based and Koopman-based algorithms on a subset of the benchmarks when the prediction
+horizon equals 10 4. Note that this experiment conﬁrms the theoretical ﬁndings provided
+earlier, namely that the algorithms scale super-linearly with the amount of data. Further-
+more, note that the Koopman algorithm outperforms the Fourier algorithm. Figure 9 gives
+the intuition why this is true.
+Figure 9 shows the time-domain long-term forecasts of the respective algorithms. Note
+that the LSTM seems to have correctly extracted the nonlinear shape of the waveform but
+22
+
+
+--- Page 23 ---
+Spectral Methods for Long-term Time Series Prediction
+0 2000 4000 6000 8000 10000
+Prediction Horizon
+0.00
+0.25
+0.50
+0.75
+1.00
+1.25
+1.50Relative Cumulative Error
+T = 2000
+T = 4000
+T = 6000
+T = 8000
+LSTM
+Fourier
+Koopman
+4000 6000 8000
+T
+0.000
+0.002
+0.004
+0.006
+0.008
+0.010
+0.012Overall Relative Error
+Koopman
+Fourier
+Figure 8: Left panel shows the Relative Cumulative Error as a function of the amount of
+training data provided. The right panel displays the Relative Cumulative Error
+when the prediction horizon equals 10 4 but, for better visibility, leaves out the
+results for the LSTM and T=2000.
+Figure 9: Long-term forecasting results for T = 4000. Note that LSTMs correctly extract
+the shape of the nonlinearity but fail to extract the correct frequency. Further-
+more note that for the Fourier algorithm small Fourier modes seem to be drowned
+by noise.
+failed at extracting the correct frequency. The impression that LSTMs seem to be biased
+frequency estimators will be reinforced in later experiments. Furthermore note that the
+Koopman algorithm signiﬁcantly outperforms the Fourier algorithm. While the Fourier
+algorithm correctly extracted large Fourier modes from the data, it struggles extracting
+smaller ones as they appear to be wiggling slowly out of phase. This behavior can be
+explained by the theoretical ﬁndings earlier: smaller Fourier modes have a smaller signal-
+23
+
+
+--- Page 24 ---
+Lange, Brunton, Kutz
+0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0
+2
+0.0
+0.2
+0.4
+0.6
+0.8
+1.0
+1.2Relative Error
+LSTM
+Fourier
+Koopman
+Figure 10: Robustness of the respective algorithms to noise. The amount of training data
+is kept ﬁxed at T = 4000 while noise variance is varied. The Koopman-based
+algorithm signiﬁcantly outperforms its Fourier counterpart as well as LSTMs.
+to-noise-ratio compared to bigger ones and are therefore harder to detect correctly.
+In a subsequent experiment, we probe the robustness of the respective algorithms to
+noise by keeping the amount of training data ﬁxed ( T = 4000) and varying the variance
+of the Gaussian noise corrupting the signal. Figure 10 shows the results. First, note
+that the theoretical results are again conﬁrmed, i.e. the performance of the algorithms
+seems to degrade linearly with noise variance. Furthermore note that, again, the Koopman-
+based algorithm outperforms its Fourier counterpart. This can, again, be explained by
+the fact that the Fourier-based algorithm requires more Fourier modes to model the signal
+appropriately. However, these additional Fourier modes often have small amplitudes and
+therefore small signal-to-noise ratios and get therefore drowned out by noise quickly. The
+Koopman-based algorithm avoids this pitfall as it requires fewer frequencies because it can
+explain away harmonics using the non-linearity.
+5.1.2 Traveling waves
+For many data-driven modeling approaches to high dimensional systems such as e.g. ﬂuid
+ﬂows, the dimensionality of the measurements are often ﬁrst reduced by applying dimen-
+sionality reduction techniques. The Koopman-based algorithm allows for jointly learning
+the inverse of the transformation that reduces the dimensionality and therefore extends the
+applicability of the techniques to high dimensional systems with which traditional dimen-
+sionality reduction techniques such as Principal Component Analysis (PCA) struggle. A
+standard example for systems with which PCA struggles are traveling waves. Because PCA
+exploits redundancies in the co-variance structure of the measurements and measurements
+within one cycle of a traveling wave are approximately uncorrelated, achieving good re-
+construction with PCA requires many modes which in turn reduces robustness to noise as
+highlighted in previous experiments. In the following, we will show how the Koopman-based
+24
+
+
+--- Page 25 ---
+Spectral Methods for Long-term Time Series Prediction
+algorithm can overcome these diﬃculties. Speciﬁcally, by showing how a 2D traveling wave
+can be modeled with a transpose-convolutional decoder.
+0 200 400 600 800
+Time
+Figure 11: A traveling wave for which reducing the dimension with PCA proves diﬃcult.
+Figure 11 shows the ﬁrst 1000 snapshots of a traveling wave with spatial dimensionality
+of 256. Let each spatial dimension be indexed by 1 ≤ u ≤ 256. For the spatio-temporal
+evolution of the wave holds:
+x(u, t) = N (u|µ = (sin(0.01t) + 1) ∗ 100 + 28, σ2 = 10)
+The performance of the Fourier-based algorithm in conjunction with PCA is compared to an
+instance of the Koopman-based algorithm that employs a transpose-convolutional Neural
+Network as a decoder. For the Fourier-based algorithm in conjunction with PCA, a pa-
+rameter sweep over the combination of retained PCA modes and the number of frequencies
+is performed. In total, 100 combinations are tested and the results are shown in Figure
+12. The best performing model incurs an error of approximately 6% with 55 retained PCA
+modes and frequencies, respectively. On the other hand, the Koopman-based algorithm in
+conjunction with a transpose-convolutional decoder achieves an error smaller than 1% with
+just a single frequency.
+5.2 Natural data experiments
+5.2.1 Energy demand: RE-Europe data set
+In the following, we will show that physical systems can be modeled eﬀectively as nonlinear
+oscillators. The example at hand is taken from the realm of power systems. Speciﬁcally,
+the goal of the experiment is to predict the total energy consumption at the distribution
+level of a node in the German electrical grid. Predicting future consumption is paramount
+for numerous applications such as power quality, grid stability and demand response (Chan
+et al., 2012). For this, a one-dimensional time series of past demand is extracted from the
+RE-Europe data set (Jensen and Pinson, 2017). Energy demand usually exhibits multiple
+scales, i.e. because energy consumption is usually higher during weekdays compared to
+weekends, energy consumption often exhibits weekly alongside daily and seasonal patterns.
+On top of that, because energy consumption is dependent on hard-to-predict outside factors
+such as weather, predicting energy demand into the future requires high robustness to
+25
+
+
+--- Page 26 ---
+Lange, Brunton, Kutz
+5 15 25 35 45 55 65 75 85 95
+#Frequencies
+5
+15
+25
+35
+45
+55
+65
+75
+85
+95 #PCA modes
+Fourier
+1
+#Frequencies
+Koopman
+Figure 12: The results of a parameter sweep of the Fourier-based algorithm in conjunction
+with PCA on modeling a traveling wave in comparison to the Koopman-based
+algorithm with a deconvolutional decoder.
+structured noise. The data set at hand contains 3 years of data at an hourly rate, therefore
+26.280 data points. The ﬁrst 19.000 data points were used as training, the next 1000 for
+testing, and the last 6.280 for evaluation. The evaluation set was in turn divided into four
+equal in size consecutive subsets. The performance of the Fourier- as well as Koopman-
+based algorithm is compared to various temporal models such LSTM, GRU, Box-Jenkins
+models, Clockwork-RNNs, Echo State Networks, Temporal Convolutional Networks and
+Fourier Neural Networks.
+For LSTMs and GRUs, the standard pytorch implementation is utilized and a parameter
+sweep over the number of layers as well as the number of hidden units per layer is performed
+totalling 100 diﬀerent conﬁgurations. In order to be able to learn yearly patterns, the Tem-
+poral Convolutional Network was instantiated with 13 layers (2 13 ≈ 365 ∗ 24), a kernel size
+of 3 and a hidden dimensionality of 25Bai et al. (2018). For the Box-Jenkins models the
+Hyndman-Khandakar (Hyndman et al., 2007) AutoARIMA algorithm implemented in the
+R forecasting package is employed which uses a combination of unit root tests, minimiza-
+tion of the Akaike Information Criterion (Sakamoto et al., 1986) and Maximum Likelihood
+Estimation to obtain an ARIMA model. We compare to the predicted mean. Note that
+the hyperparameter space for Box-Jenkins models is very large and computationally too
+expensive to sweep. But in addition to the AutoARIMA approach, handcrafted ARIMA
+models are created. Because of the long-range dependencies in the data, the best practices of
+detrending and diﬀerencing followed by an investigation of (partial) auto-correlation func-
+26
+
+
+--- Page 27 ---
+Spectral Methods for Long-term Time Series Prediction
+Algorithm Forecast Horizon Patterns
+25% 50% 75% 100% D W Y
+Koopman Forecast 0.19 0.21 0.19 0.19 ✓ ✓ ✓
+Fourier Forecast 0.31 0.39 0.33 0.3 ✓ ✓ ✓
+LSTM 0.37 0.4 0.42 0.45 ✓ × ×
+GRU 0.53 0.55 0.52 0.5 ✓ × ×
+Echo State Network 0.67 0.73 0.76 0.73 ✓ × ×
+AR(1,12,24,168,4380,8760) 0.75 0.95 1.07 1.13 ✓ ✓ ✓
+CW-RNN (data clocks) 1.1 1.14 1.14 1.15 (✓) × ×
+CW-RNN 1.05 1.08 1.08 1.09 (✓) × ×
+AutoARIMA 0.83 1.11 1.18 1.26 × × ×
+Temporal Convolutional Nets 0.96 1.69 1.87 2.33 ✓ (✓) ×
+Fourier Neural Networks 1.1 1.15 1.21 1.21 ✓ × ×
+Table 1: Performance in long-term forecasting of distribution level energy consumption as
+measured by the Relative Cumulative Error for various algorithms. Note that
+long-term predictions are obtained by recursively feeding predictions back into
+algorithms where applicable. Furthermore, column Patterns indicates whether
+algorithms at hand have successfully extracted Daily, Weekly or Yearly patterns.
+tions failed. That is why numerous hand-crafted models imbued with expert knowledge
+of the underlying data are probed. The best performing hand-crafted model is a simple
+auto-regressive process with lags corresponding to periods and harmonics found in the un-
+derlying data. Additionally, the performance of Clockwork-RNNs (Koutnik et al., 2014)
+(CW-RNN) is evaluated. CW-RNNs have an internal representation of periodicity and
+frequency because subsets of the internal state are updated based on ﬁxed (not learned)
+periods of internal clocks. We compare to a CW-RNN whose internal clock is instantiated
+according to the power law as described by the authors but also compare to a CW-RNN
+whose internal clock ticks according to the periods found in the data. For both models, a
+single layer CW-RNN was utilized and a parameter sweep over the number of clocks and
+states per clock was performed. Adjusting the internal clock to the underlying data did not
+improve the model. Furthermore, we compare to Fourier Neural Networks (Silvescu, 1999;
+Gashler and Ashmore, 2016) and Echo State Networks (Jaeger, 2007). Fourier NNs are by
+design not temporal models but merely employ cos-activation functions. Temporal depen-
+dencies were attempted to be modeled by learning a function that produces the value of
+the next time step as a function of the previous 10. For Echo State Networks, the ’easyesn’
+package was employed. Table 5.2.1 shows the results.
+Figure 13 exempliﬁes the pitfalls of time-stepping methods for long-term time series
+prediction. It shows the frequency content of the prediction of the Koopman- and Fourier-
+based algorithm alongside the prediction of the best performing LSTM. In all experiments,
+time stepping methods like LSTMs, GRUs or ESNs have two important limitations. First,
+because their objective is one-step-ahead prediction and slow frequencies incur little error
+in the short-term, they fail to extract slow frequencies from data. Second, the resulting
+27
+
+
+--- Page 28 ---
+Lange, Brunton, Kutz
+LSTMFourier
+1D 12Hr1W1Y
+Koopman
+Figure 13: Comparison of the best performing model of each contender in frequency domain.
+The x-axis shows frequencies with periods of one year, one week, one day and
+12 hours. The LSTM fails to extract slow frequencies and seems to be a biased
+frequency estimator.
+predictions are biased in terms of frequency. When integrating the LSTM (recursively
+feeding predictions back into the network), the resulting time series does oscillate but not
+with the correct frequency. This behavior is detrimental, especially when the Mean Squared
+Error is employed to evaluate the performance. Predicting a constant often incurs a smaller
+error then predicting an out-of-phase oscillation.
+5.2.2 Fluid flows and Video Frame Prediction
+There seems to be a dichotomy in ﬂuid ﬂows. On one hand, there are noise amplifying ﬂows
+and on the other hand there are oscillator ﬂows. Because of the inductive bias of the algo-
+rithms introduced in this work, we will focus on evaluating the performance of the proposed
+algorithms in modeling the behavior of oscillator ﬂows. The performance is compared to
+Dynamic Mode Decomposition (DMD) and a variant of DMD designed to be more noise
+robust, namely the forward-backward DMD algorithm (Hemati et al., 2017). Modeling ﬂuid
+ﬂows is a long-standing standard benchmark for DMD-like algorithms. Indeed, DMD was
+ﬁrst introduced to extract the dynamic behavior in ﬂuids (Kutz et al., 2016). Note that
+in the following experiments, the dimensionality of the high dimensional ﬂows was reduced
+by Principal Component Analysis and the temporal forecasting was performed using the
+Fourier-based algorithm. For each experiment, the ﬁrst 75% of the data was used for train-
+ing whereas the remaining 25% are used for testing (temporal split).
+Table 2 shows the performance of the Fourier based algorithm graphically, speciﬁcally it
+shows the last predicted frame when predicting a Kolmogorov 2D ﬂow, ﬂow around a cylin-
+der, ﬂow over a cavity and a video of a fan. The data from the Kolmogorov 2D ﬂow was
+taken from the experiments conducted in Tithof et al. (2017). Note that the Kolmogorov
+2D ﬂow and the data for the video frame prediction task constitute real measurements and
+therefore exhibit a considerable amount of noise, whereas the cylinder and cavity ﬂow data
+28
+
+
+--- Page 29 ---
+Spectral Methods for Long-term Time Series Prediction
+Prediction Ground Truth
+Kolmogorov 2D
+Rey. no.: ≈ 10
+Cylinder ﬂow
+Rey. no.: ≈ 100
+Flow over cavity
+Rey. no.: ≈ 7500
+Video frame
+–
+Table 2: The last frame as predicted by PCA in conjunction with the Fourier-based al-
+gorithm of ﬂuid ﬂows and video frame prediction. For a video that shows the
+performance, visit https://www.youtube.com/watch?v=trbXYMqi2Tw.
+stems from simulation.
+The test set was split into four equal length subsets and Table 3 shows the performance
+as measured by the relative cumulative error on each split. For each task, a parameter sweep
+over the number of frequencies was performed and the best performing model was selected.
+Note that the performance was measured in PCA-space, i.e. in predicting PCA modes. The
+results suggest that the Fourier-based algorithm signiﬁcantly outperforms DMD and FB-
+DMD on three out of four tasks. This is mainly due to the fact that under the assumption
+of measurement noise, DMD is a biased frequency estimator Hemati et al. (2017). On top
+29
+
+
+--- Page 30 ---
+Lange, Brunton, Kutz
+Algorithm Performance
+Kolmogorov 2D Fourier 1.1% 1.4% 1.57% 1.69%
+Reynolds no. ≈ 10 DMD 175% 171% 169% 165%
+FB DMD inf inf inf inf
+Cylinder ﬂow Fourier 0% 0% 0% 0.1%
+Reynolds no. 100 DMD 4.44% 4.91% 4.71% 4.69%
+FB DMD 4.22% 4.75% 4.68% 4.56%
+Flow over cavity Fourier 0.9% 1% 1% 1%
+Reynolds no. 7500 DMD 69% 66.7% 64.9% 63.8%
+FB DMD 63% 70.6% 77.2% 84%
+Video frame Fourier 12.3% 17.2% 22.8% 27.3%
+DMD 7% 11% 16% 22%
+FB DMD 194% 196% 196% 195%
+Prediction Horizon 25% 50% 75% 100%
+Table 3: The test set was split into four consecutive subsets of equal length. For every
+quantile, the relative cumulative error is reported for the Fourier-based algorithm,
+DMD and forward-backward DMD.
+of that, DMD based approaches oftentimes lack stability as eigenvalues can lie outside the
+unit-circle causing predictions to either blow up to inﬁnity (as was the case of FB-DMD
+applied to the Kolmogorov ﬂow) or crash into the origin. The reason why DMD outperforms
+the Fourier-based algorithm on the video frame prediction task is simple: one of the PCA
+modes does not ﬁt the inductive bias of the algorithm, i.e. it does not oscillate but it
+increases over time, therefore impeding the performance of the algorithm.
+5.3 Process noise and phase drifts
+The question arises whether process noise as opposed to measurement noise can be modeled
+with the algorithms introduced here. Human gait is known to be a oscillator that however
+exhibits a considerable amount of process noise (Zieli´ nska, 1996). We model process noise
+as a phase drift and slightly modify the optimization objective of the Fourier algorithm:
+L(A, ⃗ ω, φt, t) = ||xt − AΩ(⃗ ωt+ ˆφt)||2
+2 + | ˆφt − ˆφt−1|
+We test the modiﬁed algorithm on a data set containing accelerometer readings of a
+mobile phone located in test subjects pockets (subject 28, right pocket) (Vajdi et al., 2019)
+and compare to the Fourier algorithm. Figure 14 shows the ﬁrst portion of the predictions
+of the Fourier algorithm alongside the phase-corrected modiﬁcation (Fourier PC). Thus,
+small modiﬁcations to the algorithms introduced in this work allow to model process noise.
+30
+
+
+--- Page 31 ---
+Spectral Methods for Long-term Time Series Prediction
+Time
+Fourier
+Fourier PC
+Truth
+Figure 14: LocationZ recordings from subject 28. We visually compare the Fourier algo-
+rithm and its phase-corrected sibling (Fourier PC) to the true readings.
+6. Conclusion
+In this work, techniques to ﬁt linear and nonlinear oscillators to data are introduced. When
+modeling quasi-periodic systems, the optimization objectives for both problems are highly
+non-convex and are therefore not amenable to be solved by gradient descent. The key insight
+to solving both optimization problems is to express the objectives in frequency domain
+where solutions can be found in a computationally eﬃcient and scalable manner thanks
+to the computational properties of the Fast Fourier Transform. Because the optimization
+objectives are global, the algorithms introduced in this work allow for long-term forecasting
+while mitigating compounding errors. In the following, advantages and disadvantages of
+the algorithms are discussed.
+6.1 Disadvantages
+Strong inductive bias: The algorithms introduced here exhibit a strong inductive bias.
+The algorithms will not work well for data that stems from systems which are not
+quasi-periodic. However, we have shown empirically that many real life phenomena
+such as ﬂuid ﬂows, space weather and energy consumption seem to fulﬁll this assump-
+tion.
+Unknown phase problem: This problem was alluded to earlier. For the Koopman algo-
+rithm, because analytical solutions for parameters Θ when f is non-linear are usually
+unobtainable, swings in either direction from the ‘error plateau’ can be indicative of
+a correct choice of frequency.
+Conditional Independence of predictions: Given model parameters, pairs of predicted
+values are conditionally independent, i.e. p(xt1, xt2|Θ, ⃗ ω) = p(xt1|Θ, ⃗ ω)p(xt2|Θ, ⃗ ω).
+While this property is beneﬁcial for compounding errors and time stepping (see be-
+low) this property can also have adverse eﬀects. Consider the scenario where the goal
+is to perform a one-step ahead prediction for t + 1 and all previous data points up to
+t are known. If the model error for the prediction of xt is big, the prediction error for
+31
+
+
+--- Page 32 ---
+Lange, Brunton, Kutz
+xt+1 will most likely also be high. Note that in this scenario, we assume we know xt
+but even though, we know the true value of xt, incorporating this knowledge, i.e. the
+conditional dependence on xt+1, into the model is not trivial.
+6.2 Advantages
+Strong inductive bias: On the ﬂip side, if the data is known to stem from aquasi-periodic
+system, the algorithms introduced here oﬀer a tight ﬁt to the data. The resulting
+predictions are guaranteed to be quasi-periodic by construction therefore removing
+potential possibilities of failure like e.g. predictions exploding to plus/minus inﬁnity.
+Time stepping: Past values are not required to make future state predictions when model
+parameters are known. This entails that time consuming time stepping methods are
+not required. This is especially useful if the data is high dimensional. This is closely
+related to the fact that predictions are conditionally independent.
+Compounding errors: Again, because a global optimization criterion (as opposed to one
+step-ahead predictions) is solved and because predictions are conditionally indepen-
+dent, errors do not compound. However, because of uncertainty caused by noise,
+errors will still accumulate over time but in a provably linear manner.
+Noise resilience: Because of the strong inductive bias, the algorithms introduced in this
+work exhibit very strong resiliency towards noise. As an anecdote, when Jaynes ﬁrst
+published his results on Bayesian Spectral Analysis (Jaynes, 1987), because he was
+able to resolve frequencies with much higher accuracy than Nyquist’s theorem would
+suggest, his work was compared to ‘squaring a circle’ and initially dismissed.
+7. Future Work
+In the opinion of the authors, the algorithms presented in this work create new and inter-
+esting potential future research paths. The following outlines some ideas for future work.
+Input/output systems: In its current inception, the algorithms introduced in this work
+assume the underlying systems to be autonomous, i.e. systems that are not driven by
+inputs. This severely limits the applicability of the algorithms in more general con-
+texts. Koopman theory and DMD have recently been extended to include externally
+forced systems (Proctor et al., 2016, 2018). This idea could, in principle, be used to
+create new recurrent Neural Network (RNN) architectures that abandon nonlinearities
+in between time steps for linear systems in conjunction with a time-invariant nonlin-
+earity. It may also lead to improved performance and could potentially overcome
+the issues that arise when training current RNNs, like e.g. exploding or vanishing
+gradients through time.
+Interpretable ﬂows: When modeling the ﬂuid ﬂows little regard to the interpretability
+of the resulting model was given. Even though the ﬂow over the cavity could, in
+principle, be modeled using a single frequency given an appropriate nonlinearity that
+is amenable to rotations, so far, the dimensionality was reduced using Principal Com-
+ponent Analysis and forecasting was performed using the Fourier-based algorithm.
+32
+
+
+--- Page 33 ---
+Spectral Methods for Long-term Time Series Prediction
+Employing the Koopman algorithm in conjunction with a nonlinear decoder that can
+handle rotations could reduce the number of required frequencies and result in higher
+noise robustness and interpretability.
+Non-parametric Fourier/Koopman: In this work, we showed a direct link between
+time series prediction and Bayesian Spectral Analysis (BSA). However, the insights
+from BSA are, so far, merely used to derive error bounds. These error bounds can,
+in principle, be used to inﬂuence predictions. One could conceive a Bayesian prob-
+abilistic model that marginalizes the frequencies out, i.e. by performing predictions
+by computing the following quantity:
+∫
+p(xT +h|⃗ ω)p(⃗ ω|x1:T )d⃗ ω. Note that Bayesian
+Spectral Analysis provides ways to calculate p(⃗ ω|x1:T ).
+Local and global modeling: Consider the following scenario: The goal is to predict a
+signal with seasonal patterns given multiple years of training data. Imagine also
+that the current year is anomalous which entails that short-term predictions will be
+impeded. In its current inception, because global optima are sought, the information
+that the system is currently in an anomalous state is hard to incorporate. Ideally,
+in addition to one of the global models introduced in this work, there is also a local
+model and with increasing prediction horizon, more weight should be given to the
+global over the local model. Optimally weighing local and global models seem an
+interesting and important future research path.
+Acknowledgements
+The authors acknowledge support from the Defense Advanced Research Projects Agency
+(DARPA PA-18-01-FP-125) and the Army Research Oﬃce (ARO W911NF-17-1-0306). We
+would like to thank Charles Delahunt for feedback on the manuscript, and Jeﬀrey Tithof,
+Jared Callaham, Kadierdan Kaheman, Benjamin Herrmann and Isabel Scherl for providing
+data sets.
+References
+J. S. Armstrong. Long-range forecasting. Wiley New York ETC., 1985.
+T. Askham and J. N. Kutz. Variable projection methods for an optimized dynamic mode
+decomposition. SIAM Journal on Applied Dynamical Systems , 17(1):380–416, 2018.
+S. Bai, J. Z. Kolter, and V. Koltun. An empirical evaluation of generic convolutional and
+recurrent networks for sequence modeling. arXiv:1803.01271, 2018.
+A. Beck and L. Tetruashvili. On the convergence of block coordinate descent type methods.
+SIAM journal on Optimization , 23(4):2037–2060, 2013.
+G. D. Birkhoﬀ. Proof of the ergodic theorem. Proceedings of the National Academy of
+Sciences, 17(12):656–660, 1931.
+G. D. Birkhoﬀ and B. Koopman. Recent contributions to the ergodic theory. Proceedings
+of the National Academy of Sciences of the United States of America , 18(3):279, 1932.
+33
+
+
+--- Page 34 ---
+Lange, Brunton, Kutz
+G. E. Box, G. M. Jenkins, G. C. Reinsel, and G. M. Ljung. Time series analysis: forecasting
+and control. John Wiley & Sons, 2015.
+G. L. Bretthorst. Bayesian spectrum analysis and parameter estimation, volume 48. Springer
+Science & Business Media, 2013.
+B. W. Brunton, L. A. Johnson, J. G. Ojemann, and J. N. Kutz. Extracting spatial–temporal
+coherent patterns in large-scale neural recordings using dynamic mode decomposition.
+Journal of neuroscience methods , 258:1–15, 2016a.
+S. L. Brunton, B. W. Brunton, J. L. Proctor, and J. N. Kutz. Koopman invariant subspaces
+and ﬁnite linear representations of nonlinear dynamical systems for control. PLoS ONE,
+11(2):e0150171, 2016b.
+S. L. Brunton, B. W. Brunton, J. L. Proctor, E. Kaiser, and J. N. Kutz. Chaos as an
+intermittently forced linear system. Nature Communications, 8(1):1–9, 2017.
+M. Budiˇ si´ c, R. Mohr, and I. Mezi´ c. Applied Koopmanism.Chaos: An Interdisciplinary
+Journal of Nonlinear Science , 22(4):047510, 2012.
+K. Champion, B. Lusch, J. N. Kutz, and S. L. Brunton. Data-driven discovery of coordinates
+and governing equations. Proceedings of the National Academy of Sciences , 116(45):
+22445–22451, 2019.
+S.-C. Chan, K. M. Tsui, H. Wu, Y. Hou, Y.-C. Wu, and F. F. Wu. Load/price forecasting
+and managing demand response for smart grids: Methodologies and challenges. IEEE
+signal processing magazine, 29(5):68–85, 2012.
+K. K. Chen, J. H. Tu, and C. W. Rowley. Variants of dynamic mode decomposition:
+boundary condition, Koopman, and Fourier analyses. Journal of nonlinear science , 22
+(6):887–915, 2012.
+J. Chung, C. Gulcehre, K. Cho, and Y. Bengio. Empirical evaluation of gated recurrent
+neural networks on sequence modeling. arXiv preprint arXiv:1412.3555 , 2014.
+J. W. Cooley and J. W. Tukey. An algorithm for the machine calculation of complex Fourier
+series. Mathematics of computation , 19(90):297–301, 1965.
+S. T. Dawson, M. S. Hemati, M. O. Williams, and C. W. Rowley. Characterizing and
+correcting for the eﬀect of sensor noise in the dynamic mode decomposition. Experiments
+in Fluids, 57(3):42, 2016.
+N. B. Erichson, S. L. Brunton, and J. N. Kutz. Compressed dynamic mode decomposition
+for real-time object detection. Journal of Real-Time Image Processing, 16(5):1479–1492,
+2019a.
+N. B. Erichson, M. Muehlebach, and M. W. Mahoney. Physics-informed autoencoders for
+Lyapunov-stable ﬂuid ﬂow prediction. arXiv preprint arXiv:1905.10866 , 2019b.
+J. R. Fienup. Phase retrieval algorithms: a comparison. Applied optics, 21(15):2758–2769,
+1982.
+34
+
+
+--- Page 35 ---
+Spectral Methods for Long-term Time Series Prediction
+J. Fourier. Theorie analytique de la chaleur, par M. Fourier . Chez Firmin Didot, p` ere et
+ﬁls, 1822.
+M. S. Gashler and S. C. Ashmore. Modeling time series data with deep Fourier neural
+networks. Neurocomputing, 188:3–11, 2016.
+J. D. Hamilton. Time series analysis , volume 2. Princeton New Jersey, 1994.
+M. S. Hemati, C. W. Rowley, E. A. Deem, and L. N. Cattafesta. De-biasing the dynamic
+mode decomposition for applied Koopman spectral analysis of noisy datasets. Theoretical
+and Computational Fluid Dynamics , 31(4):349–368, 2017.
+S. Hochreiter and J. Schmidhuber. Long short-term memory. Neural computation, 9(8):
+1735–1780, 1997.
+R. J. Hyndman, Y. Khandakar, et al. Automatic time series for forecasting: the fore-
+cast package for R . Number 6/07. Monash University, Department of Econometrics and
+Business Statistics . . . , 2007.
+H. Jaeger. Echo state network. scholarpedia, 2(9):2330, 2007.
+E. Jaynes. Bayesian spectrum and chirp analysis. In Maximum-Entropy and Bayesian
+Spectral Analysis and Estimation Problems , pages 1–37. Springer, 1987.
+T. V. Jensen and P. Pinson. Re-europe, a large-scale dataset for modeling a highly renewable
+european electricity system. Scientiﬁc data, 4:170175, 2017.
+X. Jiang and H. Adeli. Dynamic wavelet neural network model for traﬃc ﬂow forecasting.
+Journal of transportation engineering , 131(10):771–779, 2005.
+M. Kamb, E. Kaiser, S. L. Brunton, and J. N. Kutz. Time-delay observables for Koopman:
+Theory and applications. arXiv preprint arXiv:1810.01479 , 2018.
+B. O. Koopman. Hamiltonian systems and transformation in Hilbert space. Proceedings of
+the National Academy of Sciences of the United States of America , 17(5):315, 1931.
+B. O. Koopman and J. v. Neumann. Dynamical systems of continuous spectra. Proceedings
+of the National Academy of Sciences of the United States of America , 18(3):255, 1932.
+J. Koutnik, K. Greﬀ, F. Gomez, and J. Schmidhuber. A clockwork rnn. arXiv preprint
+arXiv:1402.3511, 2014.
+J. N. Kutz, S. L. Brunton, B. W. Brunton, and J. L. Proctor. Dynamic mode decomposition:
+data-driven modeling of complex systems . SIAM, 2016.
+Y. Lan and I. Mezi´ c. Linearization in the large of nonlinear systems and Koopman operator
+spectrum. Physica D: Nonlinear Phenomena , 242(1):42–53, 2013.
+Y. LeCun, Y. Bengio, and G. Hinton. Deep learning. Nature, 521(7553):436, 2015.
+B. Lusch, J. N. Kutz, and S. L. Brunton. Deep learning for universal linear embeddings of
+nonlinear dynamics. Nature Communications, 9(1):4950, 2018.
+35
+
+
+--- Page 36 ---
+Lange, Brunton, Kutz
+D. A. Lyon. The discrete Fourier transform, part 4: spectral leakage. Journal of object
+technology, 8(7), 2009.
+C. A. Metzler, P. Schniter, A. Veeraraghavan, and R. G. Baraniuk. prdeep: Robust phase
+retrieval with a ﬂexible deep network. arXiv preprint arXiv:1803.00212 , 2018.
+I. Mezi´ c. Spectral properties of dynamical systems, model reduction and decompositions.
+Nonlinear Dynamics, 41(1-3):309–325, 2005.
+I. Mezic. Analysis of ﬂuid ﬂows via spectral properties of the Koopman operator. Annual
+Review of Fluid Mechanics , 45:357–378, 2013.
+I. Mezi´ c. On applications of the spectral theory of the Koopman operator in dynamical
+systems and control theory. In 2015 54th IEEE Conference on Decision and Control
+(CDC), pages 7034–7041. IEEE, 2015.
+J. P. Moeck, J.-F. Bourgouin, D. Durox, T. Schuller, and S. Candel. Tomographic recon-
+struction of heat release rate perturbations induced by helical modes in turbulent swirl
+ﬂames. Experiments in ﬂuids , 54(4):1498, 2013.
+C. C. Moore. Ergodic theorem, ergodic theory, and statistical mechanics. Proceedings of
+the National Academy of Sciences , 112(7):1907–1911, 2015.
+J. v. Neumann. Physical applications of the ergodic hypothesis. Proceedings of the National
+Academy of Sciences of the United States of America , 18(3):263, 1932a.
+J. v. Neumann. Proof of the quasi-ergodic hypothesis. Proceedings of the National Academy
+of Sciences, 18(1):70–82, 1932b.
+S. E. Otto and C. W. Rowley. Linearly recurrent autoencoder networks for learning dy-
+namics. SIAM Journal on Applied Dynamical Systems , 18(1):558–593, 2019.
+S. Pan and K. Duraisamy. Physics-informed probabilistic learning of linear embeddings of
+non-linear dynamics with guaranteed stability. arXiv preprint arXiv:1906.03663 , 2019a.
+S. Pan and K. Duraisamy. On the structure of time-delay embedding in linear models of
+non-linear dynamical systems. arXiv preprint arXiv:1902.05198 , 2019b.
+A. Pankratz. Forecasting with univariate Box-Jenkins models: Concepts and cases , volume
+224. John Wiley & Sons, 2009.
+Y. Paquot, F. Duport, A. Smerieri, J. Dambre, B. Schrauwen, M. Haelterman, and S. Mas-
+sar. Optoelectronic reservoir computing. Scientiﬁc reports, 2:287, 2012.
+J. L. Proctor and P. A. Eckhoﬀ. Discovering dynamic patterns from infectious disease data
+using dynamic mode decomposition. International health, 7(2):139–145, 2015.
+J. L. Proctor, S. L. Brunton, and J. N. Kutz. Dynamic mode decomposition with control.
+SIAM Journal on Applied Dynamical Systems , 15(1):142–161, 2016.
+36
+
+
+--- Page 37 ---
+Spectral Methods for Long-term Time Series Prediction
+J. L. Proctor, S. L. Brunton, and J. N. Kutz. Generalizing Koopman theory to allow for
+inputs and control. SIAM Journal on Applied Dynamical Systems , 17(1):909–930, 2018.
+C. W. Rowley, I. Mezi´ c, S. Bagheri, P. Schlatter, and D. S. Henningson. Spectral analysis
+of nonlinear ﬂows. Journal of ﬂuid mechanics , 641:115–127, 2009.
+Y. Sakamoto, M. Ishiguro, and G. Kitagawa. Akaike information criterion statistics. Dor-
+drecht, The Netherlands: D. Reidel , 81, 1986.
+W. Saxton. Computer techniques for image processing in electron microscopy , volume 10.
+Academic Press, 2013.
+P. J. Schmid. Dynamic mode decomposition of numerical and experimental data. Journal
+of ﬂuid mechanics , 656:5–28, 2010.
+B. Scholkopf and A. J. Smola. Learning with kernels: support vector machines, regulariza-
+tion, optimization, and beyond . MIT press, 2001.
+A. Silvescu. Fourier neural networks. In IJCNN’99. International Joint Conference on
+Neural Networks. Proceedings, volume 1, pages 488–491. IEEE, 1999.
+G. Song, F. Alizard, J.-C. Robinet, and X. Gloerfelt. Global and Koopman modes analysis
+of sound generation in mixing layers. Physics of Fluids , 25(12):124101, 2013.
+J. C. Spall. Cyclic seesaw process for optimization and identiﬁcation. Journal of optimiza-
+tion theory and applications , 154(1):187–208, 2012.
+N. Takeishi, Y. Kawahara, and T. Yairi. Learning Koopman invariant subspaces for dynamic
+mode decomposition. In Advances in Neural Information Processing Systems, pages 1130–
+1140, 2017.
+J. Tithof, B. Suri, R. K. Pallantla, R. O. Grigoriev, and M. F. Schatz. Bifurcations in a
+quasi-two-dimensional kolmogorov-like ﬂow. Journal of Fluid Mechanics , 828:837–866,
+2017.
+P. Tseng. Convergence of a block coordinate descent method for nondiﬀerentiable mini-
+mization. Journal of optimization theory and applications , 109(3):475–494, 2001.
+J. H. Tu, C. W. Rowley, D. M. Luchtenburg, S. L. Brunton, and J. N. Kutz. On dynamic
+mode decomposition: theory and applications. Journal of Computational Dynamics , 1
+(2):391–421, 2014.
+A. Vajdi, M. R. Zaghian, S. Farahmand, E. Rastegar, K. Marooﬁ, S. Jia, M. Pomplun,
+N. Haspel, and A. Bayat. Human gait database for normal walk collected by smart
+phone accelerometer. arXiv preprint arXiv:1905.03109 , 2019.
+C. Wehmeyer and F. No´ e. Time-lagged autoencoders: Deep learning of slow collective
+variables for molecular kinetics. The Journal of chemical physics , 148(24):241703, 2018.
+37
+
+
+--- Page 38 ---
+Lange, Brunton, Kutz
+E. Yeung, S. Kundu, and N. Hodas. Learning deep neural network representations for Koop-
+man operators of nonlinear dynamical systems. In 2019 American Control Conference
+(ACC), pages 4832–4839. IEEE, 2019.
+T. Zieli´ nska. Coupled oscillators utilised as gait rhythm generators of a two-legged walking
+machine. Biological Cybernetics, 74(3):263–273, 1996.
+38

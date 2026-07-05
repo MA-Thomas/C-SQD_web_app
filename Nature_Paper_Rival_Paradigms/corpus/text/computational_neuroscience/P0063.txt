@@ -1,0 +1,1382 @@
+--- Page 1 ---
+ORIGINAL RESEARCH
+published: 08 April 2021
+doi: 10.3389/fncom.2021.616748
+Frontiers in Computational Neuroscience | www.frontiersi n.org 1 April 2021 | Volume 15 | Article 616748
+Edited by:
+Yoram Burak,
+Hebrew University of Jerusalem, Israel
+Reviewed by:
+Mirko Klukas,
+Numenta Inc., United States
+Yuanyuan Mi,
+Chongqing University, China
+*Correspondence:
+Louis Kang
+louis.kang@riken.jp
+Received: 13 October 2020
+Accepted: 11 March 2021
+Published: 08 April 2021
+Citation:
+Kang L, Xu B and Morozov D (2021)
+Evaluating State Space Discovery by
+Persistent Cohomology in the Spatial
+Representation System.
+Front. Comput. Neurosci. 15:616748.
+doi: 10.3389/fncom.2021.616748
+Evaluating State Space Discovery by
+Persistent Cohomology in the Spatial
+Representation System
+Louis Kang 1,2*, Boyan Xu 3 and Dmitriy Morozov 4
+1 Redwood Center for Theoretical Neuroscience, University o f California, Berkeley, Berkeley, CA, United States, 2 Neural
+Circuits and Computations Unit, RIKEN Center for Brain Scien ce, Wako, Japan, 3 Department of Mathematics, University of
+California, Berkeley, Berkeley, CA, United States, 4 Computational Research Division, Lawrence Berkeley Natio nal Laboratory,
+Berkeley, CA, United States
+Persistent cohomology is a powerful technique for discover ing topological structure
+in data. Strategies for its use in neuroscience are still und ergoing development. We
+comprehensively and rigorously assess its performance in s imulated neural recordings
+of the brain’ s spatial representation system. Grid, head di rection, and conjunctive
+cell populations each span low-dimensional topological st ructures embedded in
+high-dimensional neural activity space. We evaluate the ab ility for persistent cohomology
+to discover these structures for different dataset dimensi ons, variations in spatial tuning,
+and forms of noise. We quantify its ability to decode simulat ed animal trajectories
+contained within these topological structures. We also ide ntify regimes under which
+mixtures of populations form product topologies that can be detected. Our results
+reveal how dataset parameters affect the success of topolog ical discovery and suggest
+principles for applying persistent cohomology, as well as p ersistent homology, to
+experimental neural recordings.
+Keywords: topological data analysis, neural manifold, dimens ionality reduction, neural decoding, spatial
+representation, grid cells, medial entorhinal cortex
+1. INTRODUCTION
+The enormous number of neurons that constitute brain circui ts must coordinate their ﬁring
+to operate eﬀectively. This organization often constrains neu ral activity to low-dimensional
+manifolds, which are embedded in the high-dimensional phase s pace of all possible activity
+patterns (
+Gao and Ganguli, 2015; Gallego et al., 2017; Jazayeri and Afr az, 2017; Saxena and
+Cunningham, 2019 ). In certain cases, these low-dimensional manifolds exhib it non-trivial
+topological structure ( Curto, 2016 ). This structure may be imposed externally by inputs that are
+periodic in nature, such as the orientation of a visual stimulus or the direction of an animal’s head. It
+may also be generated internally by the network itself; for example, the grid cell network constructs
+periodic representations of physical space which outperform non -periodic representations in
+several ways ( Fiete et al., 2008; Sreenivasan and Fiete, 2011; Mathis et al ., 2012; Stemmler et al.,
+2015; Wei et al., 2015; Sanzeni et al., 2016; Mosheiﬀ et al., 20 17). In either case, detecting and
+interpreting topological structure in neural data would provi de insight into how the brain encodes
+information and performs computations.
+
+
+--- Page 2 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+One promising method for discovering topological features in
+data is persistent cohomology ( Edelsbrunner and Harer, 2010;
+de Silva et al., 2011; Edelsbrunner and Morozov, 2017 ). By
+tracking how the shape of the data changes as we examine
+it across diﬀerent scales—thickening data points by growing
+balls around them—persistent cohomology detects prominent
+topological features in the data, such as loops and voids. This
+knowledge helps to identify the low-dimensional manifolds
+sampled by the data, and in particular to distinguish between
+tori of diﬀerent intrinsic dimensions. Furthermore, it enab les
+parametrization of the data and navigation of the underlying
+manifolds.
+FIGURE 1 | Pipeline for simulations and data analysis. (A) We generate activities for multiple neural populations alo ng an experimentally recorded rat trajectory. For
+each population, we plot activity maps as a function of posit ion (left) and direction (right) for one example neuron. (B) Then we choose neurons for topological analysis
+and form a high-dimensional vector of their ﬁring rates at eac h timepoint along the trajectory. For computational tracta bility, we eliminate the most redundant points
+using a geometric subsampling algorithm. (C) We compute persistent cohomology on these subsampled timep oints to identify low-dimensional topological structure.
+We characterize how persistent cohomology can discover
+topological structure in neural data through simulations of
+the brain’s spatial representation system. This system conta ins
+several neural populations whose activity exhibits non-trivia l
+topology, which we term periodic neural populations (Figure 1A).
+Grid cells ﬁre when an animal reaches certain locations in it s
+environment that form a triangular lattice in space (
+Hafting
+et al., 2005 ). In each animal, grid cells are partitioned into 4–
+10 modules ( Stensola et al., 2012 ). Within each module, grid
+cells share the same scale and orientation but their lattice s have
+diﬀerent spatial oﬀsets. Modules appear to increase in scale by
+a constant ratio and exhibit diﬀerences in orientation (
+Stensola
+Frontiers in Computational Neuroscience | www.frontiersi n.org 2 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 3 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+et al., 2012; Krupic et al., 2015 ). Head direction cells ﬁre when
+an animal’s head is oriented in a certain direction relative to its
+environment (Taube et al., 1990). They respond independently of
+the animal’s position. Finally, conjunctive grid × head direction
+cells respond when an animal is located at the vertices of a
+triangular lattice and is oriented in a certain direction (
+Sargolini
+et al., 2006 ). Like grid cells, conjunctive cells are also believed to
+be partitioned into modules.
+We also consider neural populations whose activity exhibits
+trivial topology, which we will term non-periodic neural
+populations (Figure 1A). Place and non-grid spatial cells are part
+of the spatial representation system, and they ﬁre in one or
+multiple regions of the environment (
+O’Keefe and Dostrovsky,
+1971; Diehl et al., 2017; Hardcastle et al., 2017 ). These two
+populations are found in diﬀerent brain regions, and the
+former tend to have sharper spatial selectivity compared to the
+latter. Finally, we simulate neurons with irregular activi ty that
+exhibits no spatial tuning. We imagine these random cells may
+be responding to non-spatial stimuli or representing internal
+brain states.
+Persistent cohomology, as well as the closely related technique
+persistent homology, has recently been applied to experimental
+neural recordings within the spatial representation system.
+It was used to discover topological structure (
+Chaudhuri
+et al., 2019; Rybakken et al., 2019 ) and decode behavioral
+variables ( Rybakken et al., 2019 ) from head direction cells. It
+was also used to do the same for grid cell recordings ( Gardner
+et al., 2021 ), and researchers have demonstrated topological
+discovery in simulated grid cell data ( Chaudhuri et al., 2019 ).
+These works have improved our understanding of the large-
+scale organization of spatial representation circuits throu gh
+persistent cohomology.
+In contrast to the research described above, we aim
+to comprehensively explore the capabilities of persistent
+cohomology for simulated datasets. With complete control ove r
+the data, we can identify features that improve topological
+discovery and features that disrupt it. We can also freely
+generate datasets with varied quantities and proportions of
+diﬀerent neural populations. A greater number of neurons
+embeds underlying activity manifolds in higher dimensions ,
+which can strengthen the signal. However, experimental
+limitations impose bounds to this number. Our simulations
+allow us to evaluate persistent cohomology in regimes curren tly
+accessible by experiments, as well as in regimes that may soon
+become experimentally tractable due to advances in recordin g
+technology (
+Jun et al., 2017).
+2. RESUL TS
+2.1. Overview of Methods and Persistence
+Diagrams
+In this work, we simulate neural populations within the
+spatial representation system, prepare the simulated data for
+topological analysis, and compute persistent cohomology to
+discover topological structure within the data ( Figure 1). We
+will now brieﬂy describe each of these three stages; a complete
+explanation is provided in the Methods section.
+To generate neural recordings, we deﬁne tuning curves as a
+function of position and direction. For each grid module, we
+ﬁrst create a triangular lattice in space. Each grid cell has pea ks
+in its positional tuning curves at a randomly chosen oﬀset fro m
+each lattice point. Its directional tuning curve is uniform. Head
+direction cells have peaks in their directional tuning curve s at
+a randomly chosen angle and have uniform positional tuning
+curves. Conjunctive cells have positional tuning curves like grid
+cells and directional tuning curves like head direction cell s. We
+describe tuning curves for the non-periodic neural population s
+in the Methods section.
+These tuning curves are applied to an experimentally extracted
+trajectory of a rat exploring its circular enclosure, producin g
+an activity, or ﬁring rate, for each neuron at 0.2 s intervals.
+This simulates the simultaneous recording of a large number
+of neurons from the medial entorhinal cortex and the binning
+of their spikes into ﬁring rates. The time series spans 1,000
+s, or 5,000 data points. Figure 1A shows examples of these
+time series data mapped back onto spatial coordinates. Next,
+we choose a subset of these neurons and pre-process it for
+topological data analysis (Figure 1B). We form a vector of neural
+activities at each timepoint, which produces a point cloud in
+high-dimensional phase space. We wish to subsample it for
+computation tractability while maintaining as much evidence
+of topological structure embedded within it. To do so, we use
+a geometric subsampling algorithm that roughly eliminates th e
+most redundant points, reducing the 5,000 timepoints down
+to 1,000.
+Finally, we apply persistent cohomology to this subsampled
+point cloud (Figure 1C). We describe this technique colloquially
+here, in terms of its dual, persistent homology. Both produce the
+same persistence diagrams, but we use cohomology throughout
+the paper both because it is faster to compute and because it
+allows us to parameterize the data. See the Methods section
+for a precise description. From the point cloud, we form a
+Vietoris–Rips ﬁltration, which is a nested sequence of simplici al
+complexes. Each complex consists of all cliques in the near-
+neighbor graph, which contains all edges between points at
+distance at most r apart. As the threshold r increases, more
+edges enter the graph, and more cliques enter the Vietoris–Rips
+complex. Throughout this process, cycles (e.g., 1-dimensional
+loops) appear and get ﬁlled in the complex ( Figure 2A). There
+is a unique way to pair the distance thresholds at which cycles a re
+born and die.
+All such birth and death distances are collected into a
+persistence diagram ( Figure 2B). The points farthest from the
+diagonal correspond to the most persistent cycles that appear
+for the longest range of distance thresholds. They recover
+topological structure in the space sampled by the point cloud,
+which corresponds to the processes underlying the data—in our
+case, the spatial representation networks and external inputs.
+Persistent (co)homology is stable: the persistent points will
+remain in the diagram if we make small changes to the data,
+such as selecting slightly diﬀerent timepoints or perturbing t heir
+values by a small amount of noise. The points closest to the
+Frontiers in Computational Neuroscience | www.frontiersi n.org 3 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 4 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+FIGURE 2 | Persistence diagrams for periodic neural populations. (A–C) Interpreting persistence diagrams. (A) Persistent (co)homology involves generating a ﬁltration
+of a dataset in which we connect points within ever-expandin g distances. One-dimensional loops will be born and then die at various distances. (B) These values are
+plotted in a persistence diagram where each point correspon ds to a single loop. The points located farthest from the diag onal are the most persistent and correspond
+to signiﬁcant topological features. (C) This process can be performed for features of arbitrary dime nsion k. (D–F) Persistence diagrams for periodic neural populations
+(top) and identiﬁed topological spaces (bottom). We compare the number of persistent k-(co)cycles to the k-th Betti numbers β k of different topological spaces to infer
+the underlying topological structure of the dataset. (D) Grid cells from module 1 exhibit one persistent 0-cocycle, t wo persistent 1-cocycles, and one persistent
+2-cocycle, which corresponds to a torus. (E) Head direction cells exhibit one persistent 0-cocycle, one persistent 1-cocycle, and no persistent 2-cocycles, which
+corresponds to a circle. (F) Conjunctive cells exhibit one persistent 0-cocycle, three persistent 1-cocycles, and three persistent 2-cocycles, w hich corresponds to a
+3-torus.
+diagonal would appear even if the processes underlying the data
+lack topological structure, and they are usually interpreted as
+noise.
+The process we described above keeps track of cycles of
+diﬀerent dimensions ( Figure 2C). Besides loops (1-dimensional
+cycles), it tracks connected components (0-dimensional
+cycles), voids (2-dimensional cycles), and higher-dimens ional
+topological features, which lack a colloquial name. The
+number of independent k-cycles is called the k-th Betti
+number and is a topological invariant of a space. We can
+infer the topology of a dataset by comparing the number of
+persistent k-(co)cycles to the k-th Betti numbers of conjectured
+ideal spaces, such a circle or a torus. Note that for every
+dataset, the 0-(co)cycle corresponding to the entire point
+cloud will never die, so we consider its death distance to
+be inﬁnity.
+2.2. Persistent Cohomology for Periodic
+Neural Populations
+Each periodic neural population spans a particular topological
+space. We recover these relationships when we compute
+persistent cohomology of our simulated data ( Figures 2D–F).
+Each grid cell is active at one location in a unit cell that
+is tiled over 2D space. Grid cells within a single module
+share the same unit cell but diﬀer in their active location,
+so each grid module spans a torus, which is periodic
+in two directions (
+Curto, 2016 ). Similarly, head direction
+cells span a circle and each conjunctive cell module spans
+a 3-torus. The correspondence between our results and
+predicted topological spaces validates the basic capabilities of
+our methods.
+The ability of persistent cohomology to discover topological
+structure depends on the number of neurons in the dataset,
+Frontiers in Computational Neuroscience | www.frontiersi n.org 4 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 5 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+or equivalently, the dimension of the time series embedding .
+Using the grid cell population as an exemplar, we form
+multiple datasets with randomly selected neurons to measure the
+success rate of persistent cohomology as a function of neuron
+count ( Figure 3A). To measure success, we only use the ﬁrst
+cohomology group H1, which contains 1-cocycles. We deﬁne
+successful discovery of the grid cell torus as a persistence diagram
+with two persistent 1-cocycles, and we deﬁne what it means
+to be persistent precisely using the commonly used largest-gap
+heuristic. We calculate the lifetime of each cocycle, which is the
+diﬀerence between its death and birth and corresponds to the
+vertical distance to the diagonal of its point in the persisten ce
+diagram (Figures 3A,B). We ﬁnd the largest gap in the lifetimes
+and consider points above this gap to be persistent ( Figure 3B).
+Figure 3C shows that reliable discovery of the torus using this
+heuristic can be achieved with≈ 20 simulated, idealized grid cells.
+It also shows that increasing the number of grid cells improve s
+the success rate. This occurs because topological discovery relies
+on having enough grid cells such that their ﬁelds provide a
+suﬃciently uncorrelated coverage of the unit cell. Instead of
+using data spanning the full 1,000 s-long trajectory, which
+corresponds to 5,000 timepoints, we extract portions spanning
+various lengths. Discovery of the torus requires enough sam ples
+of its manifold structure, which is achieved in this case sta rting at
+100 s (Figure 3D). Thus, persistent cohomology generally thrives
+in the large-dataset limit with long neural recordings of ma ny
+neurons.
+Persistent cohomology can succeed for mixed signals.
+Separation of raw electrode recordings into single-neuron s pike
+trains may not always be possible or desired. To address this
+scenario, we form multi-neuron units by linearly combining
+time series of neural activity across diﬀerent grid cells.
+The mixing coeﬃcients are drawn from a uniform random
+distribution and then normalized. Example activity maps of
+these multi-neuron units as a function of position are shown
+in Figure 4A. The combination of many neurons destroys the
+classic responses exhibited by individual grid cells. Yet, mul ti-
+neuron units retain topological information associated wit h the
+grid module that can be recovered by persistent cohomology
+(Figure 4B). The success rate for discovering toroidal topology
+is remarkably independent of the number of grid cells in
+each unit. Successful recovery from randomly mixed signals is
+not entirely unexpected. The preservation of distances under
+random projections has been studied extensively in statistic s
+[cf. Johnson–Lindenstrauss lemma (
+Johnson and Lindenstrauss,
+1984)].
+Persistent cohomology can also succeed in the presence of
+spiking noise. To simulate such noise, we use our generated
+activity as a raw ﬁring rate that drives a Poisson-like rando m
+process (see Methods). We construct this process to have
+diﬀerent Fano factors, which is the variance in the random
+process for a given ﬁring rate divided by the ﬁring rate.
+When the Fano factor is 1, the random process is Poisson.
+Figure 4C shows activity time series for two grid cells that
+FIGURE 3 | Success rates of persistent cohomology for grid cells. (A) As the number of grid cells increases, two persistent 1-cocy cles emerge. T o deﬁne persistence
+precisely, we consider the persistence lifetime of each 1-c ocycle, which is the difference between its birth and death d istances (length of the magenta line). (B) We
+identify the largest gap in persistence lifetimes and deﬁne p ersistent cocycles as those above this gap. (C) Since a grid module has a toroidal topology for which
+β 1= 2, we deﬁne success as a persistence diagram with two persiste nt 1-cocycles. We determine success rates by generating 100 replicate datasets. Success rate
+increases with the number of grid cells. (D) Success rates for different durations extracted from the fu ll simulated recording. T opological discovery beneﬁts from longer
+recording durations and more neurons.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 5 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 6 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+FIGURE 4 | Robustness of persistent cohomology for grid cells. (A,B) Linearly combining activities from multiple neurons befor e applying persistent cohomology. (A)
+Example positional activity maps for multi-neuron units. (B) The success rate is largely independent of the number of neur ons per multi-neuron unit. (C,D) Introducing
+Poisson-like spiking noise with different amounts of varia bility, as measured by the Fano factor. (C) For each Fano factor, time series for two grid cells with very similar
+offsets (left) and positional activity map of the ﬁrst (right ). (D) Persistent cohomology requires more neurons to achieve suc cess with higher Fano factors. (E–K)
+Success rates across many different grid cell variables wit h insets depicting example values. See Methods section 4.1. 7 for a complete description of each variable.
+(E) Introducing a square enclosure at various lattice orientati ons. (F) Changing the lattice scale factor, which is grid scale divid ed by enclosure diameter. (G) Changing
+the ﬁeld size factor, which is grid ﬁeld diameter divided by gri d scale. (H) Stretching triangular grids to various aspect ratios. (I) Jittering the position of each ﬁeld by
+random vectors multiplied by grid scale. (J) Introducing variability in shape and overall activity acros s grid ﬁelds. (K) Introducing variability in lattices across grid cells.
+have very similar tuning curves and thus very similar raw
+ﬁring rates, which can be seen in the noise-free condition
+(top left). Higher Fano factors lead to more variability bot h
+across time for each neuron and across neurons. Persistent
+cohomology can still recover the toroidal topology of the gri d
+module, though more neurons are required for higher Fano
+factors ( Figure 4D). In the mammalian cortex, Fano factors lie
+around∼ 0.5–1.5 (
+Shadlen and Newsome, 1998; Burak and Fiete,
+2009). Applying this regime to our simulations implies that
+≈ 80 grid cells are required for reliable topological discover y,
+but we acknowledge the large diﬀerences between simulated
+and experimental data which may substantially increase this
+number.
+We further test the robustness of persistent cohomology
+across wide ranges of properties associated with grid cells
+(Figures 4E–K). Using a trajectory extracted from an animal
+exploring a square enclosure does not meaningfully change th e
+success rate (Figure 4E). Grid modules have been shown to favor
+a lattice orientation of 7.5◦ relative to square enclosures (
+Stensola
+et al., 2015 ), but this orientation does not aﬀect topological
+Frontiers in Computational Neuroscience | www.frontiersi n.org 6 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 7 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+discovery. Similarly, persistent cohomology is not strongl y
+aﬀected by the aspect ratio of the triangular grid ( Figure 4H).
+Changes in grid dimensions can have a stronger eﬀect. Persist ent
+cohomology fails when the grid scale exceeds the size of the
+enclosure, which makes sense because the grid module unit cel l
+can no longer be fully sampled ( Figure 4F). When the scale does
+not change but the size of each ﬁring ﬁeld is decreased, more
+grid cells are required to produce toroidal structure in the d ata
+since each neuron covers less of the unit cell ( Figure 4G). Under
+various forms of variability within grid cell tuning curves , the
+success of persistent cohomology can be maintained if more
+neurons are recorded, up to a degree ( Figures 4I–K). Beyond
+critical values, however, variability appears to catastrophi cally
+disrupt topological discovery in a way that cannot be overcome
+with more grid cells. The extra heterogeneity conveyed by an
+additional neuron overwhelms its contribution to topologic al
+structure. Thus, an assessment of tuning curve variability may be
+a crucial component in the application of persistent cohomology
+to neural data.
+2.3. Animal Trajectory Decoded Through
+T opological Coordinates
+Persistent cohomology can not only discover topological
+structure in neural data, but it can also decode information
+embedded within this structure. Recall that a grid module deﬁnes
+a triangular lattice in physical space with ﬁelds of each grid ce ll
+oﬀset in the rhombic unit cell ( Figure 5A). The periodicities
+of this unit cell along the two lattice vectors are detected b y
+persistent cohomology as two persistent 1-cocycles belongin g
+to a torus (as seen in Figure 2D). We can assign circular
+coordinates (
+de Silva et al., 2011; Perea, 2018) for these 1-cocycles
+(Figure 5B). These coordinates describe the topological space of
+the torus and should map back onto the rhombic unit cell that
+tiles physical space. To explore this relationship, we project th e
+entire time series of neural activities onto these coordina tes. For
+each neuron, we ﬁnd the data points for which that neuron is the
+most active within the population. These points are clustered and
+deﬁne ﬁring ﬁelds in topological space ( Figure 5C). The center
+of masses of these clusters are used to evaluate distances be tween
+grid cells; these topological distances are highly correlat ed with
+the physical distances between grid oﬀsets within the rhombi c
+unit cell ( Figure 5D). Thus, the topological coordinates deﬁned
+in neural activity space indeed capture the organization of gr id
+cells in physical space.
+Furthermore, persistent cohomology can leverage the
+mapping between physical and topological spaces to decode
+trajectories in the former by trajectories in the latter ( Figure 5E).
+To do so, we trace the circular coordinates depicted in Figure 5C
+through time to form a raw trajectory through topological
+space. We then unshear it by 60 ◦ and unfold this trajectory by
+identifying large jumps with wrapping through the boundary
+to produce a reconstructed segment. These steps do not require
+knowledge of the animal’s true trajectory (although some
+general expectations about the animal’s motion are required
+for unshearing; see Methods section 4.5 for details). We ﬁnd
+that this reconstruction can be translated, rotated, reﬂec ted,
+and/or uniformly scaled to match the true trajectory very well .
+Without spiking noise, almost all reconstructions deviate fr om
+the true trajectory by<4 cm averaged across time, which is much
+less than the enclosure’s diameter of 180 cm ( Figures 5F ,G).
+This error decreases with more neurons or more timepoints
+in the simulated recording. Similar trends are observed wit h
+the introduction of Poisson noise that mimics spiking noise,
+but more neurons are required, more outliers with poor ﬁt are
+observed, and geometric subsampling cannot be used to improve
+computational tractability (Figures 5H,I).
+2.4. Persistent Cohomology for Mixtures of
+Neural Populations
+Persistent cohomology can discover topological structure i n
+mixtures of neural populations. When neurons are recorded
+from a periodic neural population and a non-periodic neural
+population, the latter adds additional dimensions to the point
+cloud embedding, but the topological structure contained wi thin
+the former may persist. We test if persistent cohomology can
+recover this information in mixed datasets with neurons fro m
+both a periodic population (either grid or conjunctive) and a
+non-periodic population (either non-grid spatial or random).
+Reliable discovery of the torus formed by grid cells is possible
+when the number of spatial or random cells is less than twice
+the number of grid cells ( Figures 6A,B). Detection of the 3-torus
+formed by conjunctive cells requires more neurons, but it canalso
+be reliably achieved in the presence of non-periodic population s
+(Figures 6C,D). Thus, persistent cohomology demonstrates
+robustness to the inclusion of non-periodic populations. The size
+of the non-periodic population that can be tolerated increases
+with the size of the periodic population.
+When neurons are recorded from multiple periodic neural
+populations, their structures are preserved within projected
+subspaces of high-dimensional activity space. We explore
+persistent cohomology in this scenario by forming mixed
+datasets with neurons from two periodic populations. When
+the two populations respond to unrelated signals, such as
+grid and head direction cells—the combined topological space
+should be the Cartesian product of those of the separate
+populations. Indeed, that persistent cohomology can discover the
+resultant 3-torus at intermediate mixing ratios ( Figures 7A,B).
+If one population contributes many more neurons—and thus
+embedding dimensions—than the other, we instead detect the
+corresponding single-population structure (Figure 7B).
+When the two populations respond to related signals, such as
+grid and conjunctive cells—the activity space of one is conta ined
+in the activity space of the other. Grid cells and conjunctive c ells
+from the same module encode position with the same toroidal
+structure; they both tile space with the same rhombic unit cell of
+neural activity. In addition, the conjunctive population enc odes
+direction with a circular topology. Thus, the mixed dataset should
+span a 3-torus, which can be detected by persistent cohomology
+(Figure 7C). For reliable discovery, at least ≈ 120 conjunctive
+cells and at least ≈ 240 total neurons are required. However,
+discovery of the product topology is disrupted if the number of
+grid cells exceeds the number of conjunctive cells by more tha n
+Frontiers in Computational Neuroscience | www.frontiersi n.org 7 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 8 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+FIGURE 5 | Correspondence between spatial and topological coordinat es for grid cells. (A) Positional activity maps. A grid module tiles physical spac e with a rhombic
+unit cell (black dashed lines) with a different offset for ea ch grid cell. (B) Schematic of circular coordinates (color) for the two persi stent 1-cocycles of a grid module
+that deﬁne a topological space (left) and their mapping onto p hysical space (right). (C) Firing ﬁelds in the topological space of neural activities. A ll timepoints (gray) and
+those for which a grid cell is the most active in the populatio n (color). (D) T opological distances between ﬁring ﬁelds depicted in (C) are correlated with physical
+distances between grid offsets depicted in (A). Each point represents distances between two grid cells. (E) Reconstructing a segment of animal trajectory in the
+topological space of neural activities and ﬁtting it to the tr ue trajectory segment. (F ,G)Reconstructions for grid cells without spiking noise. (F) Sample reconstruction
+ﬁts. (G) Mean reconstruction error is the distance between reconstr ucted and actual positions averaged over timepoints. For ea ch condition, we generate 10 replicate
+datasets, shown as violin plots with points representing in dividual values. Error generally decreases with increasin g grid cell number and trajectory duration. (H,I)
+Same as (F ,G)but for grid cells generated with Poisson spiking noise and e rror plotted on a logarithmic scale. Geometric subsampling was not performed. Persistent
+cohomology can achieve low reconstruction error with large enough grid cell number and trajectory duration.
+a factor of ≈ 1.5. Thus, persistent cohomology can best detect
+product topologies when the mixed dataset is not dominated by
+one population.
+Finally, we consider the case of mixing grid cells from multiple
+modules. Grid modules have diﬀerent rhombic unit cells with
+diﬀerent scales and orientations, so they map the same physica l
+space onto diﬀerent topological coordinates. Thus, a mixed
+dataset from two diﬀerent modules should exhibit the product
+topology of two 2-tori, which is the 4-torus. However, we are
+unable to reliably discover this structure using the grid mod ules
+illustrated in Figure 1A; they are too sparse. To produce a point
+cloud that embeds the toroidal structure for one grid module ,
+Frontiers in Computational Neuroscience | www.frontiersi n.org 8 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 9 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+FIGURE 6 | Persistent cohomology in combinations of periodic and non- periodic neural populations. Success is deﬁned by observing the number of persistent
+1-cocycles expected from the periodic population, which is two for grid cells and three for conjunctive cells. (A) Grid cells from module 1 and non-grid spatial cells. (B)
+Grid cells from module 1 and random cells. (C) Conjunctive cells from module 1 and non-grid spatial cells. (D) Conjunctive cells from module 1 and random cells.
+the animal trajectory should densely sample its rhombic unit
+cell. This is achieved since the enclosure contains many uni t
+cells. However, to produce a point cloud that embeds the 4-toru s
+formed by two grid modules, the animal trajectory should densely
+sample all combinations of unit cells. This is not achieved by
+the grid modules illustrated in Figure 1A because the enclosure
+contains too few rhombic unit cells for them to overlap in many
+diﬀerent conﬁgurations.
+Thus, we generate two grid modules separated by the
+same scale ratio as in Figure 1A, but with one-fourth of its
+scale ( Figure 7D). In addition, we explore diﬀerent relative
+orientations between the modules by generating diﬀerent
+orientations for module 2. Notably, these scale ratios and
+orientation diﬀerences are not chosen such that the two rhomb ic
+unit cells would share a simple geometric relationship with
+each other (
+Kang and Balasubramanian, 2019 ), which would
+limit their possible overlap conﬁgurations and collapse the
+expected 4-torus structure to a 2-torus. As we include more
+neurons from both modules into our dataset, we see that
+four persistent 1-cocycles eventually emerge from the points
+close to the diagonal that represent sampling noise ( Figure 7E).
+The success of persistent cohomology is independent of the
+orientation diﬀerence between the two modules ( Figure 7F).
+Note that if we obtained independent activity samples from
+each module, combined datasets formed from the original gri d
+modules with larger scales should exhibit 4-torus structur e.
+However, samples taken from a single animal trajectory are
+not independent across modules, so smaller grid scales (or
+equivalently, larger environments) are required to fully sam ple
+the 4-torus structure.
+3. DISCUSSION
+We demonstrate that persistent cohomology can discover
+topological structure in simulated neural recordings with a s few
+as tens of neurons from a periodic neural population ( Figure 3).
+From this structure, it can decode the trajectory of the anim al
+using only the time series of neural activities ( Figure 5). It can
+also discover more complex topological structures formed by
+combinations of periodic neural populations if each population
+is well-represented within the dataset ( Figure 7).
+By comprehensively adjusting a wide range of parameters
+related to grid cells, we ﬁnd that persistent cohomology gener ally
+behaves in three diﬀerent ways with respect to parameter
+variation. First, topological discovery can be unaﬀected by
+some manipulations, such as combining grid cells into multi-
+neuron units and changing global geometric features, such
+as enclosure geometry and lattice aspect ratio ( Figure 4).
+Second, topological discovery may be impeded in a way that
+is counteracted by increasing neuron number. Spiking noise,
+small ﬁeld sizes, and inclusion of non-periodic populations are
+examples of parameters that exhibit this behavior ( Figures 4,
+6). Third, topological discovery can fail catastrophically in
+Frontiers in Computational Neuroscience | www.frontiersi n.org 9 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 10 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+FIGURE 7 | Persistent cohomology in combinations of periodic neural p opulations. Success is deﬁned by observing the number of pers istent 1-cocycles expected
+from the product topology. (A,B) Discovering the 3-torus for grid cells from module 1 and head direction cells. (A) Success rates. (B) Example persistence diagrams. If
+one population contributes many more neurons than the other , persistent cohomology detects the topology of the predomi nant population. (C) Success rates for
+discovering the 3-torus for grid cells and conjunctive cell s, both from the same module 1. (D–F) Combining grid cells from two modules with smaller scales. (D)
+Positional activity maps for example neurons from module 1 a nd four different orientations of module 2. (E) Example persistence diagrams. (F) Success rates for
+discovering the 4-torus.
+certain parameter regimes without the possibility of recover y
+by including more neurons. This happens if tuning curves are
+inherently too variable or if discovery of product topologies
+are desired when one neural population vastly outnumbers the
+other ( Figures 4, 7). These conclusions can help researchers
+understand and overcome obstacles to topological discovery with
+persistent (co)homology and may guide its use across a variet y of
+neural systems.
+We have characterized the capabilities of persistent
+cohomology using simple simulated data, but our results
+may generalize to real neural data. A key requirement
+for generalization is the separation of two timescales. The
+macroscopic timescale at which topological structures are
+explored—here, the time required to traverse a rhombic
+unit cell of a grid module or 360 ◦ of head direction—must
+be much longer than the microscopic timescale at which
+neuronal activity is generated. This enables us to coarse-g rain
+over spikes and describe the activity by a ﬁring rate. Indeed,
+the inputs to our analysis pipeline are ﬁring rates over 0.2 s
+time bins, which averages over many neurophysiological
+processes, including major neural oscillations found in the
+hippocampal region (
+Lisman and Jensen, 2013). Similar forms of
+Frontiers in Computational Neuroscience | www.frontiersi n.org 10 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 11 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+coarse-graining were used by Rybakken et al. (2019) , Chaudhuri
+et al. (2019) , and Gardner et al. (2021) to successfully apply
+persistent (co)homology to experimental recordings in the
+spatial representation system.
+For comparison, we attempt to modify manifold
+learning algorithms to enable discovery and interpretation
+of topological structure ( Supplementary Material and
+Supplementary Figure 1). We ﬁnd that Isomap (
+Tenenbaum
+et al., 2000 ) followed by Independent Components Analysis
+(ICA) ( Hyvärinen, 1999 ) can successfully identify and decode
+from toroidal structure with modiﬁed grid cells whose tunin g
+curves exhibit a square lattice. Unlike persistent cohomolog y,
+it does not work for triangular lattices and does not conside r
+topological features with dimensionality >1. UMAP ( McInnes
+et al., 2018 ) can be used to embed grid cell data directly into
+a 2-dimensional space with a toroidal metric, but we ﬁnd that
+its coordinates do not correspond well to the physical grid
+periodicity. In short, persistent cohomology performs better
+and requires adjusting fewer parameters for topological data
+analysis compared to these alternative methods, which were n ot
+designed for such analysis. Note that
+Chaudhuri et al. (2019)
+formulate an alternative method for decoding topologically
+encoded information; they also use persistent homology for
+discovery of topological structure.
+The application of persistent (co)homology to neuroscience
+data is still in its developing stages. In addition to the rese arch
+on spatial representation circuits described above (
+Chaudhuri
+et al., 2019; Rybakken et al., 2019; Gardner et al., 2021 ), notable
+lines of work include: simulations of hippocampal place cells
+in spatial environments with non-trivial topology (
+Dabaghian
+et al., 2012; Spreemann et al., 2015; Babichev et al., 2018, 20 19;
+Chowdhury et al., 2018); analysis of EEG signals, for classiﬁcation
+and detection of epileptic seizures ( Piangerelli et al., 2018; Wang
+et al., 2018 ) and for construction of functional networks in
+a mouse model of depression ( Khalid et al., 2014 ); inferring
+intrinsic geometric structure in neural activity ( Giusti et al.,
+2015); and detection of coordinated behavior between human
+agents ( Zhang et al., 2020 ). There is potential for persistent
+(co)homology to provide insight to a wide range of neural
+systems. Topological structures generally can be found wher ever
+periodicities exist. These periodicities can take many forms , such
+as the spatial periodicities in our work, temporal regularitie s
+in neural oscillations, motor patterns, and neural responses to
+periodic stimuli.
+The toolbox of topological data analysis has more methods
+beneﬁcial to the analysis of neural data. The methods descri bed
+in this paper, including geometric subsampling, are sensitive
+to outliers. This problem can be addressed within the same
+framework of persistent cohomology by using the distance-to -
+a-measure function (
+Chazal et al., 2011 ). In practice, this would
+translate into a slightly more elaborate construction ( Guibas
+et al., 2013 ) of the Vietoris–Rips complex. Furthermore, our
+analysis pipeline beneﬁts from having neural activity embedd ed
+in a high dimensional space, i.e., from having many more
+neurons than the intrinsic dimensions of the recovered tori .
+It is possible to adapt this technique to the regime of limited
+neural recordings (even to a single neuron) by using time-de lay
+embeddings (
+Takens, 1981 ). However, for spatial populations,
+such a technique would require control over the smoothness o f
+the animal’s trajectory, which may not be feasible in practic e.
+Also, the method we present cannot make inferences on network
+topology. If connectivity information were present in neural
+activities, they should appear on fast timescales related to
+synaptic integration, action potential propagation, and synapt ic
+delay. By averaging neural activity into 0.2 s time bins, we destroy
+this information, but it is possible that a modiﬁed method may
+access it.
+Our results also suggest research directions in topological
+data analysis. Throughout the paper, we relied on 1-dimensional
+persistent cohomology to infer whether we recovered a particular
+torus. But that is a relatively weak method: many topological
+spaces have cohomology groups of the same dimension.
+Although the trajectories that we recover via circular coor dinates
+serve as a convincing evidence that we are indeed recovering
+the tori, it is possible to conﬁrm this further by exploiting cup
+product structure in cohomology, which is a particular kind
+of a topological operation that turns cohomology into a ring.
+Computing a “persistent cup product” would provide additional
+evidence about the structure of the recovered spaces.
+4. METHODS
+4.1. Generating Neural Recordings
+4.1.1. Animal Trajectory
+We simulate the simultaneous recording of neurons from a rat as
+it explores a circular enclosure of diameter 1.8 m. We use 1,000 s
+from a trajectory extracted from an experimental animal (
+Hafting
+et al., 2005; Burak and Fiete, 2009 ). This trajectory is provided
+as velocities sampled at 0.5 ms intervals along with the initia l
+position. We average these to positions and directions at 0.2 s
+intervals as follows: the position of the animal is simply the
+average position within each 0.2 s time bin, and the direction
+of the animal is the circular mean of the velocity vector angl e
+within each 0.2 s time bin. We ignore the distinction between
+body direction and head direction.
+4.1.2. Periodic Neural Populations
+We generate tuning curves as a function of position and/or
+direction for each neuron. These localized tuning curves ar e
+based on a shifted and truncated cosine function:
+f (z)=
+
+
+
+1+ cosπ z
+2 |z|< 1
+0 |z|≥ 1.
+(1)
+For each grid module, we set a scale l and an orientation φ .
+This deﬁnes a transformation matrix from the space of phases
+[
+− 1
+2 , 1
+2
+)
+×
+[
+− 1
+2 , 1
+2
+)
+to the rhombic unit cell of the grid module in
+physical space:
+A= l
+( cosφ cos
+(
+φ+ π
+3
+)
+sinφ sin
+(
+φ+ π
+3
+)
+)
+. (2)
+Unless otherwise speciﬁed, we use l= 40 cm and φ = 0. The
+inverse of this matrix A− 1 maps the rhombic unit cell onto the
+Frontiers in Computational Neuroscience | www.frontiersi n.org 11 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 12 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+space of phases. We also deﬁne ∥·∥ as the vector norm and
+⟨a⟩m≡ (a+ m mod 2m)− m as the shifted modulo operation.
+The tuning curve of a grid cell as a function of position x is then
+sgrid(x; b)= f
+(
+1
+0.45l
+
+A⟨A− 1x− b⟩1/ 2
+
+
+)
+(3)
+Each grid cell is shifted by a uniformly random phase oﬀsetb. The
+full width at half maximum of each grid ﬁeld is 0.45 l. In physical
+space, the oﬀset of a grid cell isAb, where integers can be added to
+either component of b; the shortest distance between these oﬀsets
+for two grid cells is the physical distance shown in Figure 5D.
+The tuning curve of a head direction cell as a function of
+directionθ is
+sdir(θ; c)= f
+(
+4⟨θ− c⟩π
+)
+. (4)
+Each head direction cell is shifted by a uniformly random
+direction oﬀset c. The full width at half maximum of the head
+direction ﬁeld isπ/ 2.
+The tuning curve of a conjunctive cell is simply the product
+sconj(x,θ; b, c)= sgrid(x; b)sdir(θ; c). (5)
+Each conjunctive cell has uniformly random oﬀsets b and c.
+4.1.3. Non-periodic Neural Populations
+For non-grid spatial cells, we generate tuning curves as a function
+of position for each neuron of the form
+sspatial(x)= 1
+2
+(
+e−∥ x− d1∥2/ 2σ 2
++ e−∥ x− d2∥2/ 2σ 2 )
+, (6)
+whereσ = 40 cm and the di’s are chosen uniformly randomly
+between (0, 0 cm) and (180, 180 cm).
+For random neurons, we obtain activity time series by
+sampling from a distribution every 2 s, or 10 timepoints,
+and interpolating in between using cubic polynomials. The
+distribution is Gaussian with mean 0 and width 0.5, truncate d
+between 0 and 1.
+4.1.4. From Tuning Curves to Time Series
+To obtain activity time series for all populations except for
+random neurons, we apply the tuning curves to each trajectory
+timepoint. Whenever the velocity decreases below 5 cm / s, we
+set the activity to be 0. This threshold simulates the behavi or
+of neurons in the hippocampal region that exhibit high activity
+during locomotion and low activity during idle periods (
+Sargolini
+et al., 2006; Kropﬀ et al., 2015; Hinman et al., 2016 ).
+4.1.5. Multi-Neuron Units for Grid Cells (Figures 4A,B)
+We generate multi-neuron units ( Figure 4) by linearly
+combining activity time series from multiple grid cells. Eac h
+mixing coeﬃcient is chosen from a uniform random distributi on
+between 0 and 1. The activity is then normalized by the sum of
+squares of the mixing coeﬃcients.
+4.1.6. Spiking Noise for Grid Cells (Figures 4C,D)
+The activities described above are dimensionless, and we typically
+do not need to assign a scale because we divide each time serie s
+by its mean before applying persistent cohomology. To create
+spiking noise, however, we must set the ﬁring rate. We linearl y
+rescale the rate given by Equation (3):
+λ= 0.4+ 7.6sgrid. (7)
+This sets the maximum ﬁring rate to be 8 and creates a baseline
+rate of 0.4; with 0.2 s time bins, these values correspond to 40
+and 2 Hz, respectively. However, we still set the ﬁring rate to 0 Hz
+when the animal’s velocity decreases below 5 cm/ s.
+Usingλ , we generate Poisson-like spiking noise with diﬀerent
+levels of variability (Figure 4). At each timestep, the noisy activity
+is given by
+snoisy= F· X, X∼ Pois(λ/ F). (8)
+F sets the Fano factor of the random process, which is its variance
+divided by its mean (for any givenλ ). The F= 1 case corresponds
+to a Poisson random process; F< 1 implies sub-Poissonian noise
+and F> 1 implies super-Poissonian noise.
+4.1.7. Generating Grid Cells With Various Properties
+(Figures 4E–K)
+• Square enclosure (Figure 4E): We use 1,000 s from a trajectory
+extracted from an experimental animal in a square enclosure of
+width 1.5 m (
+Stensola et al., 2012 ), binned in the same way as
+for the circular enclosure (section 4.1.1). To change the la ttice
+orientation, we use a non-zero value for φ in Equation (2).
+• Scale factor ( Figure 4F): Grid scale is modiﬁed by changing l
+in Equation (2). The scale factor is l divided by the diameter of
+the enclosure, 1.8 m.
+• Field size factor ( Figure 4G): Field size is modiﬁed by
+replacing 0.45 in Equation (3) by the ﬁeld size factor. In other
+words, the ﬁeld size factor multiplied by the grid scale is the
+full width at half maximum of each grid ﬁeld.
+• Aspect ratio ( Figure 4H): The grid lattice is elongated to
+an aspect ratio ε ≥ 1, which is the ratio between the
+major and minor axes of the ellipse that circumscribes each
+hexagonal lattice domain. This is accomplished by replacing
+the transformation matrix in Equation (2) with
+A= l·
+√
+3
+2 sec 2ψ
+( 2 cosψ cosφ cos
+(
+φ+ ψ
+)
+2 cosψ sinφ sin
+(
+φ+ ψ
+)
+)
+, (9)
+whereψ ≤ 60◦ is the angle between the two lattice vectors. ψ
+is related toε by
+ψ = arcsec
+( 3
+ε− 1
+)
+. (10)
+When ε = 3/ (1+
+√
+2) ≈ 1.24, ψ = 45◦ and the lattice
+becomes square.
+• Field jitter ( Figure 4I): Jitter in the position of grid ﬁelds is
+introduced by shifting each ﬁeld in physical space by
+U1l
+( cosφ
+sinφ
+)
++ U2l
+( cos
+(
+φ+ π
+3
+)
+sin
+(
+φ+ π
+3
+)
+)
+, (11)
+Frontiers in Computational Neuroscience | www.frontiersi n.org 12 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 13 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+where l is the grid scale, φ is the grid orientation, and Ui∼
+Unif(− ﬁeld jitter, ﬁeld jitter).
+• Field variability ( Figure 4J): V ariability across grid
+ﬁelds is introduced by choosing random numbers
+Uij ∼ Unif(− ﬁeld var., ﬁeld var.) at 20 cm-intervals
+throughout the enclosure for each grid cell. A linear
+interpolation is constructed for these points, which is
+smoothed by a Gaussian ﬁlter of width 20 cm. This resulting
+random function is added to the standard tuning curve in
+Equation (3), and all values under 0 are clipped to 0.
+• Lattice variability ( Figure 4K): V ariability in lattices
+across grid cells is introduced by randomly perturbing
+the transformation matrix for each grid cell (Equation 2)
+according to
+A=
+( 1+ W11 W12
+W21 1+ W22
+)
+l
+( cosφ cos
+(
+φ+ π
+3
+)
+sinφ sin
+(
+φ+ π
+3
+)
+)
+, (12)
+where
+Wij∼ Unif(− lattice var., lattice var.). (13)
+4.2. Neural Activity Maps
+We construct activity maps for each neuron as a function of
+position or direction. To do so, we simply tally the total amoun t
+of activity in each positional or directional bin. Note that t hese
+maps do not depict ﬁring rate because we do not divide by the
+occupancy of each bin; we decided against this in order to show
+the activity experienced through the animal trajectory.
+4.3. Processing Neural Recordings
+For each neuron, we ﬁrst divide its activity at every timepoin t
+by its mean activity. We then delete all timepoints whose neur al
+activities are all smaller than a small limit 1 × 10− 4. This simple
+procedure removes points at the origin that we do not expect to
+participate in topological structures.
+To improve computational eﬃciency, we reduce the number
+of input points while preserving their topological structure
+by applying a geometric subsampling strategy. We pick the
+ﬁrst point at random, and then iteratively add a point to our
+subsample that is the furthest away from the already chosen
+points. Speciﬁcally, if P is the input point set and Qi is the
+subsample after i iterations, we form Qi+ 1 by adding the point
+qi+ 1 chosen as
+arg max
+p∈ P
+min
+q∈ Qi
+∥p− q∥. (14)
+Figure 1B illustrates a result of this strategy. By construction, the
+subsample Qi forms anε i+ 1-net of the input point sample, which
+means the largest distance from any input point to the nearest
+point of the subsample does not exceed ε i+ 1= minq∈ Qi∥qi+ 1−
+q∥. Because persistent cohomology is stable, this guarantees t hat
+the persistence diagram we compute for the subsample Qi is
+at most ε i+ 1 away, in bottleneck distance (
+Cohen-Steiner et al.,
+2007), from the persistence diagram of the full point set P. We
+generally select 1,000 points through this process. The resul ts in
+Figures 5H,I were obtained by applying persistent cohomology
+on the full dataset without subsampling.
+To measure success rate, we apply persistent cohomology on
+100 replicate datasets and measure the proportion of successes a s
+determined by the largest-gap heuristic.
+4.4. Applying Persistent Cohomology
+We refer the reader to extensive literature on persistent
+(co)homology (
+Edelsbrunner and Harer, 2010; Edelsbrunner and
+Morozov, 2017) for the full details. More details on the involved
+constructions are presented in the Supplementary Material.
+Here, we only brieﬂy mention some of them. For technical
+reasons—both to recover the circular coordinates and for
+computational speed—we work with persistent cohomology,
+which is dual to persistent homology, which a reader might be
+more familiar with.
+To recover the topology of the space sampled by a point
+set P, we construct a Vietoris–Rips simplicial complex. Given a
+parameter r, Vietoris–Rips complex consists of all subsets of the
+point set P, in which every pair of points is at most r away from
+each other,
+VR(P, r)={ σ ⊆ P|∥p− q∥≤ r∀p, q∈ σ}. (15)
+The cohomology group, Hk(VR(P, r)), deﬁned formally in the
+Supplementary Material, is an algebraic invariant that describes
+the topology of the Vietoris–Rips complex. Its rank, called the
+k-th Betti number, counts the number of “holes” in the complex.
+As we vary the radius r in the deﬁnition of the Vietoris–Rips
+complex, the simplicial complexes nest: VR( P, r1)⊆ VR(P, r2),
+for r1≤ r2. The restriction of the larger complex to the smaller
+induces a linear map on cohomology groups, and all such maps
+form a sequence:
+Hk(VR(P, r1))← Hk(VR(P, r2)← Hk(VR(P, r3))← ... (16)
+It is possible to track when cohomology classes (i.e., “holes”)
+appear and disappear in this sequence. Recording all such birth–
+death pairs (ri, rj), we get a persistence diagram, which completely
+describes the changes in the sequence of cohomology groups.
+For a persistent class, i.e., one with a large diﬀerence betwee n
+birth and death,
+de Silva et al. (2011) describe a procedure for
+turning it into a map from the input data points into a circle,
+which assigns a circular coordinate to each data point.
+Perea
+(2018) extends that procedure to allow computation of persistent
+cohomology on a subsample of the data, e.g., the geometric
+subsample mentioned in the previous subsection.
+4.5. Reconstructing Animal Trajectory
+From Circular Coordinates
+The process for obtaining circular coordinates outlined in t he
+previous subsection (and presented in greater detail in the
+Supplementary Material) outputs one value between 0 and 2 π
+for each persistent 1-cocycle at each timepoint. A grid module
+yields two persistent 1-cocycles, so our circular coordinat es form
+a vector ut= (ut1, ut2) at each timepoint t= 1,... , T. We divide
+each coordinate value by 2π so that each uti∈ [0, 1). No matter
+Frontiers in Computational Neuroscience | www.frontiersi n.org 13 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 14 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+the recording duration used to obtain circular coordinates , we
+only reconstruct the ﬁrst 100 s of the animal trajectory.
+We ﬁrst perform a preliminary unfolding of the circular
+coordinates. We calculate all the diﬀerence vectors between
+adjacent timepoints and cancel out changes by more than± 1/ 2:
+/Delta1uunfolded
+ti =⟨ uti− ut− 1,i⟩1/ 2,
+where ⟨a⟩1/ 2≡ (a+ 1/ 2 mod 1)− 1/ 2. (17)
+Next, we seek to unshear the coordinates. The rhombic unit ce ll
+in physical space is sheared by 30◦ relative to the orthogonal axes
+of topological space. We wish to apply this transformation to the
+diﬀerence vectors to restore the unsheared trajectory. Ther e are
+two possible unshearing matrices
+S±=
+( cos 0 cos
+( π
+2± π
+6
+)
+sin 0 sin
+( π
+2± π
+6
+)
+,
+)
+(18)
+and we could perform the rest of the analysis for both
+transformations separately, knowing that one trajectory is
+unsheared and the other is doubly shared. Instead, we
+assume knowledge that the animal is exploring an open ﬁeld
+environment in which all directions of motion should genera lly
+be sampled uniformly. We calculate the covariance matrix for
+both sets of transformed diﬀerence vectors:
+/Sigma1±
+ij = 1
+T
+∑
+t
+/Delta1u±
+ti/Delta1u±
+tj , where /Delta1u±
+t = S±/Delta1uunfolded
+t . (19)
+The proper unshearing S produces the covariance matrix whose
+ratio of eigenvalues is closest to 1. This heuristic could bechanged
+assuming diﬀerent statistics of animal motion, for example th ose
+corresponding to a linear track.
+After identifying the unshearing matrix S, we return to
+the raw coordinates and apply this transformation ﬁrst, befor e
+unfolding:
+/Delta1uunsheared
+t = S(ut− ut− 1). (20)
+Since shear transformations change distances, we reevalua te our
+unfolding. We compare the norm of every diﬀerence vector
+/Delta1uunsheared
+t to its norm after possible unfoldings along the
+unsheared lattice vectors given by the columns of S. The shortest
+vector at each timepoint is the reconstructed diﬀerence /Delta1urecon
+t ,
+and the reconstructed trajectory segment shown in Figure 5E is
+their accumulation urecon
+t = ∑
+t/Delta1urecon
+t .
+So far, this reconstruction has not incorporated detailed
+information about the animal trajectory. To judge its qualit y,
+we now ﬁt the reconstruction to the true segment of animal
+trajectory xt through rigid transformation and uniform scaling.
+We ﬁrst determine whether or not the reconstruction needs to be
+unreﬂected. To judge this, we calculate the signed vector an gles
+between adjacent steps for both the reconstruction and the tr ue
+trajectory
+/Delta1θrecon
+t =
+⟨
+arctan(/Delta1urecon
+t2 //Delta1urecon
+t1 )− arctan(/Delta1urecon
+t− 1,2//Delta1urecon
+t− 1,1)
+⟩
+π
+/Delta1θt=⟨ arctan(/Delta1xt2//Delta1xt1)− arctan(/Delta1xt− 1,2//Delta1xt− 1,1)⟩π , (21)
+where⟨a⟩π ≡ (a+ π mod 2π )− π . If the mean square diﬀerence
+between−/Delta1θrecon
+t and/Delta1θt is less than that between/Delta1θrecon
+t and
+/Delta1θt, then we reﬂect our reconstruction uoriented
+t =
+( 1 0
+0− 1
+)
+urecon
+t .
+Otherwise, uoriented
+t = urecon
+t .
+Finally, we ﬁt the reconstruction to the true trajectory segment
+by minimizing the mean squared error after uniform scaling a,
+translation b and rotationθ :
+min
+a,b,θ
+∑
+t
+
+
+
+xt− a
+( cosθ − sinθ
+sinθ cosθ
+)
+uoriented
+t + b
+
+
+
+
+2
+. (22)
+Note that we chose to try particular unshearing matrices in
+Equation (18) and use the general assumption of isotropic
+animal motion to select between them, all before ﬁtting the
+reconstruction to the actual animal trajectory in Equation (22).
+These choices were designed to obtain the most faithful
+reconstruction without using the animal trajectory, which is the
+information that we would like to infer. This process assumes
+knowledge of the angle between directions of periodicity, wh ich
+is ∼ 60◦ for grid modules. Moreover, it also relies on the
+circular coordinates implementation (explained in greater d etail
+in Supplementary Material) selecting two of the shortest non-
+parallel vectors between lattice vertices as its basis—that selection
+is not guaranteed, but empirically, it frequently occurs in o ur
+case, as indicated by low reconstruction errors in Figure 5.
+An alternative method for unshearing before comparison with
+the true trajectory is to ﬁnd a transformation matrix that
+yields a covariance matrix for the transformed diﬀerence vec tors
+(analogously to Equation 19) with a desired ratio of eigenval ues.
+Otherwise, if a sheared reconstruction is suﬃcient, unshear ing
+can be skipped.
+DATA AVAILABILITY STATEMENT
+The datasets and source code presented in this study can be found
+in online repositories. The names of the repository/repositori es
+and accession number(s) can be found at: https://louiskang.
+group/repo.
+AUTHOR CONTRIBUTIONS
+LK and DM conceptualized the study and wrote the paper. LK,
+BX, and DM developed the methods, calculated the persistent
+cohomology, and analyzed the results. LK generated the neural
+data. All authors contributed to the article and approved the
+submitted version.
+FUNDING
+LK has been supported by a Miller Research Fellowship from the
+Miller Institute for Basic Research in Science at the University of
+California, Berkeley. BX was supported by a US Department of
+Energy Computational Science Graduate Fellowship. This work
+was partially supported by the US Department of Energy under
+Contract Number DE-AC02-05CH11231 at Lawrence Berkeley
+National Laboratory.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 14 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 15 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+ACKNOWLEDGMENTS
+We thank Francesco Fumarola for insightful and helpful
+discussions. This manuscript has been released as a preprint on
+bioRxiv (
+Kang et al., 2020).
+SUPPLEMENTARY MATERIAL
+The Supplementary Material for this article can be found
+online at: https://www.frontiersin.org/articles/10.338 9/fncom.
+2021.616748/full#supplementary-material
+REFERENCES
+Babichev, A., Morozov, D., and Dabaghian, Y. (2018). Robust s patial memory
+maps encoded by networks with transient connections. PLoS Comput. Biol.
+14:e1006433. doi: 10.1371/journal.pcbi.1006433
+Babichev, A., Morozov, D., and Dabaghian, Y. (2019). Replays of spatial memories
+suppress topological ﬂuctuations in cognitive map. Netw. Neurosci. 3, 707–724.
+doi: 10.1162/netn_a_00076
+Burak, Y., and Fiete, I. R. (2009). Accurate path integration in c ontinuous
+attractor network models of grid cells. PLoS Comput. Biol. 5:e1000291.
+doi: 10.1371/journal.pcbi.1000291
+Chaudhuri, R., Gerçek, B., Pandey, B., Peyrache, A., and Fiete , I. (2019).
+The intrinsic attractor manifold and population dynamics of a canoni cal
+cognitive circuit across waking and sleep. Nat. Neurosci. 22, 1512–1520.
+doi: 10.1038/s41593-019-0460-x
+Chazal, F., Cohen-Steiner, D., and Mérigot, Q. (2011). Geometri c inference for
+measures based on distance functions. Foundat. Comput. Math. 11, 733–751.
+doi: 10.1007/s10208-011-9098-0
+Chowdhury, S., Dai, B., and Mémoli, F. (2018). The importance of for getting:
+limiting memory improves recovery of topological characteristics from
+neural data. PLoS ONE 13:e0202561. doi: 10.1371/journal.pone.02
+02561
+Cohen-Steiner, D., Edelsbrunner, H., and Harer, J. (2007). Stab ility
+of persistence diagrams. Discrete Comput. Geometry 37, 103–120.
+doi: 10.1007/s00454-006-1276-5
+Curto, C. (2016). What can topology tell us about the neural code? Bull. Am. Math.
+Soc. 54, 63–78. doi: 10.1090/bull/1554
+Dabaghian, Y., Mémoli, F., Frank, L., and Carlsson, G. (2012). A to pological
+paradigm for hippocampal spatial map formation using persistent homology .
+PLoS Comput. Biol. 8:e1002581. doi: 10.1371/journal.pcbi.1002581
+de Silva, V., Morozov, D., and Vejdemo-Johansson, M. (2011). Pe rsistent
+cohomology and circular coordinates. Discrete Comput. Geometry 45, 737–759.
+doi: 10.1007/s00454-011-9344-x
+Diehl, G. W., Hon, O. J., Leutgeb, S., and Leutgeb, J. K. (2017). Grid and
+nongrid cells in medial entorhinal cortex represent spatial location a nd
+environmental features with complementary coding schemes. Neuron 94, 83–
+92.e6. doi: 10.1016/j.neuron.2017.03.004
+Edelsbrunner, H., and Harer, J. (2010). Computational Topology: An Introduction .
+Providence, RI: American Mathematical Society. doi: 10.1090/mb k/069
+Edelsbrunner, H., and Morozov, D. (2017). “Persistent homology, ”in Handbook of
+Discrete and Computational Geometry, eds J. E. Goodman, J. O’Rourke, and C.
+D. Tóth (Boca Raton, FL: CRC Press), 637–661.
+Fiete, I. R., Burak, Y., and Brookings, T. (2008). What grid cells c onvey about rat
+location. J. Neurosci. 28, 6858–6871. doi: 10.1523/JNEUROSCI.5684-07.2008
+Gallego, J. A., Perich, M. G., Miller, L. E., and Solla, S. A. (2017).
+Neural manifolds for the control of movement. Neuron 94, 978–984.
+doi: 10.1016/j.neuron.2017.05.025
+Gao, P., and Ganguli, S. (2015). On simplicity and complexity in the b rave
+new world of large-scale neuroscience. Curr. Opin. Neurobiol. 32, 148–155.
+doi: 10.1016/j.conb.2015.04.003
+Gardner, R. J., Hermansen, E., Pachitariu, M., Burak, Y., Baas, N. A ., Dunn, B.
+A., et al. (2021). Toroidal topology of population activity in grid ce lls. bioRxiv
+[Preprint]. doi: 10.1101/2021.02.25.432776
+Giusti, C., Pastalkova, E., Curto, C., and Itskov, V. (2015). C lique topology reveals
+intrinsic geometric structure in neural correlations. Proc. Natl. Acad. Sci. U.S.A.
+112, 13455–13460. doi: 10.1073/pnas.1506407112
+Guibas, L., Morozov, D., and Mérigot, Q. (2013). Witnessed k-d istance. Discrete
+Comput. Geometry 49, 22–45. doi: 10.1007/s00454-012-9465-x
+Hafting, T., Fyhn, M., Molden, S., Moser, M. B., and Moser, E. I . (2005).
+Microstructure of a spatial map in the entorhinal cortex. Nature 436, 801–806.
+doi: 10.1038/nature03721
+Hardcastle, K., Maheswaranathan, N., Ganguli, S., and Giocomo, L . M. (2017).
+A multiplexed, heterogeneous, and adaptive code for navigation in medial
+entorhinal cortex. Neuron 94, 375–387.e7. doi: 10.1016/j.neuron.2017.03.025
+Hinman, J. R., Brandon, M. P., Climer, J. R., Chapman, G. W., and Hasse lmo, M.
+E. (2016). Multiple running speed signals in medial entorhinal corte x. Neuron
+91, 666–679. doi: 10.1016/j.neuron.2016.06.027
+Hyvärinen, A. (1999). Fast and robust ﬁxed-point algorithms for
+independent component analysis. IEEE Trans. Neural Netw. 10, 626–634.
+doi: 10.1109/72.761722
+Jazayeri, M., and Afraz, A. (2017). Navigating the neural space i n search of the
+neural code. Neuron 93, 1003–1014. doi: 10.1016/j.neuron.2017.02.019
+Johnson, W. B., and Lindenstrauss, J. (1984). Extensions of lipschitz mappings into
+a hilbert space. Contemp. Math. 26:1. doi: 10.1090/conm/026/737400
+Jun, J. J., Steinmetz, N. A., Siegle, J. H., Denman, D. J., Bauza, M ., Barbarits, B.,
+et al. (2017). Fully integrated silicon probes for high-density recording of neural
+activity. Nature 551, 232–236. doi: 10.1038/nature24636
+Kang, L., and Balasubramanian, V. (2019). A geometric attractor mec hanism
+for self-organization of entorhinal grid modules. eLife 8:e46687.
+doi: 10.7554/eLife.46687
+Kang, L., Xu, B., and Morozov, D. (2020). State space discovery in spatial
+representation circuits with persistent cohomology. bioRxiv [Preprint] .
+doi: 10.1101/2020.10.06.328773
+Khalid, A., Kim, B. S., Chung, M. K., Ye, J. C., and Jeon, D. (2014 ). Tracing
+the evolution of multi-scale functional networks in a mouse model of
+depression using persistent brain network homology. Neuroimage 101, 351–
+363. doi: 10.1016/j.neuroimage.2014.07.040
+Kropﬀ, E., Carmichael, J. E., Moser, M. B., and Moser, E. I. (2015). Speed cells
+in the medial entorhinal cortex. Nature 523, 419–424. doi: 10.1038/nature
+14622
+Krupic, J., Bauza, M., Burton, S., Barry, C., and O’Keefe, J. (2015 ). Grid
+cell symmetry is shaped by environmental geometry. Nature 518, 232–235.
+doi: 10.1038/nature14153
+Lisman, J. E., and Jensen, O. (2013). The theta-gamma neural code . Neuron 77,
+1002–1016. doi: 10.1016/j.neuron.2013.03.007
+Mathis, A., Herz, A. V. M., and Stemmler, M. (2012). Optimal population c odes
+for space: grid cells outperform place cells. Neural Comput. 24, 2280–2317.
+doi: 10.1162/NECO_a_00319
+McInnes, L., Healy, J., Saul, N., and Großberger, L. (2018). UMAP : uniform
+manifold approximation and projection. J. Open Source Softw. 3:861.
+doi: 10.21105/joss.00861
+Mosheiﬀ, N., Agmon, H., Moriel, A., and Burak, Y. (2017). An eﬃcien t
+coding theory for a dynamic trajectory predicts non-uniform allocati on
+of entorhinal grid cells to modules. PLoS Comput. Biol. 13:e1005597.
+doi: 10.1371/journal.pcbi.1005597
+O’Keefe, J., and Dostrovsky, J. (1971). The hippocampus as a spatia l map.
+Preliminary evidence from unit activity in the freely-moving rat. Brain Res. 34,
+171–175. doi: 10.1016/0006-8993(71)90358-1
+Perea, J. A. (2018). Sparse circular coordinates via principal Z-Bundles. arXiv
+arXiv:1510.06629.
+Piangerelli, M., Rucco, M., Tesei, L., and Merelli, E. (2018). Topolo gical classiﬁer
+for detecting the emergence of epileptic seizures. BMC Res. Notes 11:392.
+doi: 10.1186/s13104-018-3482-7
+Rybakken, E., Baas, N., and Dunn, B. (2019). Decoding of neura l data
+using cohomological feature extraction. Neural Comput. 31, 68–93.
+doi: 10.1162/neco_a_01150
+Frontiers in Computational Neuroscience | www.frontiersi n.org 15 April 2021 | Volume 15 | Article 616748
+
+
+--- Page 16 ---
+Kang et al. Persistent Cohomology and Spatial Representation
+Sanzeni, A., Balasubramanian, V., Tiana, G., and Vergassola, M. (2016). Complete
+coverage of space favors modularity of the grid system in the brain. Phys. Rev.
+E 94:062409. doi: 10.1103/PhysRevE.94.062409
+Sargolini, F., Fyhn, M., Hafting, T., McNaughton, B. L., Witt er, M. P., Moser,
+M. B., et al. (2006). Conjunctive representation of position, dire ction, and
+velocity in entorhinal cortex. Science 312, 758–762. doi: 10.1126/science.11
+25572
+Saxena, S., and Cunningham, J. P. (2019). Towards the neural population doctrine.
+Curr. Opin. Neurobiol. 55, 103–111. doi: 10.1016/j.conb.2019.02.002
+Shadlen, M. N., and Newsome, W. T. (1998). The variable discharge of cortical
+neurons: implications for connectivity, computation, and informat ion coding.
+J. Neurosci. 18, 3870–3896. doi: 10.1523/JNEUROSCI.18-10-03870.1998
+Spreemann, G., Dunn, B., Botnan, M. B., and Baas, N. A. (2015). Us ing persistent
+homology to reveal hidden information in neural data. arXiv [Preprint].
+arXiv:1809.09269.
+Sreenivasan, S., and Fiete, I. (2011). Grid cells generate an analo g error-correcting
+code for singularly precise neural computation. Nat. Neurosci. 14, 1330–1337.
+doi: 10.1038/nn.2901
+Stemmler, M., Mathis, A., and Herz, A. V. M. (2015). Connecting multi ple spatial
+scales to decode the population activity of grid cells. Sci. Adv. 1:e1500816.
+doi: 10.1126/science.1500816
+Stensola, H., Stensola, T., Solstad, T., Frøland, K., Moser, M. B., and Moser,
+E. I. (2012). The entorhinal grid map is discretized. Nature 492, 72–78.
+doi: 10.1038/nature11649
+Stensola, T., Stensola, H., Moser, M. B., and Moser, E. I. (2015) . Shearing-
+induced asymmetry in entorhinal grid cells. Nature 518, 207–212.
+doi: 10.1038/nature14151
+Takens, F. (1981). “Detecting strange attractors in turbulenc e, ” in Dynamical
+Systems and Turbulence, Warwick 1980 , eds D. Rand and L.-S. Young
+(Berlin; Heidelberg: Springer Berlin Heidelberg), 366–381. doi: 10.1 007/BFb00
+91924
+Taube, J. S., Muller, R. U., and Ranck, J. B. (1990). Head-directio n cells recorded
+from the postsubiculum in freely moving rats. I. Description and quant itative
+analysis. J. Neurosci. 10, 420–435. doi: 10.1523/JNEUROSCI.10-02-0042
+0.1990
+Tenenbaum, J. B., Silva, V., and Langford, J. C. (2000). A global g eometric
+framework for nonlinear dimensionality reduction. Science 290, 2319–2323.
+doi: 10.1126/science.290.5500.2319
+Wang, Y., Ombao, H., and Chung, M. K. (2018). Topological data ana lysis of
+single-trial electroencephalographic signals. Ann. Appl. Stat. 12, 1506–1534.
+doi: 10.1214/17-AOAS1119
+Wei, X. X., Prentice, J., and Balasubramanian, V. (2015). A principle of
+economy predicts the functional architecture of grid cells. eLife 4:e08362.
+doi: 10.7554/eLife.08362
+Zhang, M., Kalies, W. D., Kelso, J. A. S., and Tognoli, E. (2020). Topological
+portraits of multiscale coordination dynamics.J. Neurosci. Methods 339:108672.
+doi: 10.1016/j.jneumeth.2020.108672
+Conﬂict of Interest: The authors declare that the research was conducted in the
+absence of any commercial or ﬁnancial relationships that could be c onstrued as a
+potential conﬂict of interest.
+Copyright © 2021 Kang, Xu and Morozov. This is an open-access articl e distributed
+under the terms of the Creative Commons Attribution License (CC BY). The use,
+distribution or reproduction in other forums is permitted, p rovided the original
+author(s) and the copyright owner(s) are credited and that th e original publication
+in this journal is cited, in accordance with accepted academ ic practice. No use,
+distribution or reproduction is permitted which does not co mply with these terms.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 16 April 2021 | Volume 15 | Article 616748

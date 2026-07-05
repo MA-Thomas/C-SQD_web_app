@@ -1,37 +1,40 @@
-# Candidate Journal List (v0)
+# Candidate Venue and Source List (v0)
 
-Status: working draft. This instantiates the "tiered, field-specific, OA-accessible journal
-list" required by `selection_protocol.md` §4, for the eight-field list in §4.1. Every entry
+Status: working draft. This instantiates the "tiered, field-specific, OA-accessible
+venue/source list" required by `selection_protocol.md` §4, for the eight-field list in §4.1. Every entry
 here is a **candidate to be verified per `selection_protocol.md` §4** (tier assignment and
-OA-accessibility confirmed per journal and per era before use). OA modes below are best
+OA-accessibility confirmed per venue/source and per era before use). OA modes below are best
 current understanding, not settled facts.
+
+For the `v1` clinical medicine / epidemiology / evidence-based medicine revision, see
+`journal_list_v1.md`. This `v0` file remains the eight-field baseline.
 
 ---
 
-## 1. How a journal is described (three axes)
+## 1. How a venue/source is described (three axes)
 
-- **Scope** — *general* (eligible for every field's draw) vs *field-specific* (eligible only
-  for its field's cells).
+- **Scope** — *general* (eligible as a source block for every field) vs *field-specific*
+  (eligible only for its field's cells).
 - **Tier** — `top` / `mid` / `specialist`.
-- **OA accessibility route** — how OA-accessible articles are obtained:
+- **OA accessibility route** — how OA-accessible papers are obtained:
   - **Gold** — immediate free access to all articles (born-OA).
   - **Green / delayed** — free after an embargo and/or reliably mirrored in PMC/repository.
-  - **Hybrid / archive** — subscription journal in which *some* articles are OA-accessible
+  - **Hybrid / archive** — subscription venue in which *some* papers are OA-accessible
     (author-paid gold-in-hybrid, funder-mandated green, or public archive / arXiv copies).
 
 ---
 
 ## 2. Eligibility and the OA-subset restriction
 
-**Hybrid journals are eligible.** Eligibility does not require born-OA. Any journal that has
-an OA-accessible subset of articles for the target era is in-frame.
+**Hybrid venues are eligible.** Eligibility does not require born-OA. Any venue/source that has
+an OA-accessible subset of papers for the target era is in-frame.
 
-**The draw is restricted to the OA-accessible subset.** Within a chosen journal and issue,
-the §1.2 article draw samples only from articles whose full text is OA-accessible.
+**The draw is restricted to the OA-accessible subset.** Within a chosen venue/source and
+archival unit, the §1.2 paper draw samples only from papers whose full text is OA-accessible.
 
 ### 2.1 Consequence: this is sampling on a non-random subset (record and weight it)
 
-Article-level OA status inside a hybrid journal is **not random**. It is correlated with:
+Article-level OA status inside a hybrid venue is **not random**. It is correlated with:
 
 - **Funding** — gold-in-hybrid requires an APC, so it tracks well-funded labs/fields; green
   OA tracks funder mandates (NIH Public Access, Wellcome, Plan S).
@@ -39,13 +42,13 @@ Article-level OA status inside a hybrid journal is **not random**. It is correla
 - **Era** — OA availability rises steeply post-~2008 and is sparse before.
 - Possibly **prominence** — higher-profile work is more often made open.
 
-So within a hybrid venue the realized sample is the **OA stratum of the issue, not the
-issue**. This does not disqualify hybrids, but it means:
+So within a hybrid venue the realized sample is the **OA stratum of the archival unit, not
+the full unit**. This does not disqualify hybrids, but it means:
 
 1. **Record the OA route per paper** (`gold` / `green` / `archive`) alongside
    `sample_source`. It is a neutral provenance fact, not a paradigm label.
 2. **Fold OA-subset coverage into the inclusion probability** of §1.3, so the
-   `design_weight` reflects "probability the article was both drawn *and* OA-accessible."
+   `design_weight` reflects "probability the paper was both drawn *and* OA-accessible."
    Otherwise OA-correlated funding/era leaks in as a confound.
 3. **Watch the gold/green era interaction.** Because OA coverage is thin pre-2008, hybrid
    venues contribute mostly recent papers; early-era cells should lean on green/delayed and
@@ -53,7 +56,7 @@ issue**. This does not disqualify hybrids, but it means:
 
 ---
 
-## 3. General journals (eligible for any field)
+## 3. General venues (eligible for any field)
 
 | Journal | Tier | OA route | Note |
 |---------|------|----------|------|
@@ -67,42 +70,62 @@ issue**. This does not disqualify hybrids, but it means:
 | Royal Society Open Science | mid | gold | Multidisciplinary born-OA. |
 | Scientific Reports | mid | gold | Multidisciplinary born-OA; high volume. |
 
-### 3.1 General-journal field filter (decision needed)
+### 3.1 General-venue field filter (resolved)
 
-A random article from a general journal is not in any particular field. Two options:
-
-- **(a) Opportunistic cell-filling (recommended).** Draw a random OA-accessible article, then
-  assign it post-hoc to whatever (field, era, tier) cell it belongs to. Less judgment at
-  selection; the field is a recorded fact, not a pre-filter.
-- **(b) Pre-filtered draw.** Restrict the draw to articles already tagged to the target
-  field. Requires a field-tagging step that injects classifier judgment before sampling.
-
----
-
-## 4. Non-journal venues (ML and frontier physics need an analog)
-
-The journal -> issue -> article unit does not exist for the discovery venues of fields 2-4.
-Define an analog sampling unit, all openly accessible:
-
-- **ML / AI (field 2)** — conferences: **NeurIPS** (proceedings.neurips.cc), **ICML** (PMLR),
-  **ICLR** (OpenReview); journals **JMLR** and **TMLR** (gold). Unit: *conference-year x
-  track* (or arXiv `cs.LG`/`stat.ML` monthly listing). Inclusion still random within unit.
-- **HEP / GW physics (field 3)** — **arXiv** `hep-ex`, `gr-qc` monthly listings; most HEP
-  journals are gold OA via **SCOAP3** (Phys. Lett. B, JHEP, Eur. Phys. J. C). Unit: *arXiv
-  category-month*, or journal issue where SCOAP3 applies.
-- **Statistically-oriented physics (field 4)** — **arXiv** `astro-ph.CO`; AAS journals (ApJ,
-  ApJS — moved to OA) and JCAP. Unit: arXiv category-month or journal issue.
-
-Treat each analog unit exactly like an issue: enumerate, draw a unit at random, draw an
-OA-accessible item at random, record inclusion probability. **See §6 D2 for the resolved
-form of this rule** (venue-based frame; arXiv as access route, not sampling frame).
+A random article from a general venue is not automatically in the target field. General
+venues are therefore **field-filtered before the final paper draw**. The target field is
+chosen as part of the `field × era × source × tier` cell (`selection_protocol.md` §1.1); after
+a general-venue source block is active and an archival unit is drawn, filter that unit to
+OA-accessible research papers matching the target field by pre-specified neutral article-level
+facts. If the unit has zero matching papers, reject the
+unit and redraw a unit from the same venue/source and era frame. This supersedes the earlier
+opportunistic-cell-filling option.
 
 ---
 
-## 5. Field-specific candidate journals
+## 4. Source/unit rules by field
+
+The general draw inside an active source block is `archival unit -> paper`. The archival unit
+depends on field practice. arXiv, bioRxiv, ChemRxiv, PsyArXiv, OSF and similar repositories
+are normally **OA routes and version records**, not sampling frames, unless a separate
+preprint stratum is explicitly declared.
+
+1. **Computational biology / genomics-ML** — sample published journals and proceedings-like
+   journals. Unit: journal issue or official article batch. PMC, bioRxiv and institutional
+   repositories are OA routes and metadata aids.
+2. **ML / AI methods proper** — sample accepted archival venues. Unit: conference-year for
+   NeurIPS, ICML and ICLR main proceedings; journal issue/article batch for JMLR, TMLR, AIJ
+   and TPAMI. Track subdivision is used only if pre-specified for a cell. arXiv `cs.LG` /
+   `stat.ML` is an OA route and version record by default.
+3. **Structure-driven experimental physics (HEP, neutrino, gravitational waves)** — sample
+   published journal venues. Unit: journal issue for PRL, PRD, Physics Letters B, JHEP,
+   EPJ C, etc. arXiv `hep-ex`, `hep-ph`, `gr-qc` and experiment publication lists may verify
+   access and field eligibility, but they do not replace the venue frame unless a separate
+   experiment-publication-list frame is declared before sampling.
+4. **Statistically-oriented physics** — sample published journals for precision cosmology,
+   exclusion-limit and ML-for-physics work. Unit: journal issue for ApJ/ApJS, A&A, MNRAS,
+   JCAP, PRD, PRL, etc. arXiv categories such as `astro-ph.CO`, `hep-ph` and `hep-ex` are
+   OA routes and field signals, not the default frame.
+5. **Mechanistic molecular / cell / developmental biology** — sample journals. Unit:
+   journal issue or official article batch. PMC and bioRxiv are OA routes and metadata aids.
+6. **Structure-driven condensed matter / chemistry** — sample journals. Unit: journal issue
+   or official article batch. arXiv and ChemRxiv are OA routes by default.
+7. **Computational neuroscience** — sample journals, plus conference proceedings only if a
+   computational-methods subcell pre-specifies them. Unit: journal issue or conference-year.
+8. **Cognitive science / psychology** — sample journals. Unit: journal issue or official
+   article batch. PsyArXiv and OSF are OA routes by default.
+
+Treat each unit like an issue in the probability model: enumerate the active venue/source
+inventory, draw a unit at random, draw an OA-accessible eligible paper at random, and record
+the source-block inclusion probability.
+
+---
+
+## 5. Field-specific candidate venues/sources
 
 All `top`-tier general journals above are *also* eligible for each field; the lists below add
-field-specific venues. Verify tier/OA per entry.
+field-specific venues. Verify tier/OA per entry. Repository services such as arXiv are listed
+as OA routes in notes, not as default sampling venues.
 
 ### Field 1 — Computational biology / genomics-ML
 | Journal | Tier | OA route |
@@ -127,7 +150,6 @@ field-specific venues. Verify tier/OA per entry.
 | Artificial Intelligence (AIJ) | top | hybrid/archive |
 | TMLR | mid | gold |
 | IEEE TPAMI | top | hybrid/archive (arXiv) |
-| arXiv cs.LG / stat.ML | — | gold (preprint) |
 
 ### Field 3 — Structure-driven experimental physics (HEP, neutrino, GW)
 | Journal | Tier | OA route |
@@ -137,7 +159,6 @@ field-specific venues. Verify tier/OA per entry.
 | Physics Letters B | mid | gold (SCOAP3) |
 | JHEP | mid | gold (SCOAP3) |
 | Eur. Phys. J. C | specialist | gold (SCOAP3) |
-| arXiv hep-ex / gr-qc | — | gold (preprint) |
 
 ### Field 4 — Statistically-oriented physics (precision cosmology, exclusion-limit, ML-for-physics)
 | Journal | Tier | OA route |
@@ -147,7 +168,6 @@ field-specific venues. Verify tier/OA per entry.
 | MNRAS | mid | hybrid/archive |
 | JCAP | specialist | hybrid/gold |
 | Physical Review D | mid | hybrid/archive (arXiv) |
-| arXiv astro-ph.CO | — | gold (preprint) |
 
 ### Field 5 — Mechanistic molecular / cell / developmental biology
 | Journal | Tier | OA route |
@@ -189,12 +209,25 @@ field-specific venues. Verify tier/OA per entry.
 |---------|------|----------|
 | Nature Human Behaviour | top | hybrid/archive |
 | Psychological Science | top | hybrid/green |
-| Cognition | mid | hybrid/archive |
+| Cognitive Research: Principles and Implications | mid | gold (SpringerOpen) |
 | Psychological Review | top | hybrid/archive (theory venue) |
 | Cognitive Science | mid | hybrid |
 | Collabra: Psychology | specialist | gold |
 | Computational Brain & Behavior | specialist | hybrid |
 | Behavior Research Methods | specialist | hybrid |
+
+> **Design-change log (2026-06-22, §4):** *Cognition* (Elsevier; was listed `mid | hybrid/archive`)
+> is **removed** as the cog-sci mid source and **replaced by *Cognitive Research: Principles and
+> Implications*** (SpringerOpen, gold OA). Rationale: Cognition proved unacquirable through every
+> §1.4.1 route in the browser-acquisition environment — ScienceDirect serves an anti-bot
+> (`crasolve`) challenge, the green PMC author-manuscript copies return tokenized-redirect stubs,
+> Europe PMC returned HTTP 500, PhilPapers/PhilArchive host no copies, and only ~10 articles have
+> an arXiv copy (too thin for a valid draw). Chasing the scattered open copies would select on
+> accessibility and bias the random-base frame, so per §4 the venue was substituted with a
+> fully-gold-OA cog-sci venue (every article OA → no accessibility bias). Recorded in
+> `round_20260622_p1_crpi_cogsci_mid_2015_present_SUBSTITUTE`; the prior Cognition attempt is
+> retained as a documented `acquisition_limited` exception in
+> `round_20260621_p1_cognition_cogsci_mid_2015_present`.
 
 ---
 
@@ -203,39 +236,51 @@ field-specific venues. Verify tier/OA per entry.
 Working defaults for the five items previously open. Each is reversible (logged as a design
 change), but these are the rules the list is built on.
 
-### D1 — General-journal field filter → opportunistic, with a low-discretion field rule
+### D1 — General-venue field filter → pre-filtered within the drawn unit
 
-General journals are sampled **opportunistically** (option (a)): draw a random OA-accessible
-article, assign it post-hoc to whatever (field, era, tier) cell it belongs to, discard if it
-falls outside the eight-field frame. They **supplement** field-specific journals, which
-remain the primary cell-fillers; do **not** rely on a general venue to hit a *targeted* cell
-(too many of its articles are out of frame). Field is assigned from the **venue's own subject
-taxonomy** where one exists (Nature subject terms, journal section, arXiv primary category),
-else by **documented two-coder topic coding**. Assignment is on neutral topic only and is
-**blind to paradigm/outcome**. Rationale: keeps selection judgment-light, makes `field` a
-recorded fact rather than a pre-filter, and avoids the inefficiency of field-tagging an
-entire issue before drawing.
+General venues are sampled only inside a chosen target cell and active source block. Draw the
+archival unit, then filter that unit to OA-accessible research papers matching the target
+field. If the unit has zero matching papers, reject and redraw a unit from the same
+venue/source and era frame. Field is assigned from neutral article-level facts only: the
+venue's own subject taxonomy where one exists (Nature subject terms, journal/conference
+section, arXiv primary category as a field signal), title/abstract keywords, MeSH/OpenAlex
+concepts, or documented two-coder topic coding. Assignment is **blind to paradigm/outcome**.
+Rationale: preserves deliberate field coverage while keeping field assignment paper-based,
+not venue-based.
 
-### D2 — Sampling frame for ML/physics → venue-based; arXiv is a route, not a frame
+### D1b — Source-block sequencing → stepwise through the eligible source list
 
-*(Supersedes the option list in §4.)* The sampling frame is **published venues**, to stay
-commensurable with the journal-based fields. ML unit = **conference-year of accepted
-proceedings** (NeurIPS / ICML / ICLR), plus JMLR/TMLR issues; subdivide by track only if a
-cell needs it. Physics fields = **journal issues** (PRL, PRD, JHEP, ApJ, JCAP, …). **arXiv is
-used only** to (i) obtain the OA full text and (ii) identify the version — it is never the
-sampling frame, because it mixes unrefereed preprints and never-published notes, a different
-population from "published contributions a venue rewarded." **Dedup:** the unit of record is
-the **version of record / first archival venue**; the arXiv ID is stored as the access route;
-the §1.2 canonical-DOI/ID dedup prevents entering one contribution twice (e.g., a conference
-paper later extended to a journal — keep the first archival venue).
+The eligible venue/source list is now implemented as **source blocks** rather than as a
+per-paper random source draw. Within each active source block, sampling remains randomized at
+the archival-unit and paper levels. Source-block order must be predeclared or randomized once
+and saved with the audit. A partially completed field therefore represents the completed
+source blocks only; it must not be described as a full field-level sample over all eligible
+sources until the declared source-block frame has been completed or a source-level weighting
+rule is applied.
 
-### D3 — Verification → per-(journal, era) eligibility, built in phase order
+### D2 — Sampling frame for ML/physics → venue/source-based; arXiv is a route, not a frame
 
-Eligibility is established **per era band**, because OA route, tier, and even a journal's
-existence change over time. A journal enters an era's eligible set only if it (i) published in
-that era and (ii) has a **verified OA-accessible route** for that era's content. Record, per
-(journal, era): OA route, a **verification source** (OA-policy page, PMC / DOAJ / SCOAP3
-listing), tier, and **check-date** — mirroring `papers.csv`'s `oa_status` / `source_checked_date`
+*(Supersedes the older arXiv-category option list in §4.)* The default sampling frame is
+**accepted/published archival venues**, to stay commensurable across fields. ML unit =
+**conference-year of accepted main proceedings** (NeurIPS / ICML / ICLR), plus JMLR/TMLR
+issues or article batches; subdivide by track only if a cell pre-specifies it. Physics
+fields = **journal issues** (PRL, PRD, JHEP, ApJ, JCAP, etc.). **arXiv is used only** to
+(i) obtain the OA full text, (ii) identify the version, and (iii) provide a neutral field
+signal; it is not the default sampling frame because it mixes unrefereed preprints,
+never-published notes and later-published papers. **Dedup:** the unit of record is the
+version of record / first archival venue; the arXiv ID is stored as the access route; the
+§1.2 canonical-DOI/ID dedup prevents entering one contribution twice (e.g., a conference
+paper later extended to a journal — keep the first archival venue unless a different
+first-venue rule is pre-specified).
+
+### D3 — Verification → per-(venue/source, era) eligibility, built in phase order
+
+Eligibility is established **per era band**, because OA route, tier, and even a venue's
+existence change over time. A venue/source enters an era's eligible set only if it (i)
+published accepted/published papers in that era and (ii) has a **verified OA-accessible
+route** for that era's content. Record, per (venue/source, era): OA route, verification
+source (OA-policy page, PMC / DOAJ / SCOAP3 listing, proceedings index, repository policy),
+tier, and check-date — mirroring `papers.csv`'s `oa_status` / `source_checked_date`
 discipline. Sequencing: verify **Phase-1 fields first** (structure-driven physics); do not
 block the whole list on full eight-field verification.
 
@@ -245,8 +290,9 @@ Not either/or; the two tactics cover different eras. (i) **Modern eras (~2008+):
 route per paper and fold OA-accessibility into the §1.3 inclusion probability / `design_weight`.
 (ii) **Early eras:** enrich via **green/archive routes** (PMC, public archives), as the pilot
 already did for 1950s-1990s papers; acknowledge these cells are sampled from the
-archive-available subset. (iii) Compute a per-(journal, era) **OA-coverage fraction** (share
-of an issue that is OA-accessible); if coverage is very low (placeholder **< 20%**), flag the
+archive-available subset. (iii) Compute a per-(venue/source, era) **OA-coverage fraction**
+(share of an archival unit that is OA-accessible); if coverage is very low (placeholder
+**< 20%**), flag the
 cell *accessibility-limited* and prefer a gold/green venue for it. Implies one recorded field:
 `oa_route` ∈ {gold, green, archive} per paper.
 

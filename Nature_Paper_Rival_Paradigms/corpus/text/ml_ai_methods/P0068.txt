@@ -1,0 +1,788 @@
+--- Page 1 ---
+Efﬁcient Approximation Algorithms for String Kernel
+Based Sequence Classiﬁcation
+Muhammad Farhan
+Department of Computer Science
+School of Science and Engineering
+Lahore University of Management Sciences
+Lahore, Pakistan
+14030031@lums.edu.pk
+Juvaria Tariq
+Department of Mathematics
+School of Science and Engineering
+Lahore University of Management Sciences
+Lahore, Pakistan
+jtariq@emory.edu
+Arif Zaman
+Department of Computer Science
+School of Science and Engineering
+Lahore University of Management Sciences
+Lahore, Pakistan
+arifz@lums.edu.pk
+Mudassir Shabbir
+Department of Computer Science
+Information Technology University
+Lahore, Pakistan
+mudassir.shabbir@itu.edu.pk
+Imdad Ullah Khan
+Department of Computer Science
+School of Science and Engineering
+Lahore University of Management Sciences
+Lahore, Pakistan
+imdad.khan@lums.edu.pk
+Abstract
+Sequence classiﬁcation algorithms, such as SVM, require a deﬁnition of distance
+(similarity) measure between two sequences. A commonly used notion of similarity
+is the number of matches between k-mers (k-length subsequences) in the two
+sequences. Extending this deﬁnition, by considering twok-mers to match if their
+distance is at most m, yields better classiﬁcation performance. This, however,
+makes the problem computationally much more complex. Known algorithms to
+compute this similarity have computational complexity that render them applicable
+only for small values of k andm. In this work, we develop novel techniques to
+efﬁciently and accurately estimate the pairwise similarity score, which enables us
+to use much larger values of k andm, and get higher predictive accuracy. This
+opens up a broad avenue of applying this classiﬁcation approach to audio, images,
+and text sequences. Our algorithm achieves excellent approximation performance
+with theoretical guarantees. In the process we solve an open combinatorial problem,
+which was posed as a major hindrance to the scalability of existing solutions. We
+give analytical bounds on quality and runtime of our algorithm and report its
+empirical performance on real world biological and music sequences datasets.
+1 Introduction
+Sequence classiﬁcation is a fundamental task in pattern recognition, machine learning, and data
+mining with numerous applications in bioinformatics, text mining, and natural language processing.
+Detecting proteins homology (shared ancestry measured from similarity of their sequences of amino
+31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.
+
+
+--- Page 2 ---
+acids) and predicting proteins fold (functional three dimensional structure) are essential tasks in
+bioinformatics. Sequence classiﬁcation algorithms have been applied to both of these problems with
+great success [3, 10, 13, 18, 19, 20, 25]. Music data, a real valued signal when discretized using vector
+quantization of MFCC features is another ﬂavor of sequential data [ 26]. Sequence classiﬁcation
+has been used for recognizing genres of music sequences with no annotation and identifying artists
+from albums [12, 13, 14]. Text documents can also be considered as sequences of words from a
+language lexicon. Categorizing texts into classes based on their topics is another application domain
+of sequence classiﬁcation [11, 15].
+While general purpose classiﬁcation methods may be applicable to sequence classiﬁcation, huge
+lengths of sequences, large alphabet sizes, and large scale datasets prove to be rather challenging for
+such techniques. Furthermore, we cannot directly apply classiﬁcation algorithms devised for vectors
+in metric spaces because in almost all practical scenarios sequences have varying lengths unless
+some mapping is done beforehand. In one of the more successful approaches, the variable-length
+sequences are represented as ﬁxed dimensional feature vectors. A feature vector typically is the
+spectra (counts) of allk-length substrings (k-mers) present exactly [18] or inexactly (with up tom
+mismatches) [19] within a sequence. A kernel function is then deﬁned that takes as input a pair of
+feature vectors and returns a real-valued similarity score between the pair (typically inner-product of
+the respective spectra’s). The matrix of pairwise similarity scores (the kernel matrix) thus computed
+is used as input to a standard support vector machine (SVM) [5, 27] classiﬁer resulting in excellent
+classiﬁcation performance in many applications [19]. In this settingk (the length of substrings used
+as bases of feature map) andm (the mismatch parameter) are independent variables directly related
+to classiﬁcation accuracy and time complexity of the algorithm. It has been established that using
+larger values ofk andm improve classiﬁcation performance [11, 13]. On the other hand, the runtime
+of kernel computation by the efﬁcient trie-based algorithm [19, 24] isO(km+1|Σ|m(|X| + |Y |)) for
+two sequencesX andY over alphabet Σ.
+Computation of mismatch kernel between two sequences X andY reduces to the following two
+problems. i) Given twok-mersα andβ that are at Hamming distanced from each other, determine
+the size of intersection of m-mismatch neighborhoods of α andβ (k-mers that are at distance at
+mostm from both of them). ii) For 0 ≤d ≤ min{2m,k } determine the number of pairs ofk-mers
+(α,β ) ∈X ×Y such that Hamming distance betweenα andβ isd. In the best known algorithm [13]
+the former problem is addressed by precomputing the intersection size in constant time form ≤ 2
+only. While a sorting and enumeration based technique is proposed for the latter problem that has
+computational complexityO(2k(|X| + |Y |), which makes it applicable for moderately large values
+ofk (of course limited tom ≤ 2 only).
+In this paper, we completely resolve the combinatorial problem (problem i) for all values ofm. We
+prove a closed form expression for the size of intersection ofm-mismatch neighborhoods that lets us
+precompute these values inO(m3) time (independent of |Σ|,k, lengths and number of sequences).
+For the latter problem we devise an efﬁcient approximation scheme inspired by the theory of locality
+sensitive hashing to accurately estimate the number ofk-mer pairs between the two sequences that
+are at distanced. Combining the above two we design a polynomial time approximation algorithm for
+kernel computation. We provide probabilistic guarantees on the quality of our algorithm and analytical
+bounds on its runtime. Furthermore, we test our algorithm on several real world datasets with large
+values ofk andm to demonstrate that we achieve excellent predictive performance. Note that string
+kernel based sequence classiﬁcation was previously not feasible for this range of parameters.
+2 Related Work
+In the computational biology community pairwise alignment similarity scores were used traditionally
+as basis for classiﬁcation, like the local and global alignment [5, 29]. String kernel based classiﬁcation
+was introduced in [30, 9]. Extending this idea, [ 30] deﬁned the gappyn-gram kernel and used it
+in conjunction with SVM [27] for text classiﬁcation. The main drawback of this approach is that
+runtime for kernel evaluations depends quadratically on lengths of the sequences.
+An alternative model of string kernels represents sequences as ﬁxed dimensional vectors of counts of
+occurrences ofk-mers in them. These includek-spectrum [18] and substring [28] kernels. This notion
+is extended to count inexact occurrences of patterns in sequences as in mismatch [ 19] and proﬁle
+[10] kernels. In this transformed feature space SVM is used to learn class boundaries. This approach
+2
+
+
+--- Page 3 ---
+yields excellent classiﬁcation accuracies [13] but computational complexity of kernel evaluation
+remains a daunting challenge [11].
+The exponential dimensions ( |Σ|k) of the feature space for both the k-spectrum kernel and k,m -
+mismatch kernel make explicit transformation of strings computationally prohibitive. SVM does not
+require the feature vectors explicitly; it only uses pairwise dot products between them. A trie-based
+strategy to implicitly compute kernel values for pairs of sequences was proposed in [18] and [19].
+A (k,m )-mismatch tree is introduced which is a rooted |Σ|-ary tree of depthk, where each internal
+node has a child corresponding to each symbol in Σ and every leaf corresponds to ak-mer in Σk.
+The runtime for computing thek,m mismatch kernel value between two sequencesX andY , under
+this trie-based framework, isO((|X| + |Y |)km+1|Σ|m), where |X| and |Y | are lengths of sequences.
+This makes the algorithm only feasible for small alphabet sizes and very small number of allowed
+mismatches.
+Thek-mer based kernel framework has been extended in several ways by deﬁning different string
+kernels such as restricted gappy kernel, substitution kernel, wildcard kernel [20], cluster kernel [32],
+sparse spatial kernel [12], abstraction-augmented kernel [16], and generalized similarity kernel [14].
+For literature on large scale kernel learning and kernel approximation see [34, 1, 7, 22, 23, 33] and
+references therein.
+3 Algorithm for Kernel Computation
+In this section we formulate the problem, describe our algorithm and analyze it’s runtime and quality.
+k-spectrum andk,m -mismatch kernel: Given a sequenceX over alphabet Σ, thek,m -mismatch
+spectrum ofX is a |Σ|k-dimensional vector, Φk,m(X) of number of times each possiblek-mer occurs
+inX with at mostm mismatches. Formally,
+Φk,m(X) = (Φk,m(X)[γ])γ∈Σk =
+( ∑
+α∈X
+Im(α,γ )
+)
+γ∈Σk
+, (1)
+whereIm(α,γ ) = 1, ifα belongs to the set ofk-mers that differ fromγ by at mostm mismatches,
+i.e. the Hamming distance between α and γ, d(α,γ ) ≤ m. Note that for m = 0 , it is known
+ask-spectrum ofX. The k,m -mismatch kernel value for two sequencesX andY (the mismatch
+spectrum similarity score) [19] is deﬁned as:
+K(X,Y |k,m ) = ⟨Φk,m(X), Φk,m(Y )⟩ =
+∑
+γ∈Σk
+Φk,m(X)[γ]Φk,m(Y )[γ]
+=
+∑
+γ∈Σk
+∑
+α∈X
+Im(α,γ )
+∑
+β∈Y
+Im(β,γ ) =
+∑
+α∈X
+∑
+β∈Y
+∑
+γ∈Σk
+Im(α,γ )Im(β,γ ). (2)
+For ak-merα, letNk,m(α) = {γ ∈ Σk :d(α,γ ) ≤m} be them-mutational neighborhood ofα.
+Then for a pair of sequencesX andY , thek,m -mismatch kernel given in eq (2) can be equivalently
+computed as follows [13]:
+K(X,Y |k,m ) =
+∑
+α∈X
+∑
+β∈Y
+∑
+γ∈Σk
+Im(α,γ )Im(β,γ )
+=
+∑
+α∈X
+∑
+β∈Y
+|Nk,m(α) ∩Nk,m(β)| =
+∑
+α∈X
+∑
+β∈Y
+Im(α,β ), (3)
+where Im(α,β ) = |Nk,m(α) ∩Nk,m(β)| is the size of intersection ofm-mutational neighborhoods
+ofα andβ. We use the following two facts.
+Fact 3.1. Im(α,β ), the size of the intersection of m-mismatch neighborhoods of α and β, is a
+function of k,m, |Σ| andd(α,β ) and is independent of the actual k-mersα andβ or the actual
+positions where they differ. (See section 3.1)
+Fact 3.2. Ifd(α,β )> 2m, then Im(α,β ) = 0.
+In view of the above two facts we can rewrite the kernel value (3) as
+K(X,Y |k,m ) =
+∑
+α∈X
+∑
+β∈Y
+Im(α,β ) =
+min{2m,k}∑
+i=0
+Mi · Ii, (4)
+3
+
+
+--- Page 4 ---
+where Ii = Im(α,β ) whend(α,β ) = i andMi is the number of pairs ofk-mers (α,β ) such that
+d(α,β ) =i, whereα ∈X andβ ∈Y . Note that bounds on the last summation follows from Fact
+3.2 and the fact that the Hamming distance between twok-mers is at mostk. Hence the problem of
+kernel evaluation is reduced to computingMi’s and evaluating Ii’s.
+3.1 Closed form for Intersection Size
+LetNk,m(α,β ) be the intersection ofm-mismatch neighborhoods ofα andβ i.e.
+Nk,m(α,β ) =Nk,m(α) ∩Nk,m(β).
+As deﬁned earlier |Nk,m(α,β )| = Im(α,β ). Let Nq(α) = {γ ∈ Σk : d(α,γ ) = q} be the set of
+k-mers that differ withα in exactlyq indices. Note that Nq(α) ∩Nr(α) = ∅ for allq ̸=r. Using
+this and deﬁningnqr(α,β ) = |Nq(α) ∩Nr(β)|,
+Nk,m(α,β ) =
+m⋃
+q=0
+m⋃
+r=0
+Nq(α) ∩Nr(β) and Im(α,β ) =
+m∑
+q=0
+m∑
+r=0
+nqr(α,β ).
+Hence we give a formula to computenij(α,β ). Lets = |Σ|.
+Theorem 3.3. Given twok-mersα andβ such thatd(α,β ) =d, we have that
+nij(α,β ) =
+i+j−d
+2∑
+t=0
+(2d −i −j + 2t
+d − (i −t)
+)( d
+i +j − 2t −d
+)
+(s − 2)i+j−2t−d
+(k −d
+t
+)
+(s − 1)t.
+Proof. nij(α,β ) can be interpreted as the number of ways to make i changes inα andj changes
+inβ to get the same string. For clarity, we ﬁrst deal with the case when we have d(α,β ) = 0, i.e
+both strings are identical. We wish to ﬁnd nij(α,β ) = |Ni(α) ∩Nj(β)|. It is clear that in this
+casei =j, otherwise makingi andj changes to the same string will not result in the same string.
+Hencenij =
+(k
+i
+)
+(s − 1)i. Second we considerα,β such thatd(α,β ) =k. Clearlyk ≥i andk ≥j.
+Moreover, since both strings do not agree at any index, character at every index has to be changed in
+at least one ofα orβ. This givesk ≤i +j.
+Now for a particular indexp,α[p] andβ[p] can go through any one of the following three changes.
+Letα[p] = x, β[p] = y. (I) Both α[p] andβ[p] may change from x andy respectively to some
+characterz. Letl1 be the count of indices going through this type of change. (II)α[p] changes from
+x toy, call the count of thesel2. (III)β[p] changes fromy tox, let this count bel3. It follows that
+i =l1 +l2 , j =l1 +l3, , l 1 +l2 +l3 =k.
+This results inl1 =i +j −k. Since l1 is the count of indices at which characters of both strings
+change, we haves − 2 character choices for each such index and
+( k
+i+j−k
+)
+possible combinations of
+indices forl1. From the remaining l2 +l3 = 2k −i −j indices, we choosel2 =k −j indices in(2k−i−j
+k−j
+)
+ways and change the characters at these indices ofα to characters ofβ at respective indices.
+Finally, we are left with onlyl3 remaining indices and we change them according to the deﬁnition of
+l3. Thus the total number of strings we get after makingi changes inα andj changes inβ is
+(s − 2)i+j−k
+( k
+i +j −k
+)(2k −i −j
+k −j
+)
+.
+Now we consider general stringsα andβ of lengthk withd(α,β ) =d. Without loss of generality
+assume that they differ in the ﬁrstd indices. We parameterize the system in terms of the number of
+changes that occur in the lastk −d indices of the strings i.e lett be the number of indices that go
+through a change in lastk −d indices. Number of possible such changes is
+(k −d
+t
+)
+(s − 1)t. (5)
+Lets call the ﬁrstd-length substrings of both strings α′ andβ′. There are i −t characters to be
+changed inα′ andj −t inβ′. As reasoned above, we haved ≤ (i −t) + (j −t) = ⇒ t ≤ i+j−d
+2 .
+4
+
+
+--- Page 5 ---
+In this setup we geti −t =l1 +l2,j −t =l1 +l3,l1 +l2 +l3 =d andl1 = (i −t) + (j −t) −d.
+We immediately get that for a ﬁxedt, the total number of resultant strings after makingi −t changes
+inα′ andj −t changes inβ′ is(2d − (i −t) − (j −t)
+d − (i −t)
+)( d
+(i −t) + (j −t) −d
+)
+(s − 2)(i−t)+(j−t)−d. (6)
+For a ﬁxedt, every substring counted in (5), every substring counted in (6) gives a required string
+obtained afteri andj changes inα andβ respectively. The statement of the theorem follows.
+Corollary 3.4. Runtime of computing Id isO(m3), independent ofk and |Σ|.
+This is so, because ifd(α,β ) =d, Id =
+m∑
+q=0
+m∑
+r=0
+nqr(α,β ) andnqr(α,β ) can be computed inO(m).
+3.2 Computing Mi
+Recall that given two sequences X andY ,Mi is the number of pairs of k-mers (α,β ) such that
+d(α,β ) =i, whereα ∈X andβ ∈Y . Formally, the problem of computingMi is as follows:
+Problem 3.5. Givenk,m, and two sets of k-mersSX andSY (set of k-mers extracted from the
+sequencesX andY respectively) with |SX | =nX and |SY | =nY . Compute
+Mi = |{(α,β ) ∈SX ×SY :d(α,β ) =i}| for 0 ≤i ≤ min{2m,k }.
+Note that the brute force approach to computeMi requiresO(nX ·nY ·k) comparisons. Let Qk(j)
+denote the set of allj-sets of {1,...,k } (subsets of indices). Forθ ∈ Qk(j) and ak-merα, letα|θ
+be thej-mer obtained by selecting the characters at thej indices inθ. Letfθ(X,Y ) be the number
+of pairs ofk-mers inSX ×SY as follows;
+fθ(X,Y ) = |{(α,β ) ∈SX ×SY :d(α|θ,β |θ) = 0}|.
+We use the following important observations aboutfθ.
+Fact 3.6. For 0 ≤i ≤k andθ ∈ Qk(k −i), ifd(α|θ,β |θ) = 0, thend(α,β ) ≤i.
+Fact 3.7. For 0 ≤i ≤k andθ ∈ Qk(k −i),fθ(X,Y ) can be computed inO(kn logn) time.
+This can be done by ﬁrst lexicographically sorting thek-mers in each ofSX andSY by the indices
+inθ. The pairs in SX ×SY that are the same at indices in θ can then be enumerated in one linear
+scan over the sorted lists. Let n =nX +nY , runtime of this computation is O(k(n + |Σ|)) if we
+use counting sort (as in [13]) orO(kn logn) for mergesort (sinceθ hasO(k) indices.) Since this
+procedure is repeated many times, we refer to this as the SORT-ENUMERATE subroutine. We deﬁne
+Fi(X,Y ) =
+∑
+θ∈Qk(k−i)
+fθ(X,Y ). (7)
+Lemma 3.8.
+Fi(X,Y ) =
+i∑
+j=0
+(k −j
+k −i
+)
+Mj. (8)
+Proof. Let (α,β ) be a pair that contributes toMj, i.e. d(α,β ) =j. Then for everyθ ∈ Qk(k −i)
+that has all indices within the k −j positions where α andβ agree, the pair (α,β ) is counted in
+fθ(X,Y ). The number of suchθ’s are
+(k−j
+k−i
+)
+, henceMj is counted
+(k−j
+k−i
+)
+times inFi(X,Y ), yielding
+the required equality.
+Corollary 3.9. Mi can readily be computed as:Mi =Fi(X,Y ) −
+i−1∑
+j=0
+(k−j
+k−i
+)
+Mj.
+By deﬁnition,Fi(X,Y ) can be computed with
+(k
+k−i
+)
+=
+(k
+i
+)
+fθ computations. Lett = min{2m,k }.
+K(X,Y |k,m ) can be evaluated by (4) after computingMi (by (8)) and Ii (by Corollary 3.4) for
+0 ≤i ≤t. The overall complexity of this strategy thus is( t∑
+i=0
+(k
+i
+)
+(k −i)(n logn +n)
+)
++O(n) =O(k · 2k−1 · (n logn)).
+5
+
+
+--- Page 6 ---
+Algorithm 1 : Approximate-Kernel(SX,SY ,k,m,ϵ,δ,B)
+1: I,M′ ← ZEROS (t + 1)
+2: σ ←ϵ ·
+√
+δ
+3: Populate I using Corollary 3.4
+4: fori = 0 tot do
+5: µF ← 0
+6: iter ← 1
+7: varF ← ∞
+8: whilevarF >σ 2 ∧iter<B do
+9: θ ← RANDOM (
+(k
+k−i
+)
+)
+10: µF ← µF · (iter − 1) + SORT-ENUMERATE (SX,SY,k,θ )
+iter ⊿ Application of Fact 3.7
+11: varF ← VARIANCE (µF,varF,iter ) ⊿ Compute online variance
+12: iter ←iter + 1
+13: F′[i] ←µF ·
+(k
+k−i
+)
+14: M′[i] ←F′[i]
+15: forj = 0 toi − 1 do ⊿ Application of Corollary 3.9
+16: M′[i] ←M′[i] −
+(k−j
+k−i
+)
+·M′[j]
+17: K′ ← SUMPRODUCT (M′, I) ⊿ Applying Equation (4)
+18: returnK′
+We give our algorithm to approximateK(X,Y |k,m ), it’s explanation followed by it’s analysis.
+Algorithm 1 takesϵ,δ ∈ (0, 1), andB ∈ Z+ as input parameters; the ﬁrst two controls the accuracy
+of estimate whileB is an upper bound on the sample size. We use(7) to estimateFi =Fi(X,Y ) with
+an online sampling algorithm, where we chooseθ ∈ Qk(k −i) uniformly at random and compute the
+online mean and variance of the estimate forFi. We continue to sample until the variance is below the
+threshold (σ2 =ϵ2δ) or the sample size reaches the upper boundB. We scale up our estimate by the
+population size and use it to computeM′
+i (estimates ofMi) using Corollary 3.9. TheseM′
+i ’s together
+with the precomputed exact values of Ii’s are used to compute our estimate,K′(X,Y |k,m,σ,δ,B ),
+for the kernel value using (4). First we give an analytical bound on the runtime of Algorithm 1 then
+we provide guarantees on it’s performance.
+Theorem 3.10. Runtime of Algorithm 1 is bounded above byO(k2n logn).
+Proof. Observe that throughout the execution of the algorithm there are at mosttB computations of
+fθ, which by Fact 3.7 needsO(kn logn) time. Since B is an absolute constant andt ≤k, we get
+that the total runtime of the algorithm isO(k2n logn). Note that in practice the while loop in line 8
+is rarely executed forB iterations; the deviation is within the desired range much earlier.
+LetK′ =K′(X,Y |k,m,ϵ,δ,B ) be our estimate (output of Algorithm 1) forK =K(X,Y |k,m ).
+Theorem 3.11. K′ is an unbiased estimator of the true kernel value, i.e.E(K′) =K.
+Proof. For this we need the following result, whose proof is deferred.
+Lemma 3.12. E(M′
+i) =Mi.
+By Line 17 of Algorithm 1, E(K′) = E(∑t
+i=0 IiM′
+i). Using the fact that Ii’s are constants and
+Lemma 3.12 we get that
+E(K′) =
+t∑
+i=0
+IiE(M′
+i) =
+min{2m,k}∑
+i=0
+IiMi =K.
+Theorem 3.13. For any 0 < ϵ,δ < 1, Algorithm 1 is an (ϵImax,δ )−additive approximation
+algorithm, i.e.Pr (|K −K′| ≥ ϵImax)<δ , where Imax = maxi{Ii}.
+6
+
+
+--- Page 7 ---
+Note that these are very loose bounds, in practice we get approximation far better than these bounds.
+Furthermore, though Imax could be large, but it is only a fraction of one of the terms in summation
+for the kernel valueK(X,Y |k,m ).
+Proof. LetF′
+i be our estimate forFi (X,Y ) =Fi. We use the following bound on the variance of
+K′ that is proved later.
+Lemma 3.14. Var (K′) ≤δ(ϵ · Imax)2.
+By Lemma 3.12 we haveE(K′) =K, hence by Lemma 3.14,Pr [|K′ −K|] ≥ϵImax is equivalent
+toPr [|K′ −E(K′)|] ≥ 1√
+δ
+√
+Var (K′). By the Chebychev’s inequality, this latter probability is at
+mostδ. Therefore, Algorithm 1 is an (ϵImax,δ )−additive approximation algorithm.
+Proof. (Proof of Lemma 3.12) We prove it by induction oni. The base case (i = 0) is true as we
+computeM′[0] exactly, i.e.M′[0] =M[0]. SupposeE(M′
+j) =Mj for 0 ≤j ≤i − 1. Letiter be
+the number of iterations fori, after execution of Line 10 we get
+F′[i] =µF
+( k
+k −i
+)
+=
+∑iter
+r=1fθr(X,Y )
+iter
+( k
+k −i
+)
+,
+whereθr is the random (k −i)-set chosen in therth iteration of the while loop. Sinceθr is chosen
+uniformly at random we get that
+E(F′[i]) =E(µF )
+( k
+k −i
+)
+=E(fθr(X,Y ))
+( k
+k −i
+)
+= Fi(X,Y )(k
+k−i
+)
+( k
+k −i
+)
+. (9)
+After the loop on Line 15 is executed we get thatE(M′[i]) =Fi(X,Y ) −
+i−1∑
+j=0
+(k−j
+k−i
+)
+E(M′
+j). Using
+E(M′
+j) =Mj (inductive hypothesis) in (8) we get thatE(M′
+i) =Mi.
+Proof. (Proof of Lemma 3.14) After execution of the while loop in Algorithm 1, we have F′
+i =
+i∑
+j=0
+(k−j
+k−i
+)
+M′
+j. We use the following fact that follows from basic calculations.
+Fact 3.15. SupposeX0,...,X t are random variables and let S = ∑t
+i=0aiXi, wherea0,...,a t
+are constants. Then
+Var (S) =
+t∑
+i=0
+a2
+iVar (Xi) + 2
+t∑
+i=0
+t∑
+j=i+1
+aiajCov(Xi,Xj).
+Using fact 3.15 and deﬁnitions ofImax andσ we get that
+Var (K′) =
+t∑
+i=0
+Ii
+2Var (M′
+i) + 2
+t∑
+i=0
+t∑
+j=i+1
+IiIjCov(M′
+i,M′
+j)
+≤ I 2
+max
+
+
+t∑
+i=0
+Var (M′
+i) + 2
+t∑
+i=0
+t∑
+j=i+1
+Cov(M′
+i,M′
+j)
+
+ ≤ I 2
+maxVar (F′
+t) ≤ I 2
+maxσ2 =δ(ϵ·Imax)2.
+The last inequality follows from the following relation derived from deﬁnition ofF′
+i and Fact 3.15.
+Var (F′
+t) =
+t∑
+i=0
+(k −i
+k −t
+)2
+Var (M′
+i) + 2
+t∑
+i=0
+t∑
+j=i+1
+(k −i
+k −t
+)(k −j
+k −t
+)
+Cov(M′
+i,M′
+j). (10)
+7
+
+
+--- Page 8 ---
+4 Evaluation
+We study the performance of our algorithm in terms of runtime, quality of kernel estimates and pre-
+dictive accuracies on standard benchmark sequences datasets (Table 1) . For the range of parameters
+feasible for existing solutions, we generated kernel matrices both by algorithm of [13] (exact) and
+our algorithm (approximate). These experiments are performed on an Intel Xeon machine with (8
+Cores, 2.1 GHz and 32 GB RAM) using the same experimental settings as in [ 13, 15, 17]. Since
+our algorithm is applicable for signiﬁcantly wider range ofk andm, we also report classiﬁcation
+performance with largek andm. For our algorithm we used B ∈ {300, 500} andσ ∈ {0.25, 0.5}
+with no signiﬁcant difference in results as implied by the theoretical analysis. In all reported results
+B = 300 andσ = 0.5. In order to perform comparisons, for a few combinations of parameters
+we generated exact kernel matrices of each dataset on a much more powerful machine (a cluster of
+20 nodes, each having 24 CPU’s with 2.5 GHz speed and 128GB RAM). Sources for datasets and
+source code are available at 1.
+Table 1: Datasets description
+Name Task Classes Seq. Av.Len. Evaluation
+Ding-Dubchak [6] protein fold recognition 27 694 169 10-fold CV
+SCOP [4, 31] protein homology detection 54 7329 308 54 binary class.
+Music [21, 26] music genre recognition 10 1000 2368 5-fold CV
+Artist20 [8, 17] artist identiﬁcation 20 1413 9854 6-fold CV
+ISMIR [17] music genre recognition 6 729 10137 5-fold CV
+Running Times: We report difference in running times for kernels generation in Figure 1. Exact
+kernels are generated using code provided by authors of [13, 14] for 8 ≤k ≤ 16 andm = 2 only.
+We achieve signiﬁcant speedups for large values ofk (fork = 16 we get one order of magnitude
+gains in computational efﬁciency on all datasets). The running times for these algorithms areO(2kn)
+andO(k2n logn) respectively. We can use larger values ofk without an exponential penalty, which
+is visible in the fact that in all graphs, ask increases the growth of running time of the exact algorithm
+is linear (on the log-scale), while that of our algorithm tends to taper off.
+Figure 1: Log scaled plot of running time of approximate and exact kernel generation form = 2
+1
+10
+100
+1000
+10000
+8 10 12 14 16 8 10 12 14 16 8 10 12 14 16 8 10 12 14 16 8 10 12 14 16
+DingDubchak SCOP MusicGenre ISMIR2004 Artist20
+k Running Time (sec) 
+Exact
+Approximate
+Kernel Error Analysis: We show that despite reduction in runtimes, we get excellent approximation
+of kernel matrices. In Table 2 we report point-to-point error analysis of the approximate kernel
+matrices. We compare our estimates with exact kernels form = 2. Form> 2 we report statistical
+error analyses. More precisely, we evaluate differences with principal submatrices of the exact kernel
+matrix. These principal submatrices are selected by randomly sampling 50 sequences and computing
+their pairwise kernel values. We report errors for four datasets; the ﬁfth one, not included for space
+reasons, showed no difference in error. From Table 2 it is evident that our empirical performance is
+signiﬁcantly more precise than the theoretical bounds proved on errors in our estimates.
+1https://github.com/mufarhan/sequence_class_NIPS_2017
+8
+
+
+--- Page 9 ---
+Table 2: Mean absolute error (MAE) and root mean squared error (RMSE) of approximate kernels.
+Form> 2 we report average MAE and RMSE of three random principal submatrices of size50 × 50
+Music Genre ISMIR Artist20 SCOP
+(k,m ) RMSE MAE RMSE MAE RMSE MAE RMSE MAE
+(10, 2) 0 0 0 0 0 0 1.3E−6 9.0E−8
+(12, 2) 0 0 0 0 0 0 1.4E−6 1.0E−8
+(14, 2) 2.0E−8 0 2.0E−8 0 3.3E−8 1.3E−8 2.9E−6 1.3E−8
+(16, 2) 1.3E−8 0 4.0E−8 3.3E−9 2.9E−6 1.0E−8
+(12, 6) 1.97E−5 8.5E−7 2.4E−4 1.8E−5
+Prediction Accuracies: We compare the outputs of SVM on the exact and approximate kernels
+using the publicly available SVM implementation LIBSVM [2]. We computed exact kernel matrices
+by brute force algorithm for a few combinations of parameters for each dataset on the much more
+powerful machine. Generating these kernels took days; we only generated to compare classiﬁcation
+performance of our algorithm with the exact one. We demonstrate that our predictive accuracies
+are sufﬁciently close to that with exact kernels in Table 3 (bio-sequences) and Table 4 (music). The
+parameters used for reporting classiﬁcation performance are chosen in order to maintain comparability
+with previous studies. Similarly all measurements are made as in [ 13, 14], for instance for music
+genre classiﬁcation we report results of10-fold cross-validation (see Table 1). For our algorithm we
+usedB = 300 andσ = 0.5 and we take an average of performances over three independent runs.
+Table 3: Classiﬁcation performance comparisons on SCOP (ROC) and Ding-Dubchak (Accuracy)
+SCOP Ding-Dubchak
+Exact Approx Exact Approx
+k,m ROC ROC50 ROC ROC50 Accuracy
+8, 2 88.09 38 .71 88.05 38 .60 34.01 31 .65
+10, 2 81.65 28 .18 80.56 26 .72 28.1 26 .9
+12, 2 71.31 23 .27 66.93 11 .04 27.23 26 .66
+14, 2 67.91 7 .78 63.67 6 .66 25.5 25 .5
+16, 2 64.45 6 .89 61.64 5 .76 25.94 25 .03
+10, 5 91.60 53 .77 91.67 54 .1 45.1 43 .80
+10, 7 90.27 48 .18 90.30 48 .44 58.21 57 .20
+12, 8 91.44 50 .54 90.97 52 .08 58.21 57 .83
+Table 4: Classiﬁcation error comparisons on music datasets exact and estimated kernels
+Music Genre ISMIR Artist20
+k,m Exact Estimate Exact Estimate Exact Estimate
+10, 2 61.30 ± 3.3 61.30 ± 3.3 54.32 ± 1.6 54.32 ± 1.6 82.10 ± 2.2 82.10 ± 2.2
+14, 2 71.70 ± 3.0 71.70 ± 3.0 55.14 ± 1.1 55.14 ± 1.1 86.84 ± 1.8 86.84 ± 1.8
+16, 2 73.90 ± 1.9 73.90 ± 1.9 54.73 ± 1.5 54.73 ± 1.5 87.56 ± 1.8 87.56 ± 1.8
+10, 7 37.00 ± 3.5 37.00 ± 3.5 27.16 ± 1.6 55.75 ± 4.7 55.75 ± 4.7
+12, 6 54.20 ± 2.7 54.13 ± 2.9 52.12 ± 2.0 52.08 ± 1.5 79.57 ± 2.4 80.00 ± 2.6
+12, 8 43.70 ± 3.2 44.20 ± 3.2 47.03 ± 2.6 47.41 ± 2.4 67.57 ± 3.6
+5 Conclusion
+In this work we devised an efﬁcient algorithm for evaluation of string kernels based on inexact
+matching of subsequences (k-mers). We derived a closed form expression for the size of intersection
+ofm-mismatch neighborhoods of twok-mers. Another signiﬁcant contribution of this work is a novel
+statistical estimate of the number ofk-mer pairs at a ﬁxed distance between two sequences. Although
+large values of the parameters k andm were known to yield better classiﬁcation results, known
+algorithms are not feasible even for moderately large values. Using the two above mentioned results
+our algorithm efﬁciently approximate kernel matrices with probabilistic bounds on the accuracy.
+Evaluation on several challenging benchmark datasets for largek andm, show that we achieve state
+of the art classiﬁcation performance, with an order of magnitude speedup over existing solutions.
+9
+
+
+--- Page 10 ---
+References
+[1] F. R. Bach and M. I. Jordan. Predictive low-rank decomposition for kernel methods. In
+International Conference on Machine Learning, ICML, pages 33–40, 2005.
+[2] C.-C. Chang and C.-J. Lin. LIBSVM: A library for support vector machines. ACM Transactions
+on Intelligent Systems and Technology, 2:27:1–27:27, 2011.
+[3] J. Cheng and P. Baldi. A machine learning information retrieval approach to protein fold
+recognition. Bioinformatics, 22(12):1456–1463, 2006.
+[4] L. Conte, B. Ailey, T. Hubbard, S. Brenner, A. Murzin, and C. Chothia. Scop: A structural
+classiﬁcation of proteins database. Nucleic Acids Research, 28(1):257–259, 2000.
+[5] N. Cristianini and J. Shawe-Taylor. An introduction to support vector machines and other
+kernel-based learning methods. Cambridge university press, 2000.
+[6] C. Ding and I. Dubchak. Multi-class protein fold recognition using support vector machines
+and neural networks. Bioinformatics, 17(4):349–358, 2001.
+[7] P. Drineas and M. W. Mahoney. On the nyström method for approximating a gram matrix for
+improved kernel-based learning. The Journal of Machine Learning Research, 6:2153–2175,
+2005.
+[8] D. P. Ellis. Classifying music audio with timbral and chroma features. In ISMIR, volume 7,
+pages 339–340, 2007.
+[9] D. Haussler. Convolution kernels on discrete structures. Technical Report UCS-CRL-99-10,
+University of California at Santa Cruz, 1999.
+[10] R. Kuang, E. Ie, K. Wang, K. Wang, M. Siddiqi, Y . Freund, and C. Leslie. Proﬁle-based string
+kernels for remote homology detection and motif extraction. Journal of Bioinformatics and
+Computational Biology, 3(3):527–550, 2005.
+[11] P. Kuksa. Scalable kernel methods and algorithms for general sequence analysis. PhD thesis,
+Department of Computer Science, Rutgers, The State University of New Jersey, 2011.
+[12] P. Kuksa, P.-H. Huang, and V . Pavlovic. Fast protein homology and fold detection with sparse
+spatial sample kernels. In 19th International Conference on Pattern Recognition, ICPR, pages
+1–4. IEEE, 2008.
+[13] P. Kuksa, P.-H. Huang, and V . Pavlovic. Scalable algorithms for string kernels with inexact
+matching. In Advances in Neural Information Processing Systems, NIPS, pages 881–888. MIT
+Press, 2009.
+[14] P. Kuksa, I. Khan, and V . Pavlovic. Generalized similarity kernels for efﬁcient sequence
+classiﬁcation. InSIAM International Conference on Data Mining, SDM, pages 873–882. SIAM,
+2012.
+[15] P. Kuksa and V . Pavlovic. Spatial representation for efﬁcient sequence classiﬁcation. In20th
+International Conference on Pattern Recognition, ICPR, pages 3320–3323. IEEE, 2010.
+[16] P. Kuksa, Y . Qi, B. Bai, R. Collobert, J. Weston, V . Pavlovic, and X. Ning. Semi-supervised
+abstraction-augmented string kernel for multi-level bio-relation extraction. In Joint European
+Conference on Machine Learning and Knowledge Discovery in Databases , ECML-PKDD,
+pages 128–144. Springer, 2010.
+[17] P. P. Kuksa. Efﬁcient multivariate sequence classiﬁcation. InCoRR abs/1409.8211, 2013.
+[18] C. Leslie, E. Eskin, and W. Noble. The spectrum kernel: A string kernel for svm protein
+classiﬁcation. In Paciﬁc Symposium on Biocomputing, volume 7 of PSB, pages 566–575, 2002.
+[19] C. Leslie, E. Eskin, J. Weston, and W. Noble. Mismatch string kernels for svm protein
+classiﬁcation. In Advances in Neural Information Processing Systems, NIPS, pages 1441–1448.
+MIT Press, 2003.
+10
+
+
+--- Page 11 ---
+[20] C. Leslie and R. Kuang. Fast string kernels using inexact matching for protein sequences.
+Journal of Machine Learning Research, 5:1435–1455, 2004.
+[21] T. Li, M. Ogihara, and Q. Li. A comparative study on content-based music genre classiﬁca-
+tion. In 26th Annual International ACM SIGIR Conference on Research and Development in
+Information Retrieval, ACM/SIGIR, pages 282–289. ACM, 2003.
+[22] A. Rahimi and B. Recht. Random features for large-scale kernel machines. In Advances in
+Neural Information Processing Systems, NIPS, pages 1177–1184, 2007.
+[23] A. Rahimi and B. Recht. Weighted sums of random kitchen sinks: Replacing minimization
+with randomization in learning. In Advances in Neural Information Processing Systems, NIPS,
+pages 1313–1320, 2008.
+[24] J. Shawe-Taylor and N. Cristianini. Kernel methods for pattern analysis. Cambridge university
+press, 2004.
+[25] S. Sonnenburg, G. Rätsch, and B. Schölkopf. Large scale genomic sequence svm classiﬁers. In
+22nd International Conference on Machine Learning, ICML, pages 848–855. ACM, 2005.
+[26] G. Tzanetakis and P. Cook. Musical genre classiﬁcation of audio signals.IEEE Transactions on
+Speech and Audio Processing, 10(5):293–302, 2002.
+[27] V . Vapnik.Statistical learning theory, volume 1. Wiley New York, 1998.
+[28] S. Vishwanathan and A. Smola. Fast kernels for string and tree matching. In Advances in
+Neural Information Processing Systems, NIPS, pages 585–592, 2002.
+[29] M. Waterman, J. Joyce, and M. Eggert. Computer alignment of sequences. Phylogenetic
+analysis of DNA sequences, pages 59–72.
+[30] C. Watkins. Dynamic alignment kernels. In Advances in Large Margin Classiﬁers, pages 39–50.
+MIT Press, 1999.
+[31] J. Weston, C. Leslie, E. Ie, D. Zhou, A. Elisseeff, and W. Noble. Semi-supervised protein
+classiﬁcation using cluster kernels. Bioinformatics, 21(15):3241–3247, 2005.
+[32] J. Weston, C. Leslie, D. Zhou, A. Elisseeff, and W. Noble. Semi-supervised protein classiﬁcation
+using cluster kernels. In Advances in Neural Information Processing Systems , NIPS, pages
+595–602. MIT Press, 2004.
+[33] C. K. I. Williams and M. Seeger. Using the nyström method to speed up kernel machines. In
+Advances in Neural Information Processing Systems, NIPS, pages 661–667, 2000.
+[34] T. Yang, Y .-F. Li, M. Mahdavi, R. Jin, and Z.-H. Zhou. Nyström method vs random fourier
+features: A theoretical and empirical comparison. InAdvances in Neural Information Processing
+Systems, NIPS, pages 476–484, 2012.
+11

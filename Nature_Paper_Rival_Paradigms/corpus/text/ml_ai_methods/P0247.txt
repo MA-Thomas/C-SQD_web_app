@@ -1,0 +1,653 @@
+--- Page 1 ---
+Constant Regret, Generalized Mixability, and Mirror
+Descent
+Zakaria Mhammedi
+Research School of Computer Science
+Australian National University and DATA61
+zak.mhammedi@anu.edu.au
+Robert C. Williamson
+Research School of Computer Science
+Australian National University and DATA61
+bob.williamson@anu.edu.au
+Abstract
+We consider the setting of prediction with expert advice; a learner makes predictions
+by aggregating those of a group of experts. Under this setting, and for the right
+choice of loss function and “mixing” algorithm, it is possible for the learner to
+achieve a constant regret regardless of the number of prediction rounds. For
+example, a constant regret can be achieved formixable losses using the aggregating
+algorithm. The Generalized Aggregating Algorithm (GAA) is a name for a family
+of algorithms parameterized by convex functions on simplices (entropies), which
+reduce to the aggregating algorithm when using theShannon entropy S. For a given
+entropy Φ, losses for which a constant regret is possible using the GAA are called
+Φ-mixable. Which losses are Φ-mixable was previously left as an open question.
+We fully characterize Φ-mixability and answer other open questions posed by [6].
+We show that the Shannon entropy S is fundamental in nature when it comes to
+mixability; any Φ-mixable loss is necessarily S-mixable, and the lowest worst-case
+regret of the GAA is achieved using the Shannon entropy. Finally, by leveraging
+the connection between the mirror descent algorithm and the update step of the
+GAA, we suggest a new adaptive generalized aggregating algorithm and analyze
+its performance in terms of the regret bound.
+1 Introduction
+Two fundamental problems in learning are how to aggregate information and under what circum-
+stances can one learn fast. In this paper, we consider the problems jointly, extending the understanding
+and characterization of exponential mixing due to [10], who showed that not only does the “ aggregat-
+ing algorithm” learn quickly when the loss is suitably chosen, but that it is in fact a generalization of
+classical Bayesian updating, to which it reduces when the loss is log-loss [12]. We consider a general
+class of aggregating schemes, going beyond V ovk’s exponential mixing, and provide a complete
+characterization of the mixing behavior for general losses and general mixing schemes parameterized
+by an arbitrary entropy function.
+In the game of prediction with expert advice a learner predicts the outcome of a random variable
+(outcome of the environment) by aggregating the predictions of a pool of experts. At the end of
+each prediction round, the outcome of the environment is announced and the learner and experts
+suffer losses based on their predictions. We are interested in algorithms that the learner can use to
+“aggregate” the experts’ predictions and minimize the regret at the end of the game. In this case,
+the regret is deﬁned as the difference between the cumulative loss of the learner and that of the best
+expert in hindsight afterT rounds.
+The Aggregating Algorithm (AA) [10] achieves a constant regret — a precise notion of fast learning
+— for mixable losses; that is, the regret is bounded from above by a constantRℓ which depends only
+on the loss function ℓ and not on the number of rounds T . It is worth mentioning that mixability
+32nd Conference on Neural Information Processing Systems (NeurIPS 2018), Montréal, Canada.
+
+
+--- Page 2 ---
+is a weaker condition than exp-concavity, and contrary to the latter, mixability is an intrinsic,
+parametrization-independent notion [4].
+Reid et al. [6] introduced the Generalized Aggregating Algorithm (GAA), going beyond the AA. The
+GAA is parameterized by the choice of a convex function Φ on the simplex (entropy) and reduces to
+the AA when Φ is the Shannon entropy. The GAA can achieve a constant regret for losses satisfying
+a certain condition called Φ-mixability (characterizing when losses are Φ-mixable was left as an open
+problem). This regret depends jointly on the generalized mixability constantηΦ
+ℓ — essentially the
+largestη such thatℓ is ( 1
+η Φ)-mixable — and the divergence DΦ(eθ,q), whereq ∈ ∆k is a prior
+distribution overk experts andeθ is theθth standard basis element of Rk [6]. At each prediction
+round, the GAA can be divided into two steps; a substitution step where the learner picks a prediction
+from a set speciﬁed by theΦ-mixability condition; and an update step where a new distributionq
+over experts is computed depending on their performance. Interestingly, this update step is exactly
+the mirror descent algorithm [8, 5] which minimizes the weighted loss of experts.
+Contributions. We introduce the notion of a support loss; given a loss ℓ deﬁned on any action
+space, there exists a proper loss ℓ which shares the same Bayes risk as ℓ. When a loss is mixable,
+one can essentially work with a proper (support) loss instead — this will be the ﬁrst stepping stone
+towards a characterization of (generalized) mixability.
+The notion of Φ-mixable and the GAA were previously restricted to ﬁnite losses. We extend these to
+allow for the use of losses which can take inﬁnite values (such as thelog-loss), and we show in this
+case that under the Φ-mixability condition a constant regret is achievable using the GAA.
+For an entropy Φ and a loss ℓ, we derive a necessary and sufﬁcient condition (Theorems 13 and
+14) for ℓ to be Φ-mixable. In particular, if ℓ and Φ satisfy some regularity conditions, then ℓ is
+Φ-mixable if and only ifηℓΦ − S is convex on the simplex, where S is the Shannon entropy andηℓ
+is essentially the largestη such thatℓ isη-mixable [10, 9]. This implies that a loss ℓ is Φ-mixable
+only if it isη-mixable for someη >0. This, combined with the fact thatη-mixability is equivalently
+( 1
+η S)-mixability (Theorem 12), reﬂects one fundamental aspect of the Shannon entropy.
+Then, we derive an explicit expression for the generalized mixability constantηΦ
+ℓ (Corollary 17), and
+thus for the regret bound of the GAA. This allows us to compare the regret boundRΦ
+ℓ of any entropy
+Φ with that of the Shannon entropy S. In this case, we show (Theorem 18) that RS
+ℓ ≤RΦ
+ℓ ; that is, the
+GAA achieves the lowest worst-case regret when using the Shannon entropy — another result which
+reﬂects the fundamental nature of the Shannon entropy.
+Finally, by leveraging the connection between the GAA and the mirror descent algorithm, we present
+a new algorithm — the Adaptive Generalized Aggregating Algorithm (AGAA). This algorithm
+consists of changing the entropy function at each prediction round similar to the adaptive mirror
+descent algorithm [8]. We analyze the performance of this algorithm in terms of its regret bound.
+Layout. In §2, we give some background on loss functions and present new results (Theorem 4 and
+5) based on the new notion of a proper support loss; we show that, as far as mixability is concerned,
+one can always work with a proper (support) loss instead of the original loss (which can be deﬁned on
+an arbitrary action space). In §3, we introduce the notions of classical and generalized mixability and
+derive a characterization ofΦ-mixability (Theorems 13 and 14). We then introduce our new algorithm
+— the AGAA — and analyze its performance. We conclude the paper by a general discussion and
+direction for future work. All proofs, except for that of Theorem 16, are deferred to Appendix C.
+Notation. Letm ∈ N. We denote [m] := {1,...,m } and ˜m := m − 1. We write ⟨·, ·⟩ for the
+standard inner product in Euclidean space. Let ∆m := {p ∈ [0, +∞[m : ⟨p, 1m⟩ = 1 } be the
+probability simplex in Rm, and let ˜∆m := { ˜p ∈ [0, +∞[ ˜m : ⟨ ˜p, 1 ˜m⟩ ≤ 1}. We will extensively
+make use of the afﬁne map⨿m : R ˜m → Rm deﬁned by
+⨿m(u) := [u1,...,u ˜m, 1 − ⟨u, 1 ˜m⟩]T. (1)
+We denote int C, ri C, and rbd C the interior, relative interior, and relative boundary of a set C ∈ Rm,
+respectively [2]. The sub-differential of a function f : Rm → R ∪ {+∞} atu ∈ Rm such that
+f(u)< +∞ is deﬁned by ([2])
+∂f (u) := {s∗ ∈ Rm : f(v) ≥f(u) + ⟨s∗,v −u⟩, ∀v ∈ Rm}. (2)
+2
+
+
+--- Page 3 ---
+Table 1 on page 9 provides a list of the main symbols used in this paper.
+2 Loss Functions
+In general, a loss function is a map ℓ: X × A → [0, +∞] where X is an outcome set and A is an
+action set. In this paper, we only consider the case X = [n], i.e. ﬁnite outcome space. Overloading
+notation slightly, we deﬁne the mapping ℓ: A → [0, +∞]n by [ℓ(a)]x = ℓ(x,a), ∀x ∈ [n] and
+denoteℓx(·) := [ℓ(·)]x. We further extend the new deﬁnition ofℓ to the set⋃
+k≥1 Ak such that for
+x ∈ [n] andA := [aθ]T
+1≤θ≤k ∈ Ak,ℓx(A) := [ℓx(aθ)]T
+1≤θ≤k ∈ [0, +∞]k. We deﬁne the effective
+domain ofℓ by domℓ := {a ∈ A : ℓ(a) ∈ [0, +∞[n}, and the loss surface by Sℓ := {ℓ(a): a ∈
+domℓ}. We say that ℓ is closed if Sℓ is closed in Rn. The superprediction set of ℓ is deﬁned by
+S∞
+ℓ := {ℓ(a) +d : (a,d) ∈ A × [0, +∞[n}. Let Sℓ := S∞
+ℓ ∩ [0, +∞[n be its ﬁnite part.
+Leta0,a1 ∈ A . The prediction a0 is said to be better thana1 if the component-wise inequality
+ℓ(a0) ≤ ℓ(a1) holds and there exists some x ∈ [n] such that ℓx(a0) < ℓx(a1) [14]. A loss ℓ is
+admissible if for anya ∈ A there are no better predictions.
+For the rest of this paper (except for Theorem 4), we make the following assumption on losses;
+Assumption 1. ℓ is a closed, admissible loss such that domℓ ̸= ∅.
+It is clear that there is no loss of generality in considering only admissible losses. The condition thatℓ
+is closed is a weaker version of the more common assumption thatA is compact and thata ↦→ℓ(x,a)
+is continuous with respect to the extended topology of [0, +∞] for allx ∈ [n] [3, 1]. In fact, we do
+not make any explicit topological assumptions on the set A (A is allowed to be open in our case).
+Our condition simply says that if a sequence of points on the loss surface converges in [0, +∞[n,
+then there exists an action in A whose image through the loss is equal to the limit. For example the
+0-1 lossℓ0-1 is closed, yet the mapp ↦→ℓ0-1(x,p) is not continuous on ∆2, forx ∈ {0, 1}.
+In this paragraph letA be then-simplex, i.e. A = ∆n. We deﬁne theconditional riskLℓ : ∆n×∆n →
+R byLℓ(p,q) = Ex∼p[ℓx(q)] = ⟨p,ℓ (q)⟩ and the Bayes risk byLℓ(p) := infq∈∆nLℓ(p,q). In
+this case, the loss ℓ is proper ifLℓ(p) = ⟨p,ℓ (p)⟩ ≤ ⟨p,ℓ (q)⟩ for allp ̸=q in ∆n (and strictly
+proper if the inequality is strict). For example, the log-lossℓlog : ∆n → [0, +∞]n is deﬁned by
+ℓlog(p) = − logp, where the ‘log’ of a vector applies component-wise. One can easily check that
+ℓlog is strictly proper. We denoteLlog its Bayes risk.
+The above deﬁnition of the Bayes risk is restricted to losses deﬁned on the simplex. For a general
+lossℓ: A → [0, +∞]n, we use the following deﬁnition;
+Deﬁnition 2 (Bayes Risk). Letℓ: A → [0, +∞]n be a loss such that domℓ ̸= ∅. The Bayes risk
+Lℓ : Rn → R ∪ {−∞} is deﬁned by
+∀u ∈ Rn, L ℓ(u) := inf
+z∈Sℓ
+⟨u,z⟩. (3)
+The support function of a set C ⊆ Rn is deﬁned byσC(u) := supz∈C⟨u,z⟩,u ∈ Rn, and thus it is
+easy to see that one can express the Bayes risk asLℓ(u) = −σSℓ(−u). Our deﬁnition of the Bayes
+risk is slightly different from previous ones ([3, 9, 1]) in two ways; 1) the Bayes risk is deﬁned on all
+Rn instead of [0, +∞[n; and 2) the inﬁmum is taken over the ﬁnite part of the superprediction set
+S∞
+ℓ . The ﬁrst point is a mere mathematical convenience and makes no practical difference since
+Lℓ(p) = −∞ for allp /∈ [0, +∞[n. For the second point, swapping Sℓ for S∞
+ℓ in (3) does not
+change the value ofLℓ for mixable losses (see Appendix D). However, we chose to work with Sℓ —
+a subset of Rn — as it allows us to directly apply techniques from convex analysis.
+Deﬁnition 3 (Support Loss). We call a mapℓ : ∆n → [0, +∞]n a support loss ofℓ if
+∀p ∈ ri ∆n, ℓ(p) ∈∂σSℓ(−p);
+∀p ∈ rbd ∆n, ∃(pm) ⊂ ri ∆n, pm
+m→∞
+→ p and ℓ(pm)
+m→∞
+→ ℓ(p) component-wise,
+where∂σSℓ (see (2)) is the sub-differential of the support function —σSℓ — of the set Sℓ.
+Theorem 4. Any lossℓ: A → [0, +∞]n such that domℓ ̸= ∅, has a proper support lossℓ with the
+same Bayes risk,Lℓ, asℓ.
+3
+
+
+--- Page 4 ---
+Theorem 4 shows that regardless of the action space on which the loss is deﬁned, there always exists
+a proper loss whose Bayes risk coincides with that of the original loss. This fact is useful in situations
+where the Bayes risk contains all the information one needs — such is the case for mixability. The
+next Theorem shows a stronger relationship between a loss and its corresponding support loss.
+Theorem 5. Letℓ: A → [0, +∞]n be a loss andℓ be a proper support loss ofℓ. If the Bayes riskLℓ
+is differentiable on ]0, +∞[n, thenℓ is uniquely deﬁned on ri ∆n and
+∀p ∈ domℓ, ∃a∗ ∈ domℓ, ℓ (a∗) =ℓ(p),
+∀a ∈ domℓ, ∃(pm) ⊂ ri ∆n, ℓ (pm)
+m→∞
+→ ℓ(a) component-wise.
+Theorem 5 shows that when the Bayes risk is differentiable (a necessary condition for mixability —
+Theorem 12), the support loss is almost a reparametrization of the original loss, and in practice, it is
+enough to work with support losses instead. This will be crucial for characterizing Φ-mixability.
+3 Mixability in the Game of Prediction with Expert Advice
+We consider the setting of prediction with expert advice [10]; there a is pool ofk experts, parame-
+terized byθ ∈ [k], which make predictionsat
+θ ∈ A at each roundt. In the same round, the learner
+predictsat
+M := M (at
+1:k, (xs,as
+1:k)1≤s<t) ∈ A, wherea·
+1:k := [a·
+θ]1≤θ≤k, (xs) ⊂ [n] are outcomes
+of the environment, and M : Ak × ([n] × Ak)∗ → A is a merging strategy [9]. At the end of round
+t,xt is announced and each expertθ [resp. learner] suffers a loss ℓxt(aθ) [resp. ℓxt(at
+M)], where
+ℓ: A → [0, +∞]n. AfterT >0 rounds, the cumulative loss of each expertθ [resp. learner] is given
+by Lossℓ
+θ(T ) :=∑T
+t=1ℓxt(at
+θ) [resp. Lossℓ
+M(T ) :=∑T
+t=1ℓxt(at
+M)]. We say that M achieves a
+constant regret if ∃R >0, ∀T > 0, ∀θ ∈ [k], Lossℓ
+M(T ) ≤ Lossℓ
+θ(T ) +R. In what follows, this
+game setting will be referred to by Gn
+ℓ (A,k ) and we only consider the case wherek ≥ 2.
+3.1 The Aggregating Algorithm and η-mixability
+Deﬁnition 6 (η-mixability). Forη >0, a lossℓ: A → [0, +∞]n is said to beη-mixable, if ∀q ∈ ∆k,
+∀a1:k ∈ Ak, ∃a∗ ∈ A, ∀x ∈ [n], ℓ x(a∗) ≤ −η−1 log ⟨q, exp(−ηℓx(a1:k))⟩, (4)
+where the exp applies component-wise. Letting Hℓ := {η > 0: ℓ isη-mixable}, we deﬁne the
+mixability constant ofℓ byηℓ := sup Hℓ if Hℓ ̸= ∅; and 0 otherwise. ℓ is said to be mixable if
+ηℓ > 0.
+If a lossℓ isη-mixable forη >0, the AA (Algorithm 1) achieves a constant regret in the Gn
+ℓ (A,k )
+game[10]. In Algorithm 1, the map Sℓ : S∞
+ℓ → A is a substitution function of the lossℓ [10, 4];
+that is, Sℓ satisﬁes the component-wise inequalityℓ(Gℓ(s)) ≤s, for alls ∈ S∞
+ℓ .
+It was shown by Chernov et al. [1] that theη-mixability condition (4) is equivalent to the convexity
+of theη-exponentiated superprediction set ofℓ deﬁned byexp(−ηS∞
+ℓ ) := {exp(−ηs): s ∈ S∞
+ℓ }.
+Using this fact, van Erven et al. [9] showed that the mixability constantηℓ of a strictly proper loss
+ℓ: ∆n → [0, +∞[n, whose Bayes risk is twice continuously differentiable on ]0, +∞[n, is equal to
+ηℓ := inf
+˜p∈int ˜∆n
+(λmax([H˜Llog( ˜p)]−1H˜Lℓ( ˜p)))−1, (5)
+where H is the Hessian operator and ˜L· :=L· ◦ ⨿n (⨿n was deﬁned in(1)). The next theorem extends
+this result by showing that the mixability constantηℓ of any lossℓ is lower bounded byηℓ in (5), as
+long asℓ satisﬁes Assumption 1 and its Bayes risk is twice differentiable.
+Theorem 7. Letη >0 andℓ: A → [0, +∞]n be a loss. Suppose that domℓ = A and thatLℓ is
+twice differentiable on ]0, +∞[n. Ifηℓ > 0 thenℓ isηℓ-mixable. In particular,ηℓ ≥ηℓ.
+We later show that, under the same conditions as Theorem 7, we actually haveηℓ =ηℓ (Theorem 16)
+which indicates that the Bayes risk contains all the information necessary to characterize mixability.
+Remark 8. In practice, the requirement ‘domℓ = A’ is not necessarily a strict restriction to ﬁnite
+losses; it is often the case that a loss ¯ℓ : ¯A → [0, +∞]n only takes inﬁnite values on the relative
+boundary of ¯A (such is the case for the log-loss deﬁned on the simplex), and thus the restriction
+ℓ := ¯ℓ|A, where A = ri ¯A, satisﬁes domℓ = A. It follows trivially from the deﬁnition of mixability
+(4) that ifℓ isη-mixable and ¯ℓ is continuous with respect to the extended topology of [0, +∞]n — a
+condition often satisﬁed — then ¯ℓ is alsoη-mixable.
+4
+
+
+--- Page 5 ---
+3.2 The Generalized Aggregating Algorithm and (η, Φ)−mixability
+A function Φ: Rk → R ∪ {+∞} is an entropy if it is convex, its epigraphepi Φ := {(u,h ): Φ(u) ≤
+h} is closed in Rk × R, and ∆k ⊆ dom Φ := {u ∈ Rk : Φ(u)< +∞}. For example, the Shannon
+entropy is deﬁned byS(q) = +∞ ifq /∈ [0, +∞[k, and
+∀q ∈ [0, +∞[k, S(q) =
+∑
+i∈[k]: qi̸=0
+qi logqi, (6)
+The divergence generated by an entropy Φ is the mapDΦ : Rn × dom Φ → [0, +∞] deﬁned by
+DΦ(v,u) :=
+{
+Φ(v) − Φ(u) − Φ′(u;v −u), ifv ∈ dom Φ;
++∞, otherwise. (7)
+where Φ′(u;v −u) := limλ↓0[Φ(u +λ(v −u)) − Φ(u)]/λ (the limit exists since Φ is convex [7]).
+Deﬁnition 9 (Φ-mixability). Let Φ: Rk → R ∪ {+∞} be an entropy. A lossℓ: A → [0, +∞]n is
+(η, Φ)-mixable forη >0 if ∀q ∈ ∆k, ∀a1:k ∈ Ak, ∃a∗ ∈ A, such that
+∀x ∈ [n], ℓx(a∗) ≤ Mixη
+Φ(ℓx(a1:k),q) := inf
+ˆq∈∆k
+⟨ˆq,ℓx(a1:k)⟩ +η−1DΦ(ˆq,q). (8)
+Whenη = 1, we simply say thatℓ is Φ-mixable and we denote MixΦ := Mix1
+Φ. Letting HΦ
+ℓ := {η >
+0: ℓ is (η, Φ)-mixable}, we deﬁne the generalized mixability constant of (ℓ, Φ) byηΦ
+ℓ := sup HΦ
+ℓ , if
+HΦ
+ℓ ̸= ∅; and 0 otherwise.
+Reid et al. [ 6] introduced the GAA (see Algorithm 2) which uses an entropy function Φ: Rk →
+R ∪ {+∞} and a substitution function Sℓ (see previous section) to specify the learner’s merging
+strategy M. It was shown that the GAA reduces to the AA when Φ is the Shannon entropy S. It was
+also shown that under some regularity conditions on Φ, the GAA achieves a constant regret in the
+Gn
+ℓ (A,k ) game for any ﬁnite,(η, Φ)-mixable loss.
+Our deﬁnition of Φ-mixability differs slightly from that of Reid et al. [ 6] — we use directional
+derivatives to deﬁne the divergenceDΦ. This distinction makes it possible to extend theGAA to losses
+which can take inﬁnite values (such as thelog-loss deﬁned on the simplex). We show, in this case,
+that a constant regret is still achievable under the (η, Φ)-mixability condition. Before presenting this
+result, we deﬁne the notion of∆-differentiability; for l ⊆ [k], let ∆l := {q ∈ ∆k : qθ = 0, ∀θ /∈ l}.
+We say that an entropy Φ is ∆-differentiable if ∀l ⊆ [k], ∀u,u0 ∈ ri ∆l, the mapz ↦→ Φ′(u;z) is
+linear on L0
+l := {λ(v −u0): (λ,v) ∈ R × ∆l}.
+Theorem 10. Let Φ: Rk → R ∪ {+∞} be a ∆-differentiable entropy. Letℓ: A → [0, +∞]n be a
+loss (not necessarily ﬁnite) such thatLℓ is twice differentiable on ]0, +∞[n. Ifℓ is (η, Φ)-mixable
+then the GAA achieves a constant regret in the Gn
+ℓ (A,k ) game; for any sequence (xt,at
+1:k)T
+t=1,
+Lossℓ
+GAA(T ) − min
+θ∈[k]
+Lossℓ
+θ(T ) ≤RΦ
+ℓ := inf
+q∈∆k
+max
+θ∈[k]
+DΦ(eθ,q)/ηΦ
+ℓ, (9)
+for initial distribution over expertsq0 = argminq∈∆k maxθ∈[k]DΦ(eθ,q), whereeθ is theθth basis
+element of Rk, and any substitution function Sℓ.
+Looking at Algorithm 2, it is clear that theGAA is divided into two steps; 1) asubstitution step which
+consists of ﬁnding a predictiona∗ ∈ A satisfying the mixability condition (8) using a substitution
+function Sℓ; and 2) an update step where a new distribution over experts is computed. Except for the
+case of the AA with the log-loss (which reduces to Bayesian updating [12]), there is not a unique
+choice of substitution function in general. An example of substitution function Sℓ is the inverse loss
+[13]. Kamalaruban et al. [4] discuss other alternatives depending on the curvature of the Bayes risk.
+Although the choice of Sℓ can affect the performance of the algorithm to some extent [4], the regret
+bound in (9) remains unchanged regardless of Sℓ. On the other hand, the update step is well deﬁned
+and corresponds to a mirror descent step [6] (we later use this fact to suggest a new algorithm).
+5
+
+
+--- Page 6 ---
+Algorithm 1: Aggregating Algorithm
+input : q0 ∈ ∆k;η >0; Aη-mixable loss
+ℓ: A → [0, +∞]n; A substitution
+function Sℓ.
+output :Learner’s predictions (at
+∗)
+fort = 1 toT do
+ObserveAt =at
+1:k ∈ Ak;
+at
+∗ ← Sℓ
+(
+− 1
+η log∑
+θ∈[k]qt−1
+θ e−ηℓ(at
+θ)
+)
+;
+Observe outcomext ∈ [n];
+qt
+θ ← qt−1
+θ exp(−ηℓxt(at
+θ))
+⟨qt−1, exp(−ηℓxt(At))⟩, ∀θ ∈ [k];
+end
+Algorithm 2: Generalized Aggregating Algorithm
+input : q0 ∈ ∆k; A ∆-differentiable entropy
+Φ: Rk → R ∪ {+∞};η >0; A
+(η, Φ)-mixable lossℓ: A → [0, +∞]n; A
+substitution function Sℓ.
+output :Learner’s predictions (at
+∗)
+fort = 1 toT do
+ObserveAt =at
+1:k ∈ Ak;
+at
+∗ ← Sℓ
+([
+Mixη
+Φ(ℓx(At),qt−1)
+]T
+1≤x≤n
+)
+;
+Observe outcomext ∈ [n];
+qt ← argmin
+µ∈∆k
+⟨µ,ℓxt(At)⟩ + 1
+ηDΦ(µ,qt−1);
+end
+We conclude this subsection with two new and important results which will lead to a characterization
+of Φ-mixability. The ﬁrst result shows that(η, S)-mixability is equivalent toη-mixability, and the
+second rules out losses and entropies for which Φ-mixability is not possible.
+Theorem 11. Letη >0. A lossℓ: A → [0, +∞]n isη-mixable if and only ifℓ is (η, S)-mixable.
+Proposition 12. Let Φ: Rk → R ∪ {+∞} be an entropy andℓ: A → [0, +∞]n. Ifℓ is Φ-mixable,
+then the Bayes risk satisﬁes Lℓ ∈ C1(]0, +∞[n). If, additionally, Lℓ is twice differentiable on
+]0, +∞[n, then Φ must be strictly convex on ∆k.
+It should be noted that since the Bayes risk of a lossℓ must be differentiable for it to be Φ-mixable
+for some entropy Φ, Theorem 5 says that we can essentially work with a proper support lossℓ ofℓ.
+This will be crucial in the proof of the sufﬁcient condition ofΦ-mixability (Theorem 14).
+3.3 A Characterization of Φ-Mixability
+In this subsection, we ﬁrst show that given an entropy Φ: Rk → R ∪ {+∞} and a loss ℓ: A →
+[0, +∞]n satisfying certain regularity conditions,ℓ is Φ-mixable if and only if
+ηℓΦ − S is convex on ∆k. (10)
+Theorem 13. Letη >0,ℓ: A → [0, +∞]n aη-mixable loss, and Φ: Rk → R ∪ {+∞} an entropy.
+IfηΦ − S is convex on ∆k, thenℓ is Φ-mixable.
+The converse of Theorem 13 also holds under additional smoothness conditions on Φ andℓ;
+Theorem 14. Letℓ: A → [0, +∞]n be a loss such thatLℓ is twice differentiable on ]0, +∞[n, and
+Φ: Rk → R ∪ {+∞} an entropy such that ˜Φ := Φ ◦ ⨿k is twice differentiable on int ˜∆k. Thenℓ is
+Φ-mixable only ifηℓΦ − S is convex on ∆k.
+As consequence of Theorem 14, if a loss ℓ is not classically mixable, i.e. ηℓ = 0 , it cannot be
+Φ-mixable for any entropy Φ. This is because ηℓΦ − S
+∗
+= ηℓΦ − S = − S is not convex (where
+equality ‘*’ is due to Theorem 7).
+We need one more result before arriving at (10); Recall that the mixability constantηℓ is deﬁned as
+the supremum of the set Hℓ := {η ≥ 0: ℓ isη-mixable}. The next lemma essentially gives a sufﬁcient
+condition for this supremum to be attained when Hℓ is non-empty — in this case, ℓ isηℓ-mixable.
+Lemma 15. Letℓ: A → [0, +∞]n be a loss. If domℓ = A, then either Hℓ = ∅ orηℓ ∈ Hℓ.
+Theorem 16. Letℓ and Φ be as in Theorem 14 with domℓ = A. Then ηℓ =ηℓ. Furthermore,ℓ is
+Φ-mixable if and only ifηℓΦ − S is convex on ∆k.
+Proof. Suppose now that ℓ is mixable. By Lemma 15, it follows that ℓ isηℓ-mixable, and from
+Theorem 11,ℓ is (η−1
+ℓ S)-mixable. Substituting Φ forη−1
+ℓ S in Theorem 14 implies that (ηℓ/ηℓ −1) S
+is convex on ri ∆k. Thus,ηℓ ≤ηℓ, and since from Theorem 7ηℓ ≤ηℓ, we conclude thatηℓ =ηℓ.
+6
+
+
+--- Page 7 ---
+From Theorem 14, ifℓ is Φ-mixable thenηℓΦ − S is convex on ∆k. Now suppose thatηℓΦ − S is
+convex on ∆k. This implies thatηℓ > 0, and thus from Theorem 7,ℓ isηℓ-mixable. Now sinceℓ is
+ηℓ-mixable andηℓΦ − S is convex on ∆k, Theorem 13 implies thatℓ is Φ-mixable.
+Note that the condition ‘domℓ = A’ is in practice not a restriction to ﬁnite losses — see Remark
+8. Theorem 16 implies that under the regularity conditions of Theorem 14, the Bayes riskLℓ [resp.
+(Lℓ, Φ)] contains all necessary information to characterize classical [resp. generalized] mixability.
+Corollary 17 (The Generalized Mixability Constant). Letℓ and Φ be as in Theorem 16. Then the
+generalized mixability constant (see Deﬁnition 9) is given by
+ηΦ
+ℓ =ηℓ inf
+˜q∈int ˜∆k
+λmin(H˜Φ(˜q)(H˜S(˜q))−1), (11)
+where ˜Φ := Φ ◦ ⨿k, ˜S = S ◦⨿k, and ⨿k is deﬁned in (1).
+Observe that when Φ = S, (11) reduces toηS
+ℓ =ηℓ as expected from Theorem 11 and Theorem 16.
+3.4 The (In)dependence Between ℓ and Φ and the Fundamental Nature of S
+So far, we showed that the Φ-mixability of losses satisfying Assumption 1 is characterized by the
+convexity ofηΦ−S, whereη ∈]0,ηℓ] (see Theorems 13 and 14). As a result, and contrary to what was
+conjectured previously [6], the generalized mixability condition does not induce a correspondence
+between losses and entropies; for a given lossℓ, there is no particular entropy Φℓ — speciﬁc to the
+choice ofℓ — which minimizes the regret of the GAA. Rather, the Shannon entropy S minimizes the
+regret regardless of the choice ofℓ (see Theorem 18 below). This reﬂects one fundamental aspect of
+the Shannon entropy.
+Nevertheless, given a loss ℓ and entropy Φ, the curvature of the loss surface Sℓ determines the
+maximum ‘learning rate’ηΦ
+ℓ of the GAA; the curvature of Sℓ is linked toηℓ through the Hessian of
+the Bayes risk (see Theorem 30 in Appendix H.2), which is in turn linked toηΦ
+ℓ through (11).
+Given a lossℓ, we now use the expression ofηΦ
+ℓ in (11) to explicitly compare the regret boundsRΦ
+ℓ
+andRS
+ℓ achieved with the GAA (see (9)) using entropy Φ and the Shannon entropy S, respectively.
+Theorem 18. Let S, Φ: Rk → R ∪ {+∞}, where S is the Shannon entropy and Φ is an entropy
+such that ˜Φ := Φ ◦ ⨿k is twice differentiable on int ˜∆k. A loss ℓ: A → [0, +∞[n withLℓ twice
+differentiable on ]0, +∞[n, is Φ-mixable only ifRS
+ℓ ≤RΦ
+ℓ .
+Theorem 18 is consistent with V ovk’s result [10, §5] which essentially states that the regret bound
+RS
+ℓ =η−1
+ℓ logk is in general tight forη-mixable losses.
+4 Adaptive Generalized Aggregating Algorithm
+In this section, we take advantage of the similarity between the GAA’s update step and the mirror
+descent algorithm (see Appendix E) to devise a modiﬁcation to the GAA leading to improved
+regret bounds in certain cases. The GAA can be modiﬁed in (at least) two immediate ways; 1)
+changing the learning rate at each time step to speed-up convergence; and 2) changing the entropy,
+i.e. the regularizer Φ, at each time step — similar to the adaptive mirror descent algorithm [8, 5].
+In the former case, one can use Corollary 17 to calculate the maximum ‘learning rate’ under the
+Φ-mixability constraint. Here, we focus on the second method; changing the entropy at each round.
+Algorithm 3 displays the modiﬁedGAA — which we call the Adaptive Generalized Aggregating
+Algorithm (AGAA) — in its most general form. In Algorithm 3, Φ⋆(z) := supq∈∆k ⟨q,z⟩ − Φ(q) is
+the entropic dual of Φ.
+Given a (η, Φ)-mixable lossℓ, we verify that Algorithm 3 is well deﬁned; for simplicity, assume that
+domℓ = A andLℓ is twice differentiable on]0, +∞[n. From the deﬁnition of an entropy,|Φ|< +∞
+on ∆k, and thus the entropic dual Φ⋆
+t is deﬁned and ﬁnite on allRk (in particular atθt). On the
+other hand, from Proposition 12, Φ is strictly convex on ∆k which implies that Φ⋆ (and thus Φ⋆
+t ) is
+differentiable on Rk (see e.g. [2, Thm. E.4.1.1]). It remains to check that ℓ is (η, Φt)-mixable. Since
+forη >0, (η, Φt)-mixability is equivalent to ( 1
+η Φt)-mixability (by deﬁnition), Theorem 16 implies
+7
+
+
+--- Page 8 ---
+Algorithm 3: Adaptive Generalized Aggregating Algorithm (AGAA)
+input : θ1 = 0 ∈ Rk; A ∆-differentiable entropy Φ: Rk → R ∪ {+∞};η >0; A (η, Φ)-mixable
+lossℓ: A → [0, +∞[n; A substitution function Sℓ; A protocol of choosingβt at roundt.
+output :Learner’s predictions (at
+∗)
+fort = 1 toT do
+Let Φt(w) := Φ(w) − ⟨w,βt −θt⟩; // New entropy
+ObserveAt :=at
+1:k ∈ Ak ; // Experts’ predictions
+at
+∗ ← Sℓ
+([
+Mixη
+Φt(ℓx(At), ∇Φ⋆
+t (θt))
+]T
+1≤x≤n
+)
+; // Learner’s prediction
+Observext ∈ [n] and pick somevt ∈ Rk;
+θt+1 ←θt −ηℓxt(At);
+end
+thatℓ is (η, Φt)-mixable if and only ifηℓη−1Φt − S is convex on ∆k. This is in fact the case since
+Φt is an afﬁne transformation ofΦ, and we have assumed thatℓ is (η, Φ)-mixable.
+In what follows, we focus on a particular instantiation of Algorithm 3 where we choose βt :=
+−η∑t−1
+s=1(ℓxs(As)+vs), for some (arbitrary for now)(vs) ⊂ Rk. The (vt) vectors act as correction
+terms in the update step of the AGAA. Using standard duality properties (see Appendix A), it is easy
+to show that the AGAA reduces to the GAA except for the update step where the new distribution
+over experts at roundt ∈ [T ] is now given by
+qt = ∇Φ⋆(∇Φ(qt−1) −ηℓxt(At) −ηvt).
+Theorem 19. Let Φ: Rk → R ∪ {+∞} be a ∆-differentiable entropy. Let ℓ: A → [0, +∞]n
+be a loss such that Lℓ is twice differentiable on ]0, +∞[n. Let βt = −η∑t−1
+s=1(ℓxs(As) +vs),
+wherevs ∈ Rk andAs := as
+1:k ∈ Ak. If ℓ is (η, Φ)-mixable then for initial distribution q0 =
+argminq∈∆k maxθ∈[k]DΦ(eθ,q) and any sequence (xt,at
+1:k)T
+t=1, the AGAA achieves the regret
+∀θ ∈ [k], Lossℓ
+AGAA (T ) − Lossℓ
+θ(T ) ≤RΦ
+ℓ + ∆Rθ(T ), (12)
+where ∆Rθ(T ) :=∑T−1
+t=1 (vt
+θ − ⟨vt,qt⟩).
+Theorem 19 implies that if the sequence (vt) is chosen such that ∆Rθ∗(T ) is negative for the best
+expertθ∗ (in hindsight), then the regret bound ‘RΦ
+ℓ + ∆Rθ∗(T )’ of the AGAA is lower than that of
+the GAA (see (9)), and ultimately that of the AA (when Φ = S). Unfortunately, due to V ovk’s result
+[10, §5] there is no “universal” choice of (vt) which guarantees that ∆Rθ∗(T ) is always negative.
+However, there are cases where this term is expected to be negative.
+Consider a dataset where it is typical for the best experts (i.e., theθ∗’s) to perform poorly at some
+point during the game, as measured by their average loss, for example. Under such an assumption,
+choosing the correction vectorsvt to be negatively proportional to the average losses of experts, i.e.
+vt := −α
+t
+∑t
+s=1ℓxs(As) (for small enoughα >0), would be consistent with the idea of making
+∆Rθ∗(T ) negative. To see this, suppose expert θ∗ is performing poorly during the game (say at
+t<T ), as measured by its instantaneous and average loss. At that point the distributionqt would put
+more weight on experts performing better thanθ∗, i.e. having a lower average loss. And sincevt
+θ is
+negatively proportional to the average loss of expertθ, the quantityvt
+θ∗ − ⟨vt,qt⟩ would be negative
+— consistent with making ∆Rθ∗(T )< 0. On the other hand, if expertθ∗ performs well during the
+game (say close to the best) thenvt
+θ∗ − ⟨vt,qt⟩ ≃ 0, sinceqt would put comparable weights between
+θ∗ and other experts (if any) with similar performance.
+Example 1. (A Negative Regret). One can construct an example that illustrates the idea above. Con-
+sider the Brier game G2
+ℓBrier(∆2, 2); a probability game with 2 experts {θ1,θ 2}, 2 outcomes {0, 1},
+and where the lossℓBrier is the Brier loss [11] (which is 1-mixable). Assume that; expertθ1 consis-
+tently predicts Pr(x = 0) = 1/2; expertθ2 predicts Pr(x = 0) = 1/4 during the ﬁrst50 rounds, then
+switches to predicting Pr(x = 0) = 3/4 thereafter; the outcome is alwaysx = 0. A straightforward
+simulation using the AGAA with the Shannon entropy, V ovk’s substitution function for the Brier loss
+[11],βt as in Theorem 19 withvt := − 1
+8t
+∑t
+s=1ℓBrier(xs,As), yieldsRΦ
+ℓBrier + ∆Rθ∗(T ) ≃ −5,
+8
+
+
+--- Page 9 ---
+∀T ≥ 150, where in this caseθ∗ =θ2 is the best expert forT ≥ 150. The learner then doesbetter than
+the best expert. If we use the AA instead, the learner does worse thanθ2 by ≃RS
+ℓBrier = log 2.
+In real data, the situation described above — where the best expert does not necessarily perform
+optimally during the game — is typical, especially when the number of rounds T is large. We have
+tested the aggregating algorithms on real data as studied by V ovk [11]. We compared the performance
+of the AA with the AGAA, and found that the AGAA outperforms the AA, and in fact achieved a
+negative regret on two data sets. Details of the experiments are in Appendix J.
+As pointed out earlier, there are situations where ∆Rθ∗(T ) ≥ 0 even for the choice of (vt) in
+Example 1, and this could potentially lead to a large positive regret for the AGAA. There is an easy
+way to remove this risk at a small price; the outputs of the AGAA and the AA can themselves be
+considered as expert predictions. These predictions can in turn be passed to a new instance of the
+AA to yield a meta prediction. The resulting worst case regret is guaranteed not to exceed that of the
+original AA instance by more thanη−1 log 2 for anη-mixable loss. We test this idea in Appendix J.
+5 Discussion and Future Work
+In this work, we derived a characterization of Φ-mixability, which enables a better understanding of
+when a constant regret is achievable in the game of prediction with expert advice. Then, borrowing
+techniques from mirror descent, we proposed a new “adaptive” version of the generalized aggregating
+algorithm. We derived a regret bound for a speciﬁc instantiation of this algorithm and discussed
+certain situations where the algorithm is expected to perform well. We empirically demonstrated the
+performance of this algorithm on football game predictions (see Appendix J).
+V ovk [10, §5] essentially showed that given anη-mixable loss there is no algorithm that can achieve
+a lower regret bound thanη−1 logk on all sequences of outcomes. There is no contradiction in trying
+to design algorithms which perform well in expectation (maybe better than the AA) on “typical” data
+while keeping the worst case regret close toη−1 logk. This was the motivation behind the AGAA.
+In future work, we will explore other choices for the correction vectorvt with the goal of lowering
+the (expected) bound in (12). In the present work, we did not study the possibility of varying the
+learning rateη. One might obtain better regret bounds using an adaptive learning rate as is the case
+with the mirror descent algorithm. Our Corollary 17 is useful in that it gives an upper bound on the
+maximal learning rate under the Φ-mixability constraint. Finally, although our Theorem 18 states that
+worst-case regret of the GAA is minimized when using the Shannon entropy, it would be interesting
+to study the dynamics of the AGAA with other entropies.
+Table 1: A short list of the main symbols used in the paper
+Symbol Description
+ℓ A loss function deﬁned on a setA and taking values in [0, +∞]n (see Sec. 2)
+Sℓ The ﬁnite part of the superprediction set of a lossℓ (see Sec. 2)
+ℓ The support loss of a lossℓ (see Def. 3)
+Lℓ The Bayes risk corresponding to a lossℓ (see Deﬁnition 2)
+˜Lℓ The composition of the Bayes risk with an afﬁne function; ˜Lℓ :=Lℓ ◦ ⨿n (see (1))
+S The Shannon Entropy (see (6))
+ηℓ The mixability constant ofℓ (see Def. 6) ; essentially the largestη s.t.ℓ isη-mixable.
+ηℓ Essentially the largestη such thatηLℓ −Llog is convex (see (5) and [9])
+ηΦ
+ℓ The generalized mixability constant (see Def. 9); the largestη s.t.ℓ is (η, Φ)-mixable.
+Sℓ A substitution function of a lossℓ (see Sec. 3.1)
+RΦ
+ℓ The regret achieved by the GAA using entropy Φ (see (9) and Algorithm 2)
+Acknowledgments
+This work was supported by the Australian Research Council and DATA61.
+9
+
+
+--- Page 10 ---
+References
+[1] Alexey Chernov, Yuri Kalnishkan, Fedor Zhdanov, and Vladimir V ovk. Supermartingales in
+prediction with expert advice. Theoretical Computer Science, 411(29-30):2647–2669, 2010.
+[2] J-B. Hiriart-Urruty and C. Lemaréchal. Fundamentals of convex analysis., 2001.
+[3] Yuri Kalnishkan, V olodya V ovk, and Michael V . Vyugin. Loss functions, complexities, and the
+legendre transformation. Theoretical Computer Science, 313(2):195–207, 2004.
+[4] Parameswaran Kamalaruban, Robert Williamson, and Xinhua Zhang. Exp-concavity of proper
+composite losses. In Conference on Learning Theory, pages 1035–1065, 2015.
+[5] Francesco Orabona, Koby Crammer, and Nicolò Cesa-Bianchi. A generalized online mirror
+descent with applications to classiﬁcation and regression. Machine Learning, 99(3):411–435,
+2015.
+[6] Mark D. Reid, Rafael M. Frongillo, Robert C. Williamson, and Nishant Mehta. Generalized
+mixability via entropic duality. In Conference on Learning Theory, pages 1501–1522, 2015.
+[7] R. Tyrrell Rockafellar. Convex analysis. Princeton University Press, Princeton, NJ, 1997.
+[8] Jacob Steinhardt and Percy Liang. Adaptivity and optimism: An improved exponentiated
+gradient algorithm. In International Conference on Machine Learning, pages 1593–1601, 2014.
+[9] Tim van Erven, Mark D. Reid, and Robert C. Williamson. Mixability is Bayes risk curvature
+relative to log loss. Journal of Machine Learning Research, 13:1639–1663, 2012.
+[10] Vladimir V ovk. A game of prediction with expert advice. Journal of Computer and System
+Sciences, 56(2):153–173, 1998.
+[11] Vladimir V ovk and Fedor Zhdanov. Prediction with expert advice for the brier game.Journal of
+Machine Learning Research, 10(Nov):2445–2471, 2009.
+[12] V olodya V ovk. Competitive on-line statistics.International Statistical Review, 69(2):213–248,
+2001.
+[13] Robert C. Williamson. The geometry of losses. In Conference on Learning Theory, pages
+1078–1108, 2014.
+[14] Robert C. Williamson, Elodie Vernet, and Mark D. Reid. Composite multiclass losses. Journal
+of Machine Learning Research, 17:223:1–223:52, 2016.
+10

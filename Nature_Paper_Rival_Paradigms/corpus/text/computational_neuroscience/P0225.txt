@@ -1,0 +1,1393 @@
+--- Page 1 ---
+REVIEW
+published: 11 December 2019
+doi: 10.3389/fncom.2019.00083
+Frontiers in Computational Neuroscience | www.frontiersi n.org 1 December 2019 | Volume 13 | Article 83
+Edited by:
+Spyridon Bakas,
+University of Pennsylvania,
+United States
+Reviewed by:
+Rong Pan,
+Arizona State University, United States
+Guotai Wang,
+University of Electronic Science and
+Technology of China, China
+*Correspondence:
+Jakub Nalepa
+jnalepa@ieee.org
+Received: 30 April 2019
+Accepted: 27 November 2019
+Published: 11 December 2019
+Citation:
+Nalepa J, Marcinkiewicz M and
+Kawulok M (2019) Data Augmentation
+for Brain-Tumor Segmentation: A
+Review.
+Front. Comput. Neurosci. 13:83.
+doi: 10.3389/fncom.2019.00083
+Data Augmentation for Brain-Tumor
+Segmentation: A Review
+Jakub Nalepa 1,2*, Michal Marcinkiewicz 3 and Michal Kawulok 2
+1 Future Processing, Gliwice, Poland, 2 Silesian University of Technology, Gliwice, Poland, 3 Netguru, Poznan, Poland
+Data augmentation is a popular technique which helps improve generalization capabilities
+of deep neural networks, and can be perceived as implicit reg ularization. It plays a pivotal
+role in scenarios in which the amount of high-quality ground -truth data is limited, and
+acquiring new examples is costly and time-consuming. This is a very common problem in
+medical image analysis, especially tumor delineation. In t his paper, we review the current
+advances in data-augmentation techniques applied to magne tic resonance images
+of brain tumors. T o better understand the practical aspects of such algorithms, we
+investigate the papers submitted to the Multimodal Brain Tumor Segmentation Challenge
+(BraTS 2018 edition), as the BraTS dataset became a standard benchmark for validating
+existent and emerging brain-tumor detection and segmentat ion techniques. We verify
+which data augmentation approaches were exploited and what was their impact on
+the abilities of underlying supervised learners. Finally, we highlight the most promising
+research directions to follow in order to synthesize high-q uality artiﬁcial brain-tumor
+examples which can boost the generalization abilities of de ep models.
+Keywords: MRI, image segmentation, data augmentation, deep le arning, deep neural network
+1. INTRODUCTION
+Deep learning has established the state of the art in many sub -areas of computer vision and
+pattern recognition (
+Krizhevsky et al., 2017 ), including medical imaging and medical image
+analysis ( Litjens et al., 2017 ). Such techniques automatically discover the underlying d ata
+representation to build high-quality models. Although it is pos sible to utilize generic priors and
+exploit domain-speciﬁc knowledge to help improve representati ons, deep features can capture
+very discriminative characteristics and explanatory facto rs of the data which could have been
+omitted and/or unknown for human practitioners during the process of manual feature engineering
+(Bengio et al., 2013).
+In order to successfully build well-generalizing deep models, we need huge amount of
+ground-truth data to avoid overﬁtting of such large-capacit y learners, and “memorizing” training
+sets (LeCun et al., 2016 ). It has become a signiﬁcant obstacle which makes deep neura l networks
+quite challenging to apply in the medical image analysis ﬁeld whe re acquiring high-quality ground-
+truth data is time-consuming, expensive, and very human-depe ndent, especially in the context of
+brain-tumor delineation from magnetic resonance imaging (MRI ) (Isin et al., 2016; Angulakshmi
+and Lakshmi Priya, 2017; Marcinkiewicz et al., 2018; Zhao et al., 2019). Additionally, the majority
+of manually-annotated image sets are imbalanced—examples b elonging to some speciﬁc classes
+are often under-represented. To combat the problem of limited medical training sets, data
+augmentation techniques, which generate synthetic training examples, are being actively developed
+in the literature (Hussain et al., 2017; Gibson et al., 2018; Park et al., 2019 ).
+
+
+--- Page 2 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+In this review paper, we analyze the brain-tumor segmentation
+approaches available in the literature, and thoroughly inves tigate
+which techniques have been utilized by the participants of the
+Multimodal Brain Tumor Segmentation Challenge (BraTS 2018).
+To the best of our knowledge, the dataset used for the BraTS
+challenge is currently the largest and the most comprehensiv e
+brain-tumor dataset utilized for validating existent and e merging
+algorithms for detecting and segmenting brain tumors. Also , it is
+heterogeneous in the sense that it includes both low- and hig h-
+grade lesions, and the included MRI scans have been acquired
+at diﬀerent institutions (using diﬀerent MR scanners). We
+discuss the brain-tumor data augmentation techniques alre ady
+available in the literature, and divide them into several gr oups
+depending on their underlying concepts (section 2). Such MRI
+data augmentation approaches have been applied to augment
+other datasets as well, also acquired for diﬀerent organs (
+Amit
+et al., 2017; Nguyen et al., 2019; Oksuz et al., 2019 ).
+In the BraTS challenge, the participants are given multi-
+modal MRI data of brain-tumor patients (as already mentioned,
+both low- and high-grade gliomas), alongside the correspond ing
+ground-truth multi-class segmentation (section 3). In thi s
+dataset, diﬀerent sequences are co-registered to the same
+anatomical template and interpolated to the same resolution
+of 1 mm 3. The task is to build a supervised learner which is
+able to generalize well over the unseen data which is release d
+during the testing phase. In section 4, we summarize the
+augmentation methods reported in 20 papers published in the
+BraTS 2018 proceedings. Here, we focused on those papers
+which explicitly mentioned that the data augmentation had been
+utilized, and clearly stated what kind of data augmentation had
+been applied. Although such augmentations are single-modal—
+meaning that they operate over the MRI from a single sequence—
+they can be easily applied to co-registered series, hence to
+augment multi-modal tumor examples. Finally, the paper is
+concluded in section 5, where we summarize the advantages
+and disadvantages of the reviewed augmentation techniques, and
+highlight the promising research directions which emerge fr om
+(not only) BraTS.
+2. DATA AUGMENTATION FOR
+BRAIN-TUMOR SEGMENTATION
+Data augmentation algorithms for brain-tumor segmentatio n
+from MRI can be divided into the following main categories
+(which we render in a taxonomy presented in Figure 1): the
+algorithms exploiting various transformations of the origi nal
+data, including aﬃne image transformations (section 2.1),
+elastic transformations (section 2.2), pixel-level transformations
+(section 2.3), and various approaches for generating artiﬁcial
+data (section 2.4). In the following subsections, we review
+the approaches belonging to all groups of such augmentation
+methods in more detail.
+Traditionally, data augmentation approaches have been
+applied to increase the size of training sets, in order to allow
+large-capacity learners beneﬁt from more representative tra ining
+data (
+Wong et al., 2016 ). There is, however, a new trend in the
+deep learning literature, in which examples are augmented on
+the ﬂy (i.e., during the inference), in the test-time1 augmentation
+process. In Figure 2, we present a ﬂowchart in which both
+training- and test-time data augmentation is shown. Test-t ime
+data augmentation can help increase the robustness of a trained
+model by simulating the creation of a homogeneous ensemble,
+where ( n + 1) models (of the same type, and trained over
+the same training data) vote for the ﬁnal class label of an
+incoming test example, and n denotes the number of artiﬁcially-
+generated samples, elaborated for the test example which is being
+classiﬁed. The robustness of a deep model is often deﬁned as
+its ability to correctly classify previously unseen examples—su ch
+incoming examples are commonly “noisy” or slightly “perturbed”
+when confronted with the original data, therefore they are m ore
+challenging to classify and/or segment (
+Rozsa et al., 2016 ). Test-
+time data augmentation can be exploited for estimating the
+level of uncertainty of deep networks during the inference— it
+brings new exciting possibilities in the context of medical i mage
+analysis, where quantifying the robustness and deep-network
+reliability are crucial practical issues (
+Wang et al., 2019). This type
+of data augmentation can utilize those methods which modify
+an incoming example, e.g., by applying aﬃne, pixel-level or
+elastic transformations in the case of brain-tumor segment ation
+from MRI.
+2.1. Data Augmentation Using Afﬁne Image
+Transformations
+In the aﬃne approaches , existent image data undergo
+diﬀerent operations (rotation, zooming, cropping, ﬂipping,
+or translations) to increase the number of training
+examples (
+Pereira et al., 2016; Liu et al., 2017 ). Shin et al.
+pointed out that such traditional data augmentation techniq ues
+fundamentally produce very correlated images ( Shin et al.,
+2018), therefore can oﬀer very little improvements for the
+deep-network training process and future generalization over the
+unseen test data (such examples do not regularize the problem
+suﬃciently). Additionally, they can also generate anatomic ally
+incorrect examples, e.g., using rotation. Nevertheless, aﬃn e
+image transformations are trivial to implement (in both 2D an d
+3D), they are fairly ﬂexible (due to their hyper-parameters), and
+are widely applied in the literature. In an example presented in
+Figure 3, we can see that applying simple data augmentation
+techniques can lead to a signiﬁcant increase in the number of
+training samples.
+2.1.1. Flip and Rotation
+Random ﬂipping creates a mirror reﬂection of an original image
+along one (or more) selected axis. Usually, natural images ca n
+be ﬂipped along the horizontal axis, which is not the case for
+the vertical one because up and down parts of an image are
+not always “interchangeable.” A similar property holds for MRI
+brain images—in the axial plane a brain has two hemispheres,
+and the brain (in most cases) can be considered anatomically
+symmetrical. Flipping along the horizontal axis swaps the left
+1Test-time augmentation is also referred to as the inference-time and the online
+data augmentation in the literature.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 2 December 2019 | Volume 13 | Article 83
+
+
+--- Page 3 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+FIGURE 1 | Data augmentation for brain-tumor segmentation—a taxonom y.
+FIGURE 2 | Flowchart presenting training- and test-time data augment ation. In the training-time data augmentation approach, we g enerate synthetic data to increase
+the representativeness of a training set (and ultimately bu ild better models), whereas in test-time augmentation, we b eneﬁt from the ensemble-like technique, in which
+multiple homogeneous classiﬁers vote for the ﬁnal class label for an incoming example by classifying this sample and a numb er of its augmented versions.
+FIGURE 3 | Applying afﬁne and pixel-level (discussed in more detail in s ection 2.3) transformations can help signiﬁcantly increase the size (and potentially
+representativeness) of training sets. In this example, we ge nerate seven new images based on the original MRI (coupled wi th its ground truth in the bottom row).
+hemisphere with the right one, and vice versa. This operation
+can help various deep classiﬁers, especially those beneﬁtti ng
+from the contextual tumor information, be invariant with respect
+to their position within the brain which would be otherwise
+diﬃcult for not representative training sets (e.g., contain ing
+brain tumors located only in the left or right hemisphere).
+Similarly, rotating an image by an angle α around the center
+pixel can be exploited in this context. This operation is followe d
+by appropriate interpolation to ﬁt the original image size. The
+rotation operation denoted as R is often coupled with zero-
+padding applied to the missing pixels:
+R =
+( cos α − sin α
+sin α cos α
+)
+. (1)
+2.1.2. Translation
+The translation operation shifts the entire image by a given
+number of pixels in a chosen direction, while applying padding
+accordingly. It allows the network to not become focused on
+features present mainly in one particular spatial region, but i t
+forces the model to learn spatially-invariant features inste ad. As
+in the case of rotation—since the MRI scans of diﬀerent patients
+available in training sets are often not co-registered—tran slation
+of an image by a given number of pixels along a selected axis
+(or axes) can create useful and viable images. However, this
+procedure may not be “useful” for all deep architectures—
+convolutional neural networks exploit convolutions and
+pooling operations, which are intrinsically spatially-invari ant
+(
+Asif et al., 2018).
+Frontiers in Computational Neuroscience | www.frontiersi n.org 3 December 2019 | Volume 13 | Article 83
+
+
+--- Page 4 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+2.1.3. Scaling and Cropping
+Introducing scaled versions of the original images into the
+training set can help the deep network learn valuable deep
+features independently of their original scale. This operati on
+S can be performed independently in diﬀerent directions (for
+brevity, we have only two dimensions here):
+S =
+( sx 0
+0 sy
+)
+, (2)
+and the scaling factors are given as sx and sy for the x and y
+directions, respectively. As tumors vary in size, scaling can indeed
+bring viable augmented images into a training set. Since var ious
+deep architectures require images of the constant size, sca ling
+is commonly paired with cropping to maintain the original
+image dimensions. Such augmented brain-tumor examples may
+manifest tumoral features at diﬀerent scales. Also, cropping c an
+limit the ﬁeld of view only to those parts of the image which are
+important (
+Menze et al., 2015).
+2.1.4. Shearing
+The shear transformation ( H) displaces each point in an image
+in a selected direction. This displacement is proportional to i ts
+distance from the line which goes through the origin and is
+parallel to this direction:
+H =
+( 1 hx
+hy 1
+)
+, (3)
+where hx and hy denote the shear coeﬃcient in the x and
+y directions, respectively (as previously, we consider two
+dimensions for readability). Although this operation can de form
+shapes, it is rarely used to augment medical image data
+because we often want to preserve original shape characterist ics
+(
+Frid-Adar et al., 2018).
+2.2. Data Augmentation Using Elastic
+Image Transformations
+Data augmentation algorithms based on unconstrained elastic
+transformations of training examples can introduce shape
+variations. They can bring lots of noise and damage into the
+training set if the deformation ﬁeld is seriously varied—see an
+example by
+Mok and Chung (2018) in which a widely-used
+elastic transform produced a totally unrealistic synthetic MRI
+scan of a human brain. If the simulated tumors were placed
+in “unrealistic” positions, it would likely force the segmen tation
+engine to become invariant to contextual information and ra ther
+focus on the lesion’s appearance features (
+Dvornik et al., 2018 ).
+Although there are works which indicate that such aggressiv e
+augmentation may deteriorate the performance of the models
+in brain-tumor delineation (
+Lorenzo et al., 2019 ), it is still an
+open issue. Chaitanya et al. (2019) showed that visually non-
+realistic synthetic examples can improve the segmentation of
+cardiac MRI and noted that it is slightly counter-intuitive—it may
+have occurred due to the inherent structural and deformatio n-
+related characteristics of the cardiovascular system. Fin ally,
+elastic transformations often beneﬁt from B-splines (
+Huang
+and Cohen, 1996; Gu et al., 2014 ) or random deformations
+(Castro et al., 2018).
+Diﬀeomophic mappings play an important role in brain
+imaging, as they are able to preserve topology and generate
+biologically plausible deformations. In such transformation s, the
+diﬀeomorphism φ (also referred to as a diﬀeomorphic mapping) is
+given in the spatial domain /Omega1 of a source image I, and transforms
+I to the target image J: I ◦ φ − 1(x, 1). The mapping is the solution
+of the diﬀerential equation:
+dφ (x, t)
+dt = v
+(
+φ (x, t), t
+)
+, (4)
+where φ (x, 0) = x, v is a time-dependent smooth velocity
+ﬁeld, v : /Omega1 × t → Rd, φ (x, t) is a geodesic path ( d denotes
+the dimensionality of the spatial domain /Omega1 ), and φ (x, t) : /Omega1 ×
+t → /Omega1 . In Nalepa et al. (2019a) , we exploited the directly
+manipulated free-form deformation, in which the velocity ve ctor
+ﬁelds are regularized using B-splines ( Tustison et al., 2009 ). The
+d-dimensional update ﬁeld δ vi1,... ,id is
+δ vi1,... ,id =
+N/Omega1∑
+c= 1
+(
+∂ξ
+∂ x
+)
+c
+d∏
+j= 1
+Bij (xc
+j )
+d∏
+j= 1
+B2
+ij (xc
+j )
+(
+N/Omega1∑
+c= 1
+d∏
+j= 1
+B2
+ij (xc
+j )
+) (
+r+ 1∑
+k1= 1
+. . .
+r+ 1∑
+kd= 1
+d∏
+j= 1
+B2
+kj
+(xc
+j )
+) , (5)
+and B(·) are the B-spline basis functions, N/Omega1 denotes the
+number of pixels in the domain of the reference image, r is the
+spline order (in all dimensions), and ∂ξ
+∂ x is the gradient of the
+spatial similarity metric at a pixel c. The B-spline functions act
+as regularizers of the solution for each parametric dimensio n
+(Tustison and Avants, 2013).
+Examples of brain-tumor images generated using
+diﬀeomorphic registration are given in Figure 4—such
+artiﬁcially-generated data signiﬁcantly improved the abili ties
+of deep learners, especially when combined with aﬃne
+transformations, as we showed in
+Nalepa et al. (2019a) .
+The generated ( I′) images preserve topological information of
+the original image data ( I) with subtle changes to the tissue.
+Diﬀeomorphic registration may be applied not only to images
+exposing anatomical structures (
+Tward and Miller, 2017 ).
+In Figure 5, we present examples of simple shapes which
+underwent this transformation—the topological informatio n is
+clearly maintained in the generated images as well.
+2.3. Data Augmentation Using Pixel-Level
+Image Transformations
+There exist augmentation techniques which do not alter
+geometrical shape of an image (therefore, all geometrical features
+remain unchanged during the augmentation process), but aﬀect
+the pixel intensity values (either locally, or across the ent ire
+image). Such operations can be especially useful in medical
+image analysis, where diﬀerent training images are acquired
+in diﬀerent locations and using diﬀerent scanners, hence can
+be intrinsically heterogeneous in the pixel intensities, in tensity
+Frontiers in Computational Neuroscience | www.frontiersi n.org 4 December 2019 | Volume 13 | Article 83
+
+
+--- Page 5 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+FIGURE 4 | Diffeomorphic image registration applied to example brain images allowed for obtaining visually-plausible generate d images. For source ( I), target ( J), and
+artiﬁcially generated ( I′) images, we also present tumor masks overlayed over the corr esponding original images (in yellow; rows with the o subscript), alongside a
+zoomed part of a tumor (rows with the z superscript).
+Frontiers in Computational Neuroscience | www.frontiersi n.org 5 December 2019 | Volume 13 | Article 83
+
+
+--- Page 6 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+FIGURE 5 | Diffeomorphic image registration applied to basic shapes w hich underwent simple afﬁne registration (translation) bef ore diffeomorphic mapping. Source
+images (I) transformed to match the corresponding targets ( J) still clearly expose their spatial characteristics ( I′).
+FIGURE 6 | Generative adversarial networks are aimed at generating fa ke data (by a generator; potentially using some available data characteristics) w hich is
+indistinguishable from the original data by the discriminator. Therefore, the generator and discriminator compete with o ne another.
+gradients or “saturation” 2. During the pixel-level augmentation,
+the pixel intensities are commonly perturbed using eitherrandom
+or zero-mean Gaussian noise (with the standard deviation
+corresponding to the appropriate data dimension), with a
+given probability (the former operation is referred to as the
+random intensity variation). Other pixel-level operations include
+shifting and scaling of pixel-intensity values (and modifyi ng the
+image brightness), applying gamma correction and its multiple
+variants (
+Agarwal and Mahajan, 2017; Sahnoun et al., 2018 ),
+sharpening, blurring, and more ( Galdran et al., 2017 ). This kind
+of data augmentation is often exploited for high-dimensiona l
+data, as it can be conveniently applied to selected dimensions
+(
+Nalepa et al., 2019b).
+2.4. Data Augmentation by Generating
+Artiﬁcial Data
+To alleviate the problems related to the basic data augmentat ion
+approaches (including the problem of generating correlated da ta
+samples), various approaches toward generating artiﬁcial data
+(GAD) have been proposed. Generative adversarial networks
+(GANs), originally introduced in
+Goodfellow et al. (2014) , are
+being exploited to augment medical datasets ( Han et al., 2019;
+Shorten and Khoshgoftaar, 2019 ). The main objective of a GAN
+(Figure 6) is to generate a new data example (by a generator)
+which will be indistinguishable from the real data by the
+2These variations can be however alleviated by appropriate data stand ardization.
+discriminator (the generator competes with the discriminator,
+and the overall optimization mimics the min-max game). Mok
+and Chung proposed a new GAN architecture which utilizes a
+coarse-to-ﬁne generator whose aim is to capture the manifold
+of the training data and generate augmented examples (
+Mok
+and Chung, 2018 ). Adversarial networks have been also used
+for semantic segmentation of brain tumors ( Rezaei et al.,
+2017), brain-tumor detection ( V arghese et al., 2017), and image
+synthesis of diﬀerent modalities ( Yu et al., 2018 ). Although
+GANs allow us to introduce invariance and robustness of deep
+models with respect to not only aﬃne transforms (e.g., rotatio n,
+scaling, or ﬂipping) but also to some shape and appearance
+variations, convergence of the adversarial training and ex istence
+of its equilibrium point remain the open issues. Finally, there
+exist scenarios in which the generator renders multiple very
+similar examples which cannot improve the generalization
+of the system—it is known as the mode collapse problem
+(
+Wang et al., 2017).
+An interesting approach for generating phantom image data
+was exploited in Gholami et al. (2018), where the authors utilized
+a multi-species partial diﬀerential equations (PDE) growth model
+of a tumor to generate synthetic lesions. However, such data
+does not necessarily follow the correct intensity distributi on
+of a real MRI, hence it should be treated as a separate
+modality, because using the artiﬁcial data which is sampled f rom
+a very diﬀerent distribution may adversely aﬀect the overall
+segmentation performance by “tricking” the underlying deep
+Frontiers in Computational Neuroscience | www.frontiersi n.org 6 December 2019 | Volume 13 | Article 83
+
+
+--- Page 7 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+model ( Wei et al., 2018 ). The tumoral growth model itself
+captured the time evolution of enhancing and necrotic tumor
+concentrations together with the edema induced by a tumor.
+Additionally, the deformation of a lesion was simulated by
+incorporating the linear elasticity equations into the mode l. To
+deal with the diﬀerent data distributions, the authors applied
+CycleGAN (
+Zhu et al., 2017 ) for performing domain adaptation
+(from the generated phantom data to the real BraTS MRI scans).
+The experimental results showed that the domain adaptation was
+able to generate images which were practically indistinguis hable
+from the real data, therefore could be safely included in the
+training set.
+A promising approach of combining training samples using
+their linear combinations (referred to as mixup) was proposed
+by
+Zhang et al. (2017) , and further enhanced for medical
+image segmentation by Eaton-Rosen et al. in their mixmatch
+algorithm ( Eaton-Rosen et al., 2019 ), which additionally
+introduced a technique of selecting training samples that
+undergo linear combination. Since the medical image datase ts
+are often imbalanced (with the tumorous examples constituti ng
+the minority class), training patches with highest “foregro und
+amounts” (i.e., the number of pixels annotated as tumorous)
+are combined with those with the lowest concentration of
+foreground. The authors showed that their approach can increase
+performance in medical-image segmentation tasks, and relat ed
+its success to the mini-batch training. It is especially rele vant in
+the medical-image analysis, because the sizes of input scans are
+usually large, hence the batches are small to keep the traini ng
+memory requirements feasible in practice. Such data-driven
+augmentation techniques can also beneﬁt from growing groun d-
+truth datasets (e.g., BraTS) which manifest large variabil ity
+of brain tumors, to generate even more synthetic examples.
+Also, they could be potentially applied at test time to build an
+ensemble-like model, if a training patch/image which matche s
+the test image being classiﬁed was eﬃciently selected from t he
+training set.
+3. DATA
+In this work, we analyzed the approaches which were exploited
+by the BraTS 2018 participants to segment brain tumors from
+MRI (45 methods have been published,
+Crimi et al., 2019 ),
+and veriﬁed which augmentation scenarios were exploited in
+these algorithms. All of those techniques have been trained over
+the BraTS 2018 dataset consisting of MRI-DCE data of 285
+patients with diagnosed gliomas: 210 patients with high-grad e
+glioblastomas (HGG), and 75 patients with low-grade gliomas
+(LGG), and validated using the validation set of 66 previously
+unseen patients (both LGG and HGG, however the grade has not
+been revealed) (
+Menze et al., 2015; Bakas et al., 2017a,b,c ). Each
+study was manually annotated by one to four expert readers. Th e
+data comes in four co-registered modalities: native pre-con trast
+(T1), post-contrast T1-weighted (T1c), T2-weighted (T2), and T2
+Fluid Attenuated Inversion Recovery (FLAIR). All the pixels have
+one of four labels attached: healthy tissue, Gd-enhancing t umor
+(ET), peritumoral edema (ED), the necrotic and non-enhancin g
+tumor core (NCR/NET). The scans were skull-stripped and
+interpolated to the same shape (155, 240, 240 with the voxel siz e
+of 1 mm3).
+Importantly, this dataset manifests very heterogeneous ima ge
+quality, as the studies were acquired across diﬀerent institu tions,
+and using diﬀerent scanners. On the other hand, the delineati on
+procedure was clearly deﬁned which allowed for obtaining
+similar ground-truth annotations across various readers. To this
+end, the BraTS dataset—as the largest, most heterogeneous,
+and carefully annotated set—has been established as a standa rd
+brain-tumor dataset for quantifying the performance of exist ent
+and emerging detection and segmentation approaches. This
+heterogeneity is pivotal, as it captures a wide range of tumor
+characteristics, and the models trained over BraTS are easi ly
+applicable for segmenting other MRI scans (
+Nalepa et al., 2019).
+To show this desirable feature of the BraTS set
+experimentally, we trained our U-Net-based ensemble
+architecture (
+Marcinkiewicz et al., 2018 ) using (a) BraTS
+2019 training set (exclusively FLAIR sequences) and (b) our set
+of 41 LGG (WHO II) brain-tumor patients who underwent the
+MR imaging with a MAGNETOM Prisma 3T system (Siemens,
+Erlangen, Germany) equipped with a maximum ﬁeld gradient
+strength of 80 mT/m, and using a 20-channel quadrature head
+coil. The MRI sequences were acquired in the axial plane with
+a ﬁeld of view of 230 × 190 mm, matrix size 256 × 256 and 1
+mm slice thickness with no slice gap. In particular, we exploite d
+exclusively FLAIR series with TE = 386 ms, TR = 5,000 ms, and
+inversion time of 1,800 ms for segmentation of brain tumors.
+These scans underwent the same pre-processing as applied in the
+case of BraTS, however they were not segmented following
+the same delineation protocol, hence the characteristics of t he
+manual segmentation likely diﬀer across (a) and (b). The
+4-fold cross-validation showed that although the deep mode ls
+trained over (a) and (b) gave the statistically diﬀerent resul ts
+at p < 0.001, according to the two-tailed Wilcoxon test 3, the
+ensemble of models trained over (a) correctly detected 71.4%
+(5/7 cases) of brain tumors in the WHO II test dataset, which
+included seven patients kept aside while building an ensemble,
+with the average whole-tumor DICE of 0.80, where DICE is
+given as:
+DICE(A, B) = 2 · |A ∩ B|
+|A|+ |B| , (6)
+where A and B are two segmentations, i.e., manual and
+automated, 0 ≤ DICE ≤ 1, and DICE = 1 means the perfect
+segmentation score. On the other hand, a deep model trained
+over the WHO II training set and used for segmenting the test
+WHO II cases detected 85.7% tumors (6/7 patients) with the
+average whole-tumor DICE = 0.84. This tiny experiment shows
+that the segmentation engines trained over BraTS can capture
+tumor characteristics which are manifested in MRI data acquired
+and analyzed using diﬀerent protocols, and allow us to obtain
+high-quality segmentation. Interestingly, if we train ourensemble
+over the combined BraTS 2019 and WHO II training sets, we
+3We tested the null hypothesis saying that applying the models trained exclusively
+over the BraTS or our WHO II datasets leads to the same-quality segme ntation.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 7 December 2019 | Volume 13 | Article 83
+
+
+--- Page 8 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+FIGURE 7 | T wo example low- and high-grade glioma patients from the Bra TS 2018 dataset: red—GD-enhancing tumor (ET), green—perit umoral edema (ED), and
+blue—necrotic and non-enhancing tumor core (NCR/NET); (A–D) show original images, whereas (A’–D’) present overlaid ground-truth masks.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 8 December 2019 | Volume 13 | Article 83
+
+
+--- Page 9 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+TABLE 1 | Data augmentation techniques applied in the approaches val idated within the BraTS 2018 challenge framework.
+References Model Flip Rot. Trans. Scale Shear Elastic GAD Pix el-wise
+Albiol et al., 2019 VGG, Inception, Dense 3D afﬁne transformations
+Benson et al., 2018 * CNN (encoder-decoder) Yes Random
+Carver et al., 2018 U-Net Yes
+Chandra et al., 2018 V-Net, ResNet-18, FC-CRF Yes Yes
+Dai et al., 2018 Domain-adapted U-Net Yes
+Feng et al., 2018 U-Net Yes
+Gholami et al., 2018 * U-Net PDE
+Isensee et al., 2018 U-Net Yes Yes Yes Random Gamma
+Kao et al., 2018 DeepMedic, 3D U-Net Yes
+Kermi et al., 2018 U-Net Yes Yes Yes
+Lachinov et al., 2018 * Cascaded U-Net Yes B-spline Gaussian
+Ma and Yang, 2018 3D CNN Yes Yes Yes
+McKinley et al., 2018 Dense CNN Yes Yes Shift, scale
+Mehta and Arbel, 2018 U-Net Yes Yes Yes Yes
+Myronenko, 2018 CNN (encoder-decoder) Yes Yes Shift
+Nuechterlein and Mehta, 2018 3D-ESPNet Yes Yes
+Puybareau et al., 2018 VGG-16 Yes Yes
+Rezaei et al., 2018 † Voxel-GAN Yes Yes Gaussian
+Sun et al., 2018 CNN, DFKZ, 3D CNN Yes Gaussian
+Wang et al., 2018 *† CNN Yes Yes Yes Random
+Number of methods utilizing this augmentation → 15 8 2 9 1 2 1 8
+Percentage (%) of methods utilizing this augmentation → 75 40 10 45 5 10 5 40
+The top-performing techniques (over the unseen test set) are annotated wi th green.
+*The authors veriﬁed the impact of data augmentation of the generalization abilities of their deep models.
+†The authors used both training- and test-time data augmentation.
+will end up having the correct detection of 85.7% tumors (6/7
+cases) with the average whole-tumor DICE of 0.76. We can
+appreciate the fact that we were able to improve the detection,
+but the segmentation quality slightly dropped, showing that t he
+detected case was challenging to segment. Finally, it is wor th
+mentioning that this experiment sheds only some light on the
+eﬀectiveness of applying the deep models (or other data-driven
+techniques) trained over BraTS for analyzing diﬀerent MRI
+brain images. The manual delineation protocols were diﬀerent ,
+and the lack of inter-rater agreement may play pivotal role
+in quantifying automated segmentation algorithms over suc h
+diﬀerently acquired and analyzed image sets—it is unclear if
+the diﬀerences result from the inter-rater disagreement of t he
+incorrect segmentation (
+Hollingworth et al., 2006; Fyllingen
+et al., 2016; Visser et al., 2019 ).
+3.1. Example BraTS Images
+Example BraTS 2018 images are rendered in Figure 7 (two
+low-grade and two high-grade glioma patients), alongside th e
+corresponding multi-class ground-truth annotations. We ca n
+appreciate that diﬀerent parts of the tumors are manifested in
+diﬀerent modalities—e.g., necrotic and non-enhancing tumo r
+core is typically hypo-intense in T1-Gd when compared to
+T1 (
+Bakas et al., 2018 ). Therefore, multi-modal analysis appears
+crucial to fully beneﬁt from the available image informatio n.
+4. BRAIN-TUMOR DATA AUGMENTATION
+IN PRACTICE
+4.1. BraTS 2018 Challenge
+The BraTS challenge is aimed at evaluating the state-of-
+the-art approaches toward accurate multi-class brain-tumor
+segmentation from MRI. In this work, we review all published
+methods which were evaluated within the framework of
+the BraTS 2018 challenge—although 61 teams participated
+in the testing phase (
+Bakas et al., 2018 ), only 45 methods
+were ﬁnally described and published in the post-conference
+proceedings (
+Crimi et al., 2019 ). We verify which augmentation
+techniques were exploited to help boost generalization abili ties
+of the proposed supervised learners. We exclusively focus on 20
+papers (44% of all manuscripts) in which the authors explicitly
+stated that the augmentation had been used and report the type
+of the applied augmentation.
+In Table 1, we summarize all investigated brain-tumor
+segmentation algorithms, and report the deep models utilize d in
+the corresponding works alongside the augmentation techniques.
+In most of the cases, the authors followed the cross-validat ion
+scenario, and divided the training set into multiple non-
+overlapping folds. Then, separate models were trained over
+such folds, and the authors ﬁnally formed an ensemble of
+heterogeneous classiﬁers (trained over diﬀerent training d ata) to
+segment previously unseen test brain-tumor images. Also, ther e
+Frontiers in Computational Neuroscience | www.frontiersi n.org 9 December 2019 | Volume 13 | Article 83
+
+
+--- Page 10 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+FIGURE 8 | The DICE values: (A) whote-tumor (WT), (B) tumor core (TC), and (C) enhancing tumor (ET), obtained using the investigated tech niques over the BraTS
+2018 validation set.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 10 December 2019 | Volume 13 | Article 83
+
+
+--- Page 11 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+TABLE 2 | The impact of applying data augmentation on the average DICE s cores.
+Without augmentation With augmentation Change (in %)
+References WT TC ET WT TC ET /Delta1WT /Delta1TC /Delta1ET
+Benson et al., 2018 0.82 0.64 0.59 0.82 0.61 0.56 0 − 5 − 5
+Gholami et al., 2018 0.89 0.80 0.74 0.91 0.82 0.79 + 2 + 3 + 7
+Lachinov et al., 2018 * 0.91 0.84 0.77 0.91 0.84 0.78 0 0 + 1
+Wang et al., 2018 0.90 0.85 0.79 0.90 0.86 0.80 0 + 1 + 1
+For the methods reported by Lachinov et al. (2018) and Wang et al. (2018) , we analyzed the best-performing models.
+*The authors veriﬁed the impact of data augmentation over the training se t.
+TABLE 3 | The impact of applying data augmentation on the average Haus dorff distance values (in mm).
+Without augmentation With augmentation Change (in %)
+References WT TC ET WT TC ET /Delta1WT /Delta1TC /Delta1ET
+Benson et al., 2018 94.28 130.70 18.12 13.57 17.95 14.29 − 86 − 86 − 21
+Wang et al., 2018 5.38 6.61 3.34 6.18 6.37 3.13 + 26 − 4 − 6
+For the method reported by Wang et al. (2018) , we analyzed the best-performing models. Note that Gholami et al. (2018) and Lachinov et al. (2018) did not present the Hausdorff
+distances obtained using their approaches.
+TABLE 4 | The fully convolutional neural networks proposed in Lorenzo et al. (2019) have been trained using a number of datasets with different p reprocessing
+and augmentations.
+Setup→ A, A’ B, B’ C, C’ D, D’ E, E’ F , F’ G, G’ H, H’ I, I’ J, J’ K, K’ L, L’ M, M ’ N, N’ O, O’
+Feature centering No Yes Yes Yes Yes No Yes Yes Yes Yes No Yes Ye s Yes Yes
+Vertical ﬂip No No Yes No Yes No No Yes No Yes No No Yes No Yes
+Horizontal ﬂip No No No Yes Yes No No No Yes Yes No No No Yes Yes
+Max. rotation ( ∡ max) 0 0 0 0 0 45 45 45 45 45 90 90 90 90 90
+Augmentation factor 1, 2 1, 2 2, 4 2, 4 4, 8 2, 4 2, 4 4, 8 4, 8 8, 16 2, 4 2, 4 4, 8 4, 8 8, 16
+In the prime versions, we applied elastic deformations. This table come s from our previous paper ( Lorenzo et al., 2019 ).
+are approaches, e.g., by Albiol et al. (2019), Chandra et al. (2018),
+or Sun et al. (2018), in which a variety of deep neural architectures
+were used.
+In the majority of investigated brain-tumor segmentation
+techniques, the authors applied relatively simple training-t ime
+data augmentation strategies—the combination of training - and
+test-time augmentation was used only in two methods ( Rezaei
+et al., 2018; Wang et al., 2018). In 75% of the analyzed approaches,
+random ﬂipping was executed to increase the training set
+size and provide anatomically correct brain images 4. Similarly,
+rotating and scaling MRI images was applied in 40% and
+45% of techniques, respectively. Since modern deep network
+architectures are commonly translation-invariant, this t ype of
+aﬃne augmentation was used only in two works. Although
+other augmentation strategies were not as popular as easy-
+to-implement aﬃne transformations, it is worth noting that
+the pixel-wise operations were utilized in all of the top-
+performing techniques (the algorithms by
+Myronenko (2018) ,
+4Note that we do not count the algorithm proposed by Albiol et al. (2019), because
+the authors were not very speciﬁc about their augmentation strate gies.
+Isensee et al. (2018) , and McKinley et al. (2018) achieved the
+ﬁrst, second, and third place across all segmentation algorithms5,
+respectively). Additionally, Isensee et al. (2018) exploited elastic
+transformations in their aggressive data augmentation procedure
+which signiﬁcantly increased the size and representativene ss of
+their training sets, and ultimately allowed for outperformi ng
+a number of other learners. Interestingly, the authors show ed
+that the state-of-the-art U-Net architecture can be extreme ly
+competitive with other (much deeper and complex) models
+if the data is appropriately curated. It, in turn, manifests the
+importance of data representativeness and quality in the cont ext
+of robust medical image analysis.
+In Figure 8, we visualize the DICE scores obtained using
+almost all investigated methods (
+Puybareau et al., 2018; Rezaei
+et al., 2018 did not report the results over the unseen BraTS 2018
+validation set, therefore these methods are not included in the
+ﬁgure). It is worth mentioning that the trend is fairly coherent for
+all classes (whole tumor, tumor core, and enhancing tumor), a nd
+the best-performing methods by Isensee et al. (2018) , McKinley
+5For more detail on the validation and scoring procedures, see Bakas et al. (2018).
+Frontiers in Computational Neuroscience | www.frontiersi n.org 11 December 2019 | Volume 13 | Article 83
+
+
+--- Page 12 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+et al. (2018) , and Myronenko (2018) consistently outperform
+the other techniques in all cases. Although the success of th ese
+approaches obviously lies not only in the applied augmentation
+techniques, it is notable that the authors extensively bene ﬁt from
+generating additional synthetic data.
+Albeit data augmentation is introduced in order to improve
+the generalization capabilities of supervised learners, thi s impact
+was veriﬁed only in four BraTS 2018 papers (
+Benson et al.,
+2018; Gholami et al., 2018; Lachinov et al., 2018; Wang et al. ,
+2018). Gholami et al. (2018) showed that their PDE-based
+augmentation delivers very signiﬁcant improvement in the DICE
+scores obtained for segmenting all parts of the tumors in the
+multi-class classiﬁcation. The same performance boost (in t he
+DICE values obtained for each class) was reported by
+Lachinov
+et al. (2018). Finally, Wang et al. (2018) showed that the proposed
+test-time data augmentation led to improving the performance of
+their convolutional neural networks.
+In Table 2, we gathered the DICE scores obtained with
+and without the corresponding data augmentation, alongside
+the change in DICE (reported in %; the larger the DICE
+score becomes, the better segmentation has been obtained).
+Interestingly, training-time data augmentation appeared to be
+adversely aﬀecting the performance of the algorithm presented
+by
+Benson et al. (2018) . On the other hand, the authors showed
+that the Hausdorﬀ distance, being the maximum distance of
+TABLE 5 | Five best-performing conﬁgurations of our fully convolutio nal neural
+network according to the Friedman’ s test (at p < 0.05) taking into account the
+results elaborated for the WHO II validation set ( Lorenzo et al., 2019 ).
+Variant→ I E O E’ J’
+Rank 4.75 5.50 6.00 7.25 7.75
+FIGURE 9 | Exploiting various augmentations and coupling them into an augmentation tree allow us to generate multiple versions of an original patch (or image) which
+may be included in a training set. This ﬁgure is inspired by Lorenzo et al. (2019) .
+Frontiers in Computational Neuroscience | www.frontiersi n.org 12 December 2019 | Volume 13 | Article 83
+
+
+--- Page 13 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+all points from the segmented lesion to the corresponding
+nearest point of the ground-truth segmentation (
+Sauwen
+et al., 2017 ), signiﬁcantly dropped, hence the maximum
+segmentation error quantiﬁed by this metric was notably
+reduced (the smaller the Hausdorﬀ distance becomes, the
+better segmentation has been elaborated; Table 3). Test-time
+data augmentation exploited by
+Wang et al. (2018) not only
+decreased DICE for the whole-tumor segmentation, but also
+caused the increase of the correspoding Hausdorﬀ distance.
+TABLE 6 | The results, both (a) average, and (b) median DICE over our cli nical
+MRI data of low-grade glioma (WHO II) patients in the whole-tum or segmentation
+task, for different augmentation scenarios.
+Augmentation Training Validation T est
+(a)
+Without 0.823 0.743 0.763
+Flip 0.836 0.790 0.785
+DIR 0.858 0.777 0.773
+DIR + Flip 0.865 0.808 0.800
+(b)
+Without 0.823 0.779 0.785
+Flip 0.838 0.808 0.797
+DIR 0.859 0.802 0.792
+DIR + Flip 0.867 0.816 0.809
+The results come from our paper ( Nalepa et al., 2019a ). The best results are boldfaced.
+Therefore, applying it in the WT segmentation scenario led
+to decreasing the abilities of the underlying models. Overal l,
+the vast majority of methods neither report nor analyze
+the real impact of the incorporated augmentation techniques
+on the classiﬁcation performance and/or inference time of
+their deep models. Although we believe the authors did
+investigate the advantages (and disadvantages) of their da ta
+generation strategies (either experimentally or theoretic ally),
+data augmentation is often used a standard tool which is
+applied to any diﬃcult data (e.g., imbalanced, with highly
+under-represented classes).
+4.2. Beyond the BraTS Challenge
+Although practically all brain-tumor segmentation algorit hms
+which emerge in the recent literature have been tested over
+the BraTS datasets, we equipped our U-Nets with a battery of
+augmentation techniques (summarized in Table 4) and veriﬁed
+their impact over our clinical MRI data in
+Lorenzo et al.
+(2019). In this experiment, we have focused on the whole-
+tumor segmentation, as it was an intermediate step in the
+automated dynamic contrast-enhanced MRI analysis, in which
+perfusion parameters have been extracted for the entire tumor
+volume. Additionally, this dataset was manually delineate d by a
+reader (8 years of experience) who highlighted the whole-tum or
+areas only.
+FIGURE 10 | Examples from our clinical dataset segmented using our deep network trained in the DIR+Flip setting: (A–C) are original images, (D–F) are
+corresponding segmentations. Green color represents true positives, blue—false negatives, and red—false positives .
+Frontiers in Computational Neuroscience | www.frontiersi n.org 13 December 2019 | Volume 13 | Article 83
+
+
+--- Page 14 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+We executed multi-step augmentation by applying both aﬃne
+and elastic deformations of tumor examples, and increased th e
+cardinality of our training sets up to 16 × . In Figure 9, we can
+observe how executing simple aﬃne transformations leads to
+new synthetic image patches. Since various augmentation
+approaches may be utilized at diﬀerent depths of this
+augmentation tree, the number of artiﬁcial examples can
+be signiﬁcantly increased. The multi-fold cross-validati on
+experiments showed that introducing rotated training exampl es
+was pivotal to boost the generalization abilities of underly ing
+deep models. To verify the statistical importance of the resu lts,
+we executed the Friedman’s ranking tests which revealed tha t
+the horizontal ﬂip with additional rotation is crucial to bu ild
+well-generalizing deep learners in the patch-based segment ation
+scenario (Table 5).
+Similarly, we applied diﬀeomorphic image registration
+(DIR) coupled with a recommendation algorithm 6 to select
+training image pairs for registration in the data augmentati on
+process (
+Nalepa et al., 2019a ). The proposed augmentation was
+compared with random horizontal ﬂipping, and the experiments
+indicated that the combined approach leads to statistically
+signiﬁcant (Wilcoxon test at p < 0.01) improvements in DICE
+(Table 6). In Figure 10, we have gathered example segmentations
+obtained using our DIR+Flip deep model, alongside the
+corresponding DICE values. Although the original network,
+trained over the original training set would correctly dete ct and
+segment large tumors ( Figures 10A,B), it failed for relatively
+small lesions which were under-represented in the training s et
+(Figure 10C). Similarly, synthesizing artiﬁcial training examples
+helped improving the performance of our models in the case
+of brain tumors located in the brain areas which have not
+been originally included in the dataset (by applying rotation
+and ﬂipping).
+5. CONCLUSION
+In this paper, we reviewed the state-of-the-art data augmentation
+methods applied in the context of segmenting brain tumors
+from MRI. We carefully investigated all BraTS 2018 papers
+and analyzed data augmentation techniques utilized in
+these methods. Our investigation revealed that the aﬃne
+transformations are still the most widely-used in practice, since
+they are trivial to implement and can elaborate anatomically -
+correct brain-tumor examples. There are, however, augmentation
+methods which combine various approaches, also including
+elastic transformations. A very interesting research dire ction
+encompasses algorithms which can generate artiﬁcial images
+(e.g., based on the tumoral growth models) that not necessar ily
+follow real-life data distribution, but can be followed by
+other techniques to ensure correctness of such phantoms.
+6We used a recommendation algorithm for selecting source-target ima ge pairs
+that undergo registration. Such pairs should contain the trainin g images which
+capture lesions positioned in the same or close part of the brain, as the totally
+diﬀerent images can easily render unrealistic brain-tumor examples. A po tential
+drawback of this recommendation technique is its time complexity which amounts
+to O(||T||2), where ||T||is the cardinality of the original training set.
+The results showed that data augmentation was pivotal in the
+best-performing BraTS algorithms, and
+Isensee et al. (2018)
+experimentally proved that well-known and widely-used fully-
+convolutional neural networks can outperform other (perhaps
+much more deeper and complex) learners, if the training
+data is appropriately cleansed and curated. It clearly indicates
+the importance of introducing eﬀective data augmentation
+methods for medical image data, which beneﬁt from aﬃne
+transformations (in 2D and 3D), pixel-wise modiﬁcations
+and elastic transform to deal with the problem of limited
+ground-truth data. In Table 7, we gather the advantages and
+disadvantages of all groups of brain-tumor data augmentatio n
+techniques analyzed in this review. Finally, these approaches
+can be easily applied in both single- and multi-modal scans,
+TABLE 7 | The pros and cons of state-of-the-art brain-tumor data
+augmentation algorithms.
+Transformation of original data
+Advantages Disadvantages
+Afﬁne transformations
+• Easy to implement and
+understand
+• Produce correlated images
+• Operate in real-time due to low
+time complexity
+• Easily generate anatomically
+incorrect examples (*)
+• Applicable in training- and
+test-time
+• Deliver invariance with respect
+to the lesion position, scale, and
+rotation
+Elastic transformations
+• Can be applicable in training-
+and test-time
+• Not trivial to implement
+• Can introduce variations in
+shape
+• Often have high time complexity
+• Easily generate anatomically
+incorrect examples (*)
+Pixel-wise transformations
+• Easy to implement and
+understand
+• Cannot introduce changes in
+shape
+• Operate in real-time due to low
+time complexity
+• Applicable in training- and
+test-time
+• Can simulate different
+acquisition scenarios
+Generation of artiﬁcial data
+• Can synthesize realistic
+examples
+• (Very) high time complexity
+• (Potentially) applicable in
+test-time
+• GANs applicable in
+training-time only
+• Can introduce invariance with
+respect to afﬁne transformations
+and appearance variations
+• Can easily render multiple
+similar examples (mode collapse
+problem)
+*The real impact of incorporating unrealistic examples into training sets still
+needs investigation.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 14 December 2019 | Volume 13 | Article 83
+
+
+--- Page 15 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+FIGURE 11 | Anatomically incorrect brain images may still manifest val id tumor features—the impact of including such examples (wh ich may be easily rendered by
+various data-generation augmentation techniques) into tr aining sets for brain-tumor detection and segmentation tas ks is yet to be revealed.
+usually by synthesizing artiﬁcial examples separately for ea ch
+image modality.
+Although data augmentation became a pivotal part of virtually
+all deep learning-powered methods for segmenting brain lesi ons
+(due to the lack of very large, suﬃciently heterogeneous
+and representative ground-truth sets, with BraTS being an
+exception), there are still promising and unexplored research
+pathways in the literature. We believe that hybridizing techniques
+from various algorithmic groups, introducing more data-dri ven
+augmentations, and applying them at training- and test-time
+can further boost the performance of large-capacity learners .
+Also, investigating the impact of including not necessarily
+anatomically correct brain-tumor scans into training sets
+remains an open issue (see the examples of anatomically incorrect
+brain images which still manifest valid tumor characterist ics
+in Figure 11).
+AUTHOR CONTRIBUTIONS
+JN designed the study, performed the experiments, analyzed
+data, and wrote the manuscript. MM provided selected
+implementations and experimental results, and contributed t o
+writing of some parts of the initial version of the manuscript. MK
+provided qualitative segmentation analysis and visualizat ions.
+FUNDING
+This work was supported by the Polish National Centre
+for Research and Development under the Innomed Grant
+(POIR.01.02.00-00-0030/15). JN was supported by the Silesian
+University of Technology funds (The Rector’s Habilitation
+Grant No. 02/020/RGH19/0185). The research undertaken in
+this project led to developing Sens.AI—a tool for automated
+segmentation of brain lesions from T2-FLAIR sequences (https://
+sensai.eu). MK was supported by the Silesian University of
+Technology funds (Grant No. 02/020/BK_18/0128).
+ACKNOWLEDGMENTS
+The authors are grateful to the Reviewers for their constructi ve
+and valuable comments that helped improve the paper. JN thanks
+Dana K. Mitchell for lots of inspiring discussions on (not only )
+brain MRI analysis.
+This paper is in memory of Dr. Grzegorz Nalepa, an
+extraordinary scientist, pediatric hematologist/oncologis t, and a
+compassionate champion for kids at Riley Hospital for Children,
+Indianapolis, USA, who helped countless patients and their
+families through some of the most challenging moments of
+their lives.
+REFERENCES
+Agarwal, M., and Mahajan, R. (2017). Medical images contrast enh ancement
+using quad weighted histogram equalization with adaptive gama
+correction and homomorphic ﬁltering. Proc. Comput. Sci. 115, 509–517.
+doi: 10.1016/j.procs.2017.09.107
+Albiol, A., Albiol, A., and Albiol, F. (2019). “Extending 2D deep lea rning
+architectures to 3D image segmentation problems, ” in Brainlesion: Glioma,
+Multiple Sclerosis, Stroke and Traumatic Brain Injuries , eds A. Crimi, S.
+Bakas, H. Kuijf, F. Keyvan, M. Reyes, and T. van Walsum (Cham: Sprin ger
+International Publishing), 73–82.
+Alex, V., Mohammed Safwan, K. P., Chennamsetty, S. S., and Krishna murthi, G.
+(2017). “Generative adversarial networks for brain lesion detection, ” inMedical
+Imaging 2017: Image Processing , eds M. A. Styner and E. D. Angelini (SPIE),
+113–121. doi: 10.1117/12.2254487
+Amit, G., Ben-Ari, R., Hadad, O., Monovich, E., Granot, N., and H ashoul, S.
+(2017). “Classiﬁcation of breast MRI lesions using small-size trai ning sets:
+comparison of deep learning approaches, ” inMedical Imaging 2017: Computer-
+Aided Diagnosis , eds S. G. Armato III and N. A. Petrick (SPIE), 374–379.
+doi: 10.1117/12.2249981
+Angulakshmi, M., and Lakshmi Priya, G. (2017). Automated brain tumo ur
+segmentation techniques—a review. Int. J. Imaging Syst. Technol. 27, 66–77.
+doi: 10.1002/ima.22211
+Asif, U., Bennamoun, M., and Sohel, F. A. (2018). A multi-modal, disc riminative
+and spatially invariant CNN for RGB-D object labeling. IEEE Trans. Patt. Anal.
+Mach. Intell. 40, 2051–2065. doi: 10.1109/TPAMI.2017.2747134
+Bakas, S., Akbari, H., Sotiras, A., Bilello, M., Rozycki, M., Kirby , J. S., et al. (2017a).
+Segmentation labels and radiomic features for the pre-operative scans of the
+TCGA-GBM collection. Cancer Imaging Arch . Available online at: https://
+wiki.cancerimagingarchive.net/display/DOI/Segmentation+Labels+and+
+Radiomic+Features+for+the+Pre-operative+Scans+of+the+TCGA-GBM+
+collection
+Bakas, S., Akbari, H., Sotiras, A., Bilello, M., Rozycki, M., Kirby, J. S., et al. (2017b).
+Segmentation labels and radiomic features for the pre-operative scans of the
+TCGA-LGG collection. Cancer Imaging Arch. Available online at: https://
+wiki.cancerimagingarchive.net/display/DOI/Segmentation+Labels+and+
+Radiomic+Features+for+the+Pre-operative+Scans+of+the+TCGA-GBM+
+collection
+Bakas, S., Akbari, H., Sotiras, A., Bilello, M., Rozycki, M., Kirby , J. S.,
+et al. (2017c). Advancing the cancer genome atlas glioma MRI collect ions
+Frontiers in Computational Neuroscience | www.frontiersi n.org 15 December 2019 | Volume 13 | Article 83
+
+
+--- Page 16 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+with expert segmentation labels and radiomic features. Sci. Data 4, 1–13.
+doi: 10.1038/sdata.2017.117
+Bakas, S., Reyes, M., Jakab, A., Bauer, S., Rempﬂer, M., Crimi, A. , et al.
+(2018). Identifying the best machine learning algorithms for brain tumor
+segmentation, progression assessment, and overall survival predict ion in the
+BRATS challenge. CoRR abs/1811.02629.
+Bengio, Y., Courville, A., and Vincent, P. (2013). Representati on
+learning: a review and new perspectives. IEEE TPAMI 35, 1798–1828.
+doi: 10.1109/TPAMI.2013.50
+Benson, E., Pound, M. P., French, A. P., Jackson, A. S., and Prid more, T. P.
+(2018). “Deep hourglass for brain tumor segmentation, ” inBrainlesion: Glioma,
+Multiple Sclerosis, Stroke and Traumatic Brain Injuries - 4t h International
+Workshop, BrainLes 2018, Held in Conjunction with MICCAI 2018, Granad a,
+Spain, September 16, 2018, Revised Selected Papers, Part II, vol. 11384 of Lecture
+Notes in Computer Science (Cham), 419–428.
+Carver, E., Liu, C., Zong, W., Dai, Z., Snyder, J. M., Lee, J., et al. (2018).
+“Automatic brain tumor segmentation and overall survival predictio n using
+machine learning algorithms, ” inBrainlesion: Glioma, Multiple Sclerosis, Stroke
+and Traumatic Brain Injuries - 4th International Workshop, BrainLes 2018, Held
+in Conjunction with MICCAI 2018, Granada, Spain, September 16, 2018, Revised
+Selected Papers, Part II, vol. 11384 of Lecture Notes in ComputerScience (Cham),
+406–418.
+Castro, E., Cardoso, J. S., and Pereira, J. C. (2018). “Elastic def ormations for
+data augmentation in breast cancer mass detection, ” in 2018 IEEE EMBS
+International Conference on Biomedical Health Informatics (B HI), 230–234.
+doi: 10.1109/BHI.2018.8333411
+Chaitanya, K., Karani, N., Baumgartner, C. F., Becker, A., Dona ti, O., and
+Konukoglu, E. (2019). “Semi-supervised and task-driven data au gmentation, ”
+in Information Processing in Medical Imaging , eds A. C. S. Chung, J. C. Gee,
+P. A. Yushkevich, and S. Bao (Cham: Springer International Publishing), 29–41.
+Chandra, S., V akalopoulou, M., Fidon, L., Battistella, E., Estien ne, T., Sun, R.,
+et al. (2018). “Context aware 3D CNNs for brain tumor segmentation , ” in
+Brainlesion: Glioma, Multiple Sclerosis, Stroke and Traum atic Brain Injuries -
+4th International Workshop, BrainLes 2018, Held in Conjunction wi th MICCAI
+2018, Granada, Spain, September 16, 2018, Revised Selected Papers, Par t II, vol.
+11384 of Lecture Notes in Computer Science (Cham), 299–310.
+Crimi, A., Bakas, S., Kuijf, H. J., Keyvan, F., Reyes, M., and van Walsum, T. (eds).
+(2019). Brainlesion: Glioma, Multiple Sclerosis, Stroke and Traum atic Brain
+Injuries - 4th International Workshop, BrainLes 2018, Held in Conj unction with
+MICCAI 2018, Granada, Spain, September 16, 2018, Revised Selected Pape rs,
+Part II, volume 11384 of Lecture Notes in Computer Science (Cham).
+Dai, L., Li, T., Shu, H., Zhong, L., Shen, H., and Zhu, H. (2018). “ Automatic
+brain tumor segmentation with domain adaptation, ” in Brainlesion: Glioma,
+Multiple Sclerosis, Stroke and Traumatic Brain Injuries - 4t h International
+Workshop, BrainLes 2018, Held in Conjunction with MICCAI 2018, Granad a,
+Spain, September 16, 2018, Revised Selected Papers, Part II, vol. 11384 of Lecture
+Notes in Computer Science (Cham), 380–392.
+Dvornik, N., Mairal, J., and Schmid, C. (2018). On the importance of visual context
+for data augmentation in scene understanding. CoRR abs/1809.02492.
+Eaton-Rosen, Z., Bragman, F., Ourselin, S., and Cardoso, M. J. (2 019). Improving
+data augmentation for medical image segmentation. OpenReview.
+Feng, X., Tustison, N. J., and Meyer, C. H. (2018). “Brain tumor se gmentation
+using an ensemble of 3d u-nets and overall survival prediction usin g radiomic
+features, ” inBrainlesion: Glioma, Multiple Sclerosis, Stroke and Traumatic Brain
+Injuries - 4th International Workshop, BrainLes 2018, Held in Conj unction with
+MICCAI 2018, Granada, Spain, September 16, 2018, Revised Selected Pape rs,
+Part II, vol. 11384 of Lecture Notes in Computer Science (Cham), 279–288.
+Frid-Adar, M., Diamant, I., Klang, E., Amitai, M., Goldberger, J. , and Greenspan,
+H. (2018). Gan-based synthetic medical image augmentation for i ncreased
+cnn performance in liver lesion classiﬁcation. Neurocomputing 321, 321–331.
+doi: 10.1016/j.neucom.2018.09.013
+Fyllingen, E. H., Stensjøen, A. L., Berntsen, E. M., Solheim, O., an d Reinertsen,
+I. (2016). Glioblastoma segmentation: comparison of three diﬀerent s oftware
+packages. PLoS ONE 11:e0164891. doi: 10.1371/journal.pone.0164891
+Galdran, A., Alvarez-Gila, A., Meyer, M. I., Saratxaga, C. L., Araujo, T., Garrote, E.,
+et al. (2017). Data-driven color augmentation techniques for de ep skin image
+analysis. CoRR abs/1703.03702.
+Gholami, A., Subramanian, S., Shenoy, V., Himthani, N., Yue, X., Zha o, S.,
+et al. (2018). “A novel domain adaptation framework for medical image
+segmentation, ” inBrainlesion: Glioma, Multiple Sclerosis, Stroke and Traumatic
+Brain Injuries - 4th International Workshop, BrainLes 2018, Held in Conjunction
+with MICCAI 2018, Granada, Spain, September 16, 2018, Revised Selected
+Papers, Part II, vol. 11384 of Lecture Notes in Computer Science (Cham),
+289–298.
+Gibson, E., Li, W., Sudre, C., Fidon, L., Shakir, D. I., Wang, G ., et al. (2018).
+NiftyNet: a deep-learning platform for medical imaging. Comput. Methods
+Prog. Biomed. 158, 113–122. doi: 10.1016/j.cmpb.2018.01.025
+Goodfellow, I., Pouget-Abadie, J., Mirza, M., Xu, B., Warde-Farley , D., Ozair, S.,
+et al. (2014). “Generative adversarial nets, ” in Advances in Neural Information
+Processing Systems 27 , eds Z. Ghahramani, M. Welling, C. Cortes, N. D.
+Lawrence and K. Q. Weinberger (Curran Associates, Inc.), 2672– 2680.
+Available online at: http://papers.nips.cc/paper/5423-generative- adversarial-
+nets.pdf
+Gu, S., Meng, X., Sciurba, F. C., Ma, H., Leader, J., Kaminski, N. ,
+et al. (2014). Bidirectional elastic image registration using b-s pline
+aﬃne transformation. Comput. Med. Imaging Graph. 38, 306–314.
+doi: 10.1016/j.compmedimag.2014.01.002
+Han, C., Murao, K., Satoh, S., and Nakayama, H. (2019). Learning mo re
+with less: gan-based medical image augmentation. CoRR abs/1904.00838.
+doi: 10.1145/3357384.3357890
+Hollingworth, W., Medina, L. S., Lenkinski, R. E., Shibata, D. K. , Bernal, B.,
+Zurakowski, D., et al. (2006). Interrater reliability in assessing quality of
+diagnostic accuracy studies using the quadas tool: a preliminary as sessment.
+Acad. Radiol. 13, 803–810. doi: 10.1016/j.acra.2006.03.008
+Huang, Z., and Cohen, F. S. (1996). Aﬃne-invariant b-spline moment s for
+curve matching. IEEE Trans. Image Process. 5, 1473–1480. doi: 10.1109/83.
+536895
+Hussain, Z., Gimenez, F., Yi, D., and Rubin, D. (2017). “Diﬀeren tial data
+augmentation techniques for medical imaging classiﬁcation tas ks, ” in
+AMIA 2017, American Medical Informatics Association Annual Sympo sium
+(Washington, DC).
+Isensee, F., Kickingereder, P., Wick, W., Bendszus, M., and M aier-Hein, K. H.
+(2018). “No new-net, ” in Brainlesion: Glioma, Multiple Sclerosis, Stroke and
+Traumatic Brain Injuries - 4th International Workshop, Brai nLes 2018, Held in
+Conjunction with MICCAI 2018, Granada, Spain, September 16, 2018, Revi sed
+Selected Papers, Part II, vol. 11384 of Lecture Notes in ComputerScience (Cham),
+234–244.
+Isin, A., Direkoglu, C., and Sah, M. (2016). Review of mri-based brain tumor image
+segmentation using deep learning methods. Proc. Comput. Sci. 102, 317–324.
+doi: 10.1016/j.procs.2016.09.407
+Kao, P., Ngo, T., Zhang, A., Chen, J. W., and Manjunath, B. S. (2018). “Brain tumor
+segmentation and tractographic feature extraction from structural M R images
+for overall survival prediction, ” inBrainlesion: Glioma, Multiple Sclerosis, Stroke
+and Traumatic Brain Injuries - 4th International Workshop, BrainLes 2018, Held
+in Conjunction with MICCAI 2018, Granada, Spain, September 16, 2018, Revised
+Selected Papers, Part II, vol. 11384 of Lecture Notes in ComputerScience (Cham),
+128–141.
+Kermi, A., Mahmoudi, I., and Khadir, M. T. (2018). “Deep convolut ional neural
+networks using u-net for automatic brain tumor segmentation in mult imodal
+MRI volumes, ” inBrainlesion: Glioma, Multiple Sclerosis, Stroke and Traumatic
+Brain Injuries - 4th International Workshop, BrainLes 2018, Held in Conjunction
+with MICCAI 2018, Granada, Spain, September 16, 2018, Revised Selected
+Papers, Part II, vol. 11384 of Lecture Notes in Computer Science (Cham), 37–48.
+Krizhevsky, A., Sutskever, I., and Hinton, G. E. (2017). Imagen et classiﬁcation
+with deep convolutional neural networks. Commun. ACM 60, 84–90.
+doi: 10.1145/3065386
+Lachinov, D., V asiliev, E., and Turlapov, V. (2018). “Glioma segmen tation with
+cascaded unet, ” inBrainlesion: Glioma, Multiple Sclerosis, Stroke and Traumatic
+Brain Injuries - 4th International Workshop, BrainLes 2018, Held in Conjunction
+with MICCAI 2018, Granada, Spain, September 16, 2018, Revised Selected
+Papers, Part II, vol. 11384 of Lecture Notes in Computer Science (Cham),
+189–198.
+LeCun, Y., Bengio, Y., and Hinton, G. (2016). Deep learning. Nature 521, 436–555.
+doi: 10.1038/nature14539
+Frontiers in Computational Neuroscience | www.frontiersi n.org 16 December 2019 | Volume 13 | Article 83
+
+
+--- Page 17 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+Litjens, G., Kooi, T., Bejnordi, B. E., Setio, A. A. A., Ciompi, F ., Ghafoorian, M.,
+et al. (2017). A survey on deep learning in medical image analysis. Med. Image
+Anal. 42, 60–88. doi: 10.1016/j.media.2017.07.005
+Liu, Y., Stojadinovic, S., Hrycushko, B., Wardak, Z., Lau, S., L u, W., et al. (2017).
+A deep convolutional neural network-based automatic delineatio n strategy for
+multiple brain metastases stereotactic radiosurgery. PLoS ONE 12:e0185844.
+doi: 10.1371/journal.pone.0185844
+Ma, J., and Y ang, X. (2018). “Automatic brain tumor segmentation b y exploring
+the multi-modality complementary information and cascaded 3d lightweig ht
+cNNs, ” inBrainlesion: Glioma, Multiple Sclerosis, Stroke and Traum atic Brain
+Injuries - 4th International Workshop, BrainLes 2018, Held in Conj unction with
+MICCAI 2018, Granada, Spain, September 16, 2018, Revised Selected Pape rs,
+Part II, vol. 11384 of Lecture Notes in Computer Science (Cham), 25–36.
+Marcinkiewicz, M., Nalepa, J., Lorenzo, P. R., Dudzik, W., and Mrukwa, G. (2018).
+“Segmenting brain tumors from MRI using cascaded multi-modal U-Nets , ” in
+Brainlesion: Glioma, Multiple Sclerosis, Stroke and Traum atic Brain Injuries -
+4th International Workshop, BrainLes 2018, Held in Conjunction wi th MICCAI
+2018, Granada, Spain, September 16, 2018, Revised Selected Papers, Par t II, vol.
+11384 of Lecture Notes in Computer Science (Cham), 13–24.
+McKinley, R., Meier, R., and Wiest, R. (2018). “Ensembles of den sely-connected
+cnns with label-uncertainty for brain tumor segmentation, ” in Brainlesion:
+Glioma, Multiple Sclerosis, Stroke and Traumatic Brain Inj uries - 4th
+International Workshop, BrainLes 2018, Held in Conjunction with MICCAI
+2018, Granada, Spain, September 16, 2018, Revised Selected Papers, Par t II, vol.
+11384 of Lecture Notes in Computer Science (Cham), 456–465.
+Mehta, R., and Arbel, T. (2018). “3D U-Net for brain tumour segment ation, ” in
+Brainlesion: Glioma, Multiple Sclerosis, Stroke and Traum atic Brain Injuries -
+4th International Workshop, BrainLes 2018, Held in Conjunction wi th MICCAI
+2018, Granada, Spain, September 16, 2018, Revised Selected Papers, Par t II, vol.
+11384 of Lecture Notes in Computer Science (Cham), 254–266.
+Menze, B. H., Jakab, A., Bauer, S., Kalpathy-Cramer, J., Farahani, K., Kirby, J., et al.
+(2015). The multimodal brain tumor image segmentation benchmark (BraT S).
+IEEE TMI 34, 1993–2024. doi: 10.1109/TMI.2014.2377694
+Mok, T. C. W., and Chung, A. C. S. (2018). Learning data augmenta tion for brain
+tumor segmentation with coarse-to-ﬁne generative adversarial networks. CoRR
+abs/1805.11291:1–10.
+Myronenko, A. (2018). “3D MRI brain tumor segmentation using aut oencoder
+regularization, ” inBrainlesion: Glioma, Multiple Sclerosis, Stroke and Traumatic
+Brain Injuries - 4th International Workshop, BrainLes 2018, Held in Conjunction
+with MICCAI 2018, Granada, Spain, September 16, 2018, Revised Selected
+Papers, Part II, vol. 11384 of Lecture Notes in Computer Science (Cham),
+311–320.
+Nalepa, J., Lorenzo, P. R., Marcinkiewicz, M., Bobek-Billewicz, B., Wawrzyniak,
+P., Walczak, M., et al. (2019). Fully-automated deep learning-powere d
+system for DCE-MRI analysis of brain tumors. CoRR abs/1907.08303.
+doi: 10.1016/j.artmed.2019.101769
+Nalepa, J., Mrukwa, G., Piechaczek, S., Lorenzo, P. R., Marcinki ewicz, M., Bobek-
+Billewicz, B., et al. (2019a). “Data augmentation via image regist ration, ” in2019
+IEEE International Conference on Image Processing (ICIP) , 4250–4254.
+Nalepa, J., Myller, M., and Kawulok, M. (2019b). Training- and test- time data
+augmentation for hyperspectral image segmentation. IEEE Geosci. Remote Sens.
+Lett. 1–5. doi: 10.1109/LGRS.2019.2921011
+Nguyen, K. P., Fatt, C. C., Treacher, A., Mellema, C., Trivedi, M. H. , and Montillo,
+A. (2019). Anatomically-informed data augmentation for function al MRI with
+applications to deep learning. CoRR abs/1910.08112.
+Nuechterlein, N., and Mehta, S. (2018). “3D-ESPNet with pyramidal reﬁnement for
+volumetric brain tumor image segmentation, ” in Brainlesion: Glioma, Multiple
+Sclerosis, Stroke and Traumatic Brain Injuries - 4th Interna tional Workshop,
+BrainLes 2018, Held in Conjunction with MICCAI 2018, Granada, Spain,
+September 16, 2018, Revised Selected Papers, Part II, vol. 11384 of Lect ure Notes
+in Computer Science (Cham), 245–253.
+Oksuz, I., Ruijsink, B., Puyol-Antón, E., Clough, J. R., Cruz, G ., Bustin, A., et al.
+(2019). Automatic CNN-based detection of cardiac MR motion arte facts using
+k-space data augmentation and curriculum learning. Med. Image Anal. 55,
+136–147. doi: 10.1016/j.media.2019.04.009
+Park, S.-C., Cha, J. H., Lee, S., Jang, W., Lee, C. S., and Lee, J. K. (2019).
+Deep learning-based deep brain stimulation targeting and clinica l applications.
+Front. Neurosci. 13:1128. doi: 10.3389/fnins.2019.01128
+Pereira, S., Pinto, A., Alves, V., and Silva, C. A. (2016). Brain tu mor segmentation
+using convolutional neural nets in MRI images. IEEE TMI 35, 1240–1251.
+doi: 10.1109/TMI.2016.2538465
+Puybareau, É., Tochon, G., Chazalon, J., and Fabrizio, J. (2018 ). “Segmentation of
+gliomas and prediction of patient overall survival: a simple and fast proce dure, ”
+in Brainlesion: Glioma, Multiple Sclerosis, Stroke and Traumatic Brain Injuries -
+4th International Workshop, BrainLes 2018, Held in Conjunction wi th MICCAI
+2018, Granada, Spain, September 16, 2018, Revised Selected Papers, Par t II, vol.
+11384 of Lecture Notes in Computer Science (Cham), 199–209.
+Rezaei, M., Harmuth, K., Gierke, W., Kellermeier, T., Fischer, M., Y ang, H., et al.
+(2017). Conditional adversarial network for semantic segmenta tion of brain
+tumor. CoRR abs/1708.05227:1–10.
+Rezaei, M., Y ang, H., and Meinel, C. (2018). “voxel-gan: advers arial framework
+for learning imbalanced brain tumor segmentation, ” in Brainlesion: Glioma,
+Multiple Sclerosis, Stroke and Traumatic Brain Injuries - 4t h International
+Workshop, BrainLes 2018, Held in Conjunction with MICCAI 2018, Granad a,
+Spain, September 16, 2018, Revised Selected Papers, Part II, vol. 11384 of Lecture
+Notes in Computer Science (Cham), 321–333.
+Ribalta Lorenzo, P., Nalepa, J., Bobek-Billewicz, B., Wawrzyniak, P., Mrukwa, G.,
+Kawulok, M., et al. (2019). Segmenting brain tumors from ﬂair MRI us ing fully
+convolutional neural networks. Comput. Methods Prog. Biomed. 176, 135–148.
+doi: 10.1016/j.cmpb.2019.05.006
+Rozsa, A., Günther, M., and Boult, T. E. (2016). Towards robust d eep neural
+networks with BANG. CoRR abs/1612.00138.
+Sahnoun, M., Kallel, F., Dammak, M., Mhiri, C., Ben Mahfoudh, K., an d Ben
+Hamida, A. (2018). “A comparative study of MRI contrast enhancemen t
+techniques based on Traditional Gamma Correction and Adaptive Gamma
+Correction: Case of multiple sclerosis pathology, ” in 2018 4th International
+Conference on Advanced Technologies for Signal and Image Proc essing (ATSIP),
+1–7.
+Sauwen, N., Acou, M., Sima, D. M., Veraart, J., Maes, F., Himmelreich, U., et al.
+(2017). Semi-automated brain tumor segmentation on multi-parametric M RI
+using regularized non-negative matrix factorization. BMC Med. Imaging 17:29.
+doi: 10.1186/s12880-017-0198-4
+Shin, H.-C., Tenenholtz, N. A., Rogers, J. K., Schwarz, C. G., Se njem, M. L.,
+Gunter, J. L., et al. (2018). “Medical image synthesis for data augmentation
+and anonymization using generative adversarial networks, ” in Simulation and
+Synthesis in Medical Imaging, eds A. Gooya, O. Goksel, I. Oguz, and N. Burgos
+(Cham: Springer), 1–11.
+Shorten, C., and Khoshgoftaar, T. M. (2019). A survey on image data augmentation
+for deep learning. J. Big Data 6:60. doi: 10.1186/s40537-019-0197-0
+Sun, L., Zhang, S., and Luo, L. (2018). “Tumor segmentation and survival
+prediction in glioma with deep learning, ” in Brainlesion: Glioma, Multiple
+Sclerosis, Stroke and Traumatic Brain Injuries - 4th Interna tional Workshop,
+BrainLes 2018, Held in Conjunction with MICCAI 2018, Granada, Spain,
+September 16, 2018, Revised Selected Papers, Part II, vol. 11384 of Lect ure Notes
+in Computer Science (Cham), 83–93.
+Tustison, N. J., and Avants, B. B. (2013). Explicit B-spline regula rization
+in diﬀeomorphic image registration. Front. Neuroinformatics 7:39.
+doi: 10.3389/fninf.2013.00039
+Tustison, N. J., Avants, B. B., and Gee, J. C. (2009). Directly ma nipulated
+free-form deformation image registration. IEEE TIP 18, 624–635.
+doi: 10.1109/TIP.2008.2010072
+Tward, D., and Miller, M. (2017). “Unbiased diﬀeomorphic mapping of
+longitudinal data with simultaneous subject speciﬁc template esti mation, ” in
+Graphs in Biomedical Image Analysis, Computational Anatomy and Imaging
+Genetics, eds M. J.Cardoso, T.Arbel, E. Ferrante, X. Pennec, A. V. Dalca, S.
+Parisot, S. Joshi, N. K. Batmanghelich, A. Sotiras, M. Nielsen, M. R. Sabuncu, T.
+Fletcher, L. Shen, S. Durrleman, and S. Sommer (Cham: Springer Internati onal
+Publishing), 125–136.
+Visser, M., Müller, D. M. J., van Duijn, R. J. M., Smits, M., Verburg, N., Hendriks, E.
+J., et al. (2019). Inter-rater agreement in glioma segmentations on longitudinal
+MRI. NeuroImage 22:101727. doi: 10.1016/j.nicl.2019.101727
+Wang, G., Li, W., Aertsen, M., Deprest, J., Ourselin, S., and Verc auteren,
+T. (2019). Aleatoric uncertainty estimation with test-time augme ntation
+for medical image segmentation with convolutional neural
+networks. Neurocomputing 338, 34–45. doi: 10.1016/j.neucom.2019.
+01.103
+Frontiers in Computational Neuroscience | www.frontiersi n.org 17 December 2019 | Volume 13 | Article 83
+
+
+--- Page 18 ---
+Nalepa et al. Data Augmentation for Brain-Tumor Segmentation: A Review
+Wang, G., Li, W., Ourselin, S., and Vercauteren, T. (2018). “Au tomatic brain
+tumor segmentation using convolutional neural networks with tes t-time
+augmentation, ” inBrainlesion: Glioma, Multiple Sclerosis, Stroke and Traumatic
+Brain Injuries - 4th International Workshop, BrainLes 2018, Held in Conjunction
+with MICCAI 2018, Granada, Spain, September 16, 2018, Revised Selected
+Papers, Part II, vol. 11384 of Lecture Notes in Computer Science (Cham),
+61–72.
+Wang, K., Gou, C., Duan, Y., Lin, Y., Zheng, X., and Wang, F. (20 17). Generative
+adversarial networks: introduction and outlook. IEEE/CAA J. Automat. Sin. 4,
+588–598. doi: 10.1109/JAS.2017.7510583
+Wei, W., Liu, L., Truex, S., Yu, L., and Gursoy, M. E. (2018). Ad versarial examples
+in deep learning: characterization and divergence. CoRR abs/1807.00051.
+Wong, S. C., Gatt, A., Stamatescu, V., and McDonnell, M. D. (2016 ).
+“Understanding data augmentation for classiﬁcation: when to w arp?” in
+2016 International Conference on Digital Image Computing: Tech niques and
+Applications (DICTA), 1–6. doi: 10.1109/DICTA.2016.7797091
+Yu, B., Zhou, L., Wang, L., Fripp, J., and Bourgeat, P. (2018). “3 D cGAN based
+cross-modality MR image synthesis for brain tumor segmentation, ” i n 2018
+IEEE 15th International Symposium on Biomedical Imaging (ISBI 2018), 626–
+630. doi: 10.1109/ISBI.2018.8363653
+Zhang, H., Cissé, M., Dauphin, Y. N., and Lopez-Paz, D. (2017). mi xup: beyond
+empirical risk minimization. CoRR abs/1710.09412.
+Zhao, J., Meng, Z., Wei, L., Sun, C., Zou, Q., and Su, R. (2019) . Supervised brain
+tumor segmentation based on gradient and context-sensitive fe atures. Front.
+Neurosci. 13:144. doi: 10.3389/fnins.2019.00144
+Zhu, J., Park, T., Isola, P., and Efros, A. A. (2017). Unpaired
+image-to-image translation using cycle-consistent adversarial
+networks. CoRR abs/1703.10593. doi: 10.1109/ICCV.20
+17.244
+Conﬂict of Interest: JN was employed by Future Processing, and MM was
+employed by Netguru.
+The remaining author declares that the research was conducted in t he absence of
+any commercial or ﬁnancial relationships that could be construed as a potential
+conﬂict of interest.
+Copyright © 2019 Nalepa, Marcinkiewicz and Kawulok. This is an open-access article
+distributed under the terms of the Creative Commons Attribu tion License (CC BY).
+The use, distribution or reproduction in other forums is perm itted, provided the
+original author(s) and the copyright owner(s) are credited a nd that the original
+publication in this journal is cited, in accordance with acc epted academic practice.
+No use, distribution or reproduction is permitted which doe s not comply with these
+terms.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 18 December 2019 | Volume 13 | Article 83

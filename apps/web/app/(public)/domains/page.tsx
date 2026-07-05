@@ -14,7 +14,6 @@ type DomainCard = {
   auditSubjects: string;
   auditModes: string;
   evaluationBasis: string;
-  sharedPrimitives: string;
   liveSurfaces: string | null;
 };
 
@@ -32,8 +31,6 @@ const plannedDomains: DomainCard[] = [
       "Methodological audit, ethics audit, causal & statistical audit, protocol response",
     evaluationBasis:
       "Public health consequentiality, feasibility, risk-benefit, endpoint validity",
-    sharedPrimitives:
-      "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
     liveSurfaces: null,
   },
   {
@@ -49,8 +46,6 @@ const plannedDomains: DomainCard[] = [
       "Evaluation audit, risk synthesis, red-team response, mitigation follow-up",
     evaluationBasis:
       "Deployment risk, downstream uptake, evidence quality, causal & statistical validity",
-    sharedPrimitives:
-      "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
     liveSurfaces: null,
   },
   {
@@ -65,8 +60,6 @@ const plannedDomains: DomainCard[] = [
     auditModes: "Evidence integration, claim audit, response, synthesis review",
     evaluationBasis:
       "Downstream adoption, causal & statistical adequacy, implementation assumptions",
-    sharedPrimitives:
-      "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
     liveSurfaces: null,
   },
 ];
@@ -81,6 +74,9 @@ const sharedPrimitives = [
   "Solicitations",
 ];
 
+/// Domains are lenses over one audit substrate, not separate products.
+/// Active domains come from the registry; planned ones are shown without
+/// pretending to have live workflows.
 export default async function DomainsPage() {
   const registryDomains = await getDomainInstantiations();
   const activeDomains =
@@ -90,90 +86,75 @@ export default async function DomainsPage() {
   const domainCards = [...activeDomains, ...plannedDomains];
 
   return (
-          <section className="workspace">
-        <header className="topbar">
-          <div>
-            <p className="eyebrow">C-SQD domains</p>
-            <h1>Epistemic Audit Domains</h1>
-          </div>
-          <div className="status-pill">
-            {activeDomains.length} active + {plannedDomains.length} planned
-          </div>
-        </header>
+    <>
+      <header className="pub-page-head">
+        <div>
+          <p className="pub-kicker">Domains</p>
+          <h1>Epistemic Audit Domains</h1>
+          <p>
+            Every domain is a configured lens over the same audit substrate —
+            shared primitives, domain-specific criteria and evaluation basis.
+          </p>
+        </div>
+      </header>
 
-        <section className="metric-grid" aria-label="Domain metrics">
-          <div className="metric">
-            <span>Active domains</span>
-            <strong>{activeDomains.length}</strong>
-          </div>
-          <div className="metric">
-            <span>Planned domains</span>
-            <strong>{plannedDomains.length}</strong>
-          </div>
-          <div className="metric">
-            <span>Shared primitives</span>
-            <strong>{sharedPrimitives.length}</strong>
-          </div>
-        </section>
+      <div className="pub-stat-strip">
+        <span>
+          <strong>{activeDomains.length}</strong> active
+        </span>
+        <span>
+          <strong>{plannedDomains.length}</strong> planned
+        </span>
+        <span>Shared primitives:</span>
+      </div>
+      <div className="pub-chip-row" style={{ marginBottom: 20 }}>
+        {sharedPrimitives.map((primitive) => (
+          <span className="pub-chip" key={primitive}>
+            {primitive}
+          </span>
+        ))}
+      </div>
 
-        <section className="domain-substrate" aria-label="Shared C-SQD primitives">
-          {sharedPrimitives.map((primitive) => (
-            <span key={primitive}>{primitive}</span>
-          ))}
-        </section>
-
-        <section className="domain-grid" aria-label="C-SQD domain list">
-          {domainCards.map((domain) => (
-            <article
-              className={`domain-card domain-card-${domain.status}`}
-              key={domain.id}
-            >
-              <div className="domain-card-main">
-                <div className="object-kicker">
-                  <span>{formatLabel(domain.domainType)}</span>
-                  <span>{formatLabel(domain.status)}</span>
-                </div>
-                <h2>{domain.name}</h2>
-                <p>{domain.description}</p>
-                <dl className="domain-concept-list">
-                  <div>
-                    <dt>Audit modes</dt>
-                    <dd>{domain.auditModes}</dd>
-                  </div>
-                  <div>
-                    <dt>Shared C-SQD primitives</dt>
-                    <dd>{domain.sharedPrimitives}</dd>
-                  </div>
-                  {domain.liveSurfaces ? (
-                    <div>
-                      <dt>Live surfaces</dt>
-                      <dd>{domain.liveSurfaces}</dd>
-                    </div>
-                  ) : null}
-                </dl>
+      <div className="pub-domain-grid">
+        {domainCards.map((domain) => (
+          <article
+            className={`pub-domain-card${domain.status === "planned" ? " planned" : ""}`}
+            key={domain.id}
+          >
+            <div className="pub-card-kicker">
+              <span>{formatLabel(domain.domainType)}</span>
+              <span>{formatLabel(domain.status)}</span>
+            </div>
+            <h3>{domain.name}</h3>
+            <p>{domain.description}</p>
+            <dl>
+              <div>
+                <dt>Audit subjects</dt>
+                <dd>{domain.auditSubjects}</dd>
               </div>
-              <dl className="domain-facts">
+              <div>
+                <dt>Audit modes</dt>
+                <dd>{domain.auditModes}</dd>
+              </div>
+              <div>
+                <dt>Evaluation basis</dt>
+                <dd>{domain.evaluationBasis}</dd>
+              </div>
+              {domain.liveSurfaces ? (
                 <div>
-                  <dt>Registry</dt>
-                  <dd>{domain.registryName}</dd>
+                  <dt>Live surfaces</dt>
+                  <dd>{domain.liveSurfaces}</dd>
                 </div>
-                <div>
-                  <dt>Audit subjects</dt>
-                  <dd>{domain.auditSubjects}</dd>
-                </div>
-                <div>
-                  <dt>Status</dt>
-                  <dd>{formatLabel(domain.status)}</dd>
-                </div>
-                <div>
-                  <dt>Evaluation basis</dt>
-                  <dd>{domain.evaluationBasis}</dd>
-                </div>
-              </dl>
-            </article>
-          ))}
-        </section>
-      </section>
+              ) : null}
+              <div>
+                <dt>Registry</dt>
+                <dd>{domain.registryName}</dd>
+              </div>
+            </dl>
+          </article>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -191,9 +172,7 @@ function domainCardFromRegistry(domain: DomainInstantiationSummary): DomainCard 
       auditModes: "Element review facts, synthesis review, submitter response",
       evaluationBasis:
         "Methodological adequacy, causal & statistical adequacy, interpretation strength",
-      sharedPrimitives:
-        "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
-      liveSurfaces: "Discover, Public Audits, CRWE, Search / Register, Method",
+      liveSurfaces: "Discover, Audit Reports, Criteria, Register, Method",
     };
   }
 
@@ -208,8 +187,6 @@ function domainCardFromRegistry(domain: DomainInstantiationSummary): DomainCard 
     auditSubjects: "Configured by domain schema",
     auditModes: "Configured by domain schema",
     evaluationBasis: "Configured evaluation tuple",
-    sharedPrimitives:
-      "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
     liveSurfaces: null,
   };
 }
@@ -227,8 +204,6 @@ function fallbackAcademicDomain(): DomainCard {
     auditModes: "Element review facts, synthesis review, submitter response",
     evaluationBasis:
       "Methodological adequacy, causal & statistical adequacy, interpretation strength",
-    sharedPrimitives:
-      "Audit subjects, facts, audit episodes, memberships, synthesis, evaluation tuples",
-    liveSurfaces: "Discover, Public Audits, CRWE, Search / Register, Method",
+    liveSurfaces: "Discover, Audit Reports, Criteria, Register, Method",
   };
 }

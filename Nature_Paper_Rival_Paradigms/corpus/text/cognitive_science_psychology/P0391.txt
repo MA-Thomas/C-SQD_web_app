@@ -1,0 +1,2296 @@
+--- Page 1 ---
+Vol:.(1234567890)
+Computational Brain & Behavior (2023) 6:172–194
+https://doi.org/10.1007/s42113-022-00145-2
+1 3
+ORIGINAL PAPER
+Influences of Reinforcement and Choice Histories on Choice Behavior 
+in Actor‑Critic Learning
+Kentaro Katahira1  · Kenta Kimura1
+Accepted: 5 June 2022 / Published online: 11 July 2022 
+© The Author(s) 2022
+Abstract
+Reinforcement learning models have been used in many studies in the fields of neuroscience and psychology to model choice 
+behavior and underlying computational processes. Models based on action values, which represent the expected reward from 
+actions (e.g., Q-learning model), have been commonly used for this purpose. Meanwhile, the actor-critic learning model, 
+in which the policy update and evaluation of an expected reward for a given state are performed in separate systems (actor 
+and critic, respectively), has attracted attention due to its ability to explain the characteristics of various behaviors of living 
+systems. However, the statistical property of the model behavior (i.e., how the choice depends on past rewards and choices) 
+remains elusive. In this study, we examine the history dependence of the actor-critic model based on theoretical considera-
+tions and numerical simulations while considering the similarities with and differences from Q-learning models. We show 
+that in actor-critic learning, a specific interaction between past reward and choice, which differs from Q-learning, influences 
+the current choice. We also show that actor-critic learning predicts qualitatively different behavior from Q-learning, as the 
+higher the expectation is, the less likely the behavior will be chosen afterwards. This study provides useful information for 
+inferring computational and psychological principles from behavior by clarifying how actor-critic learning manifests in 
+choice behavior.
+Keywords Reinforcement learning · History dependence · Actor-critic learning · Q-learning · Logistic regression
+Introduction
+Reinforcement learning (RL) models have been used to infer 
+the computational processes underlying action selection 
+from behavioral data (Yechiam et al. 2005; Corrado & Doya 
+2007; Daw et al. 2011; Maia & Frank 2011). Most often, 
+RL models based on “action values,” which represent the 
+expected reward obtained from an action (e.g., Q-learning 
+models), have been used for this purpose (Samejima et al. 
+2005; Daw 2011; Palminteri et al. 2017; Wilson & Collins 
+2019). In such models, the action values are directly trans-
+lated into weights for corresponding actions such that the 
+higher the action value, the more likely the action is to be 
+chosen. However, it has been noted that many psychological 
+and neuroscientific findings are concisely explained by pol-
+icy-based RL models in which the preference for each action 
+is represented independently of the reward expectations (for 
+a review, see Mongillo et al. 2014; Bennett et al. 2021).
+A purely policy-based framework that does not represent 
+any values (i.e., expected reward), however, is inconsistent 
+with the fact that the neural correlates of value (expected 
+reward) have been extensively reported (O’Doherty 2014). 
+Thus, models with both value (expected reward) and value-
+independent preference representations should be reason-
+able candidates for a plausible model of RL in the brain. 
+Actor-critic learning or the actor-critic model (Barto et al. 
+1983; Barto 1995) is a representative model that has such 
+an architecture. Actor-critic learning can explain how the 
+choice behavior of animals obeys the matching law, which 
+is the fundamental law of choice behavior (Sakai & Fukai 
+2008a). The matching law states that the ratio of an individ-
+ual’s choice (across options) equals the ratio of the rewards 
+obtained. Including actor-critic learning, the learning rules 
+by which the choice probability converges to what follows 
+the matching law as a steady state have been theoretically 
+ * Kentaro Katahira 
+ k.katahira@aist.go.jp
+1 Human Informatics and Interaction Research Institute, 
+National Institute of Advanced Industrial Science 
+and Technology (AIST), Central 6, 1-1-1 Higashi, 
+305-8566 Tsukuba, Ibaraki, Japan
+
+
+--- Page 2 ---
+173Computational Brain & Behavior (2023) 6:172–194 
+1 3
+studied (Loewenstein & Seung 2006; Sakai & Fukai 2008a, 
+b). Actor-critic learning can also explain conditioned avoid-
+ance, which is difficult to explain by action value-based 
+models (Maia 2010). In addition, the actor-critic architecture 
+is well aligned with the neural architecture of the basal gan-
+glia (Houk & Adams 1995; Joel et al. 2002; Collins & Frank 
+2014). Since the actor-critic architecture separately repre-
+sents preference and value, it has been used to represent the 
+processes of pathological decision-making in which behav-
+ior is maintained even though no further reward is expected, 
+such as in drug addiction (Redish 2004).
+While the actor-critic model has these desirable proper -
+ties, action value-based models, such as Q-learning, have 
+been commonly used in the computational modeling of 
+learning and decision-making in which models are fitted to 
+experimentally observed behavioral data (Daw 2011; Pal-
+minteri et al. 2017; Wilson & Collins 2019). If the actor-
+critic model better captures the true computational process, 
+are the findings reported in previous studies using value-
+based models incorrect or do they capture a part of the truth? 
+In general, a model misspecification can lead to the errone-
+ous interpretation of data (Nassar & Gold 2013; Katahira 
+2018; Wilson & Collins 2019; Toyama et al. 2019; Katahira 
+& Toyama 2021). However, the impact of fitting an action 
+value-based model to choice data actually generated from 
+processes that are well described by actor-critic learning is 
+not understood.
+To discuss this issue, first, we aim to understand the 
+statistical properties of the actor-critic model. Specifi-
+cally, we investigate how the past history of experiences 
+(rewards and choices) leads to behavioral choices and how 
+each model parameter modifies them. In general, an RL 
+model can be regarded as a statistical model that deter -
+mines the probability of choice as a function of the his-
+tory of past events, which include one or more hedonically 
+valenced events (i.e., rewards or punishments). Thus, by 
+analyzing how past rewards and choices affect current 
+choices, we can understand the statistical properties of RL 
+models. Such analyses have been conducted specifically 
+by comparing RL models with a logistic regression model 
+that can explicitly model the influence of past events on 
+future choices (Katahira 2015, 2018). In the present study, 
+we perform such an analysis of the actor-critic model and 
+clarify the differences and similarities between this model 
+and Q-learning models. In Q-learning models with cer -
+tain settings, it has been shown that statistical interac-
+tions exist between past rewards and choices that influence 
+subsequent choices (Katahira 2015, 2018). The present 
+study addresses whether interactions also exist among past 
+events in actor-critic models and, if such interactions exist, 
+how the model parameters (e.g., learning rates) determine 
+the interactions. The regression coefficients of the interac-
+tion terms in logistic regression models are analytically 
+derived as a function of the model parameters. This allows 
+us to quantitatively evaluate how the RL model param-
+eters affect the interactions (Katahira 2018). Although the 
+steady state of RL models, including actor-critic leaning 
+and Q-leaning, has been analyzed theoretically, our analy -
+sis is not of the steady state but of the transient behavior 
+of the model (i.e., how past rewards and choices affect 
+subsequent choices immediately). This analysis will allow 
+us to distinguish the actor-critic model from other models 
+based on not only the steady-state properties of behavior 
+as described by the matching-law but also the trial-by-trial 
+dynamics.
+Next, we examine when and the extent to which the 
+predictions of the actor-critic and the Q-learning models 
+agree or deviate. In particular, we examine how closely the 
+Q-learning model can predict a choice when actor-critic is 
+the true model. This issue is also related to identifiability 
+between the models. If the actor-critic and Q-learning mod-
+els can always provide an equivalent prediction of choices, 
+these models would be indistinguishable from the data. 
+In situations in which the predictions differ, the two models 
+can be distinguished. Subsequently, we investigate the rela-
+tionship between the parameters of actor-critic learning and 
+those of Q-learning. Specifically, we check how the param-
+eter estimates of the Q-learning model vary when fitted to 
+simulated data generated by actor-critic models with varied 
+parameters.
+Finally, based on the nature of the actor-critic model we 
+examine in this study, we consider a model of habit for -
+mation as an example where the actor-critic model yields 
+qualitatively different predictions than Q-learning. In our 
+model setting, the actor-critic model predicts that if the ini-
+tial expectations are too high, the habit strength (preference 
+for the target action) is attenuated due to the negative RPE, 
+and the target behavior is not maintained. This prediction 
+qualitatively differs from that of Q-learning, whereby the 
+higher the expectation is, the more likely the behavior is to 
+be maintained. This prediction may have implications for 
+behavior change interventions.
+As a specific paradigm of decision-making tasks, we 
+mainly consider a two-alternative choice task called the two-
+armed bandit task, which is typically used in studies using 
+RL models (O’Doherty et al. 2004; Pessiglione et al. 2006; 
+Daw 2011). In this task, a single choice is made for each dis-
+crete trial, resulting in the presence or absence of a reward-
+ing outcome. The probabilities of reward are unknown to the 
+agent (subject) and change during the task without notice. 
+Thus, the probabilities should be learned by trial-and-error. 
+In addition, although the “value” in general RL refers to the 
+estimated amount of future cumulative reward, in such a 
+task, each trial is considered an independent episode. There-
+fore, the value in this study represents the expected value of 
+the reward in each trial.
+
+
+--- Page 3 ---
+174 Computational Brain & Behavior (2023) 6:172–194
+1 3
+The remainder of this article is organized as follows. The 
+“Models and Task Settings” section introduces the models, 
+including the actor-critic models, Q-learning models, and 
+logistic regression models, and the behavioral task settings 
+considered in this study. The “History Dependence of the 
+Actor-Critic Model” section discusses the statistical prop-
+erties (i.e., history dependence) of the actor-critic models 
+while examining the relationship between the actor-critic 
+models and the logistic regression models. The “Mapping 
+Actor-Critic Learning to Q-Learning” section evaluates how 
+each variant of the Q-learning model is mapped to the choice 
+behavior produced by the actor-critic models. In the “Impli-
+cations for Habit Formation: the Effect of the Initial Expec-
+tation” section, we consider the implications of the proper -
+ties of the actor-critic model for human behavior in daily 
+life using the model of habit formation. Finally,  the “Dis-
+cussion” section discusses the significance and limitations 
+of this study.
+Models and Task Settings
+First, we introduce a basic function used to determine 
+the probability of choice for each option called a softmax 
+function, which is commonly used in RL models and logis-
+tic regression models (in the “Choice Probability Func-
+tion” section). The models differ in how they determine the 
+preference for each option given to this softmax function. 
+Next, we introduce the actor-critic leaning (in the “ Actor-
+Critic Learning” section), which is the main focus of this 
+study, followed by Q-leaning models (in the “Q-Learning 
+Models” section) and then logistic regression models (in 
+the  “Logistic Regression Models”  section). Then, we 
+introduce the two-alternative choice task (in the “ Task Set-
+tings” section). Readers familiar with these models and the 
+task may skip to the “ History Dependence of the Actor-
+Critic Model” section.
+Choice Probability Function
+Here, we denote the chosen option at trial t by at ( at ∈{ 1, 2} 
+in the two-alternative case). Let Wt(i) denote the preference 
+for (or weight of) specific action i at trial t. Based on the set 
+of preferences, the model assigns the probability of choosing 
+option i by using the softmax function:
+where K is the number of possible actions. In our binary 
+choice case ( K = 2 ), the probability of selecting action 1 
+can be written as follows:
+(1)P(at = i)=
+exp �Wt(i)�
+∑ K
+k=1 exp �Wt(k)�,
+The RL models considered in the present study determine 
+the preference Wt(i) depending on past events (rewards and 
+choices) as specified below. In the two-alternative case, it is 
+convenient to consider the relative preference between the 
+two options defined as a logit1
+The logistic regression model can directly model this 
+logit as a linear combination of the effects of past rewards 
+and choices (and their interactions in some model settings).
+Actor‑Critic Learning
+Basic RL models learn the values of each state (e.g., in actor-
+critic learning) or each state-action pair (e.g., in Q-learning). 
+However, the present study basically considers a situation in 
+which no state transition explicitly occurs (Sakai & Fukai 
+2008a). Thus, we consider RL models without state vari-
+ables (i.e., the state variable is a constant). We also assume 
+that the choice at each trial does not affect the outcome at 
+subsequent trials.
+We introduce the actor-critic model based on these set-
+tings. The critic estimates the expected reward of the (single) 
+state. The estimate of the value of the state at trial t, denoted 
+as Vt , is computed by using the update rule as follows:
+where /u1D6FC denotes the critic learning rate, which deter -
+mines the extent to which the reward prediction error 
+(RPE),  (rt − Vt), is reflected in the value. The initial value, 
+V1 , is set to 0.5 in the present study. The outcome (reward) 
+at trial t is denoted by rt.
+The preferences (or policy parameters) are directly calcu-
+lated based on the RPE obtained from the critic as follows:
+where the decay parameter /u1D702∈[ 0, 1] is included to adapt to a 
+nonstationary reward contingency (Li & Daw 2011; Spiegler 
+et al. 2020). /u1D719∈[ 0, ∞) is called the policy learning rate. 
+The initial values of W1(1) and W1(2) are set to 0.5 in the 
+present study.
+Notably, we did not include the inverse temperature 
+parameter /u1D6FD , which is often included in the choice rule 
+of RL models (Sakai & Fukai 2008a) because the policy 
+(2)P(at = 1)= 1
+1 + exp /parenleft.s1− /bracketleft.s1Wt(1)−W t(2)/bracketright.s1/parenright.s1.
+(3)ht = Wt(1)−W t(2).
+(4)Vt+1 = Vt + /u1D6FC(rt − Vt)
+(5)
+Wt+1 (i)=
+/braceleft.s3/u1D702Wt(i)+ /u1D719(rt − Vt) if action i is chosen at trial t
+/u1D702Wt(i) if action i is unchosen at trial t
+1 The logit can be expressed as ht = log(P(at = 1)∕P(at = 2)).
+
+
+--- Page 4 ---
+175Computational Brain & Behavior (2023) 6:172–194 
+1 3
+learning rate /u1D719 is statistically indistinguishable from the 
+inverse temperature; the transformation /u1D719→ /u1D719× c and 
+W1(i)→ W1(i)×c  has an equivalent effect on the choice 
+probability as the transformation /u1D6FD→ /u1D6FD× c.
+Figure  1 shows the typical behavior of an actor-critic 
+model in which /u1D702= 0.7, /u1D719= 2.0 , and /u1D6FC= 0.2 . The time 
+evolution of the probability of choosing option 1 in the 
+actor-critic model is depicted in panel A (blue lines). The 
+preference Wt(i) and the state value Vt are depicted in panel 
+B. Notably, the preference for option 1 and the choice prob-
+ability decrease even when the same choice persists and the 
+reward continues to be given as observed in the first five to 
+ten trials. The mechanism underlying this phenomenon is 
+discussed later.
+Q‑Learning Models
+Here, we provide the formulation of the full version of the 
+Q-learning model considered in the present study. This 
+model includes various additional components (in addition 
+to the standard Q-learning model), such as an asymmetric 
+learning rate, forgetting rate, and choice-autocorrelation fac-
+tor. Specific reduced models are derived from this general 
+formulation by decreasing or fixing the parameters. The 
+model formulations presented here basically follow Kata -
+hira (2018).
+The Q-learning model assigns each option i  an action 
+value Qt(i) at trial t. The action value of the chosen option i 
+is updated as follows:
+(6)Qt+1 (i)=
+/braceleft.s3Qt(i)+𝛼 +
+L (rt − Qt(i))if rt − Qt(i)≥ 0
+Qt(i)+𝛼 −
+L (rt − Qt(i))if rt − Qt(i)< 0 ,
+where /u1D6FC+
+L ∈[ 0, 1] and /u1D6FC−
+L ∈[ 0, 1] are the learning rates 
+that determine how much the model updates the action 
+value depending on the sign of the RPE, rt − Qt(i) . 
+The initial action values are basically set to zero (i.e., 
+Q1(1)=Q 1(2)= 0 ). For unchosen option j ( i ≠ j ), the action 
+value is updated as follows:
+where /u1D6FCF ∈[ 0, 1] is the forgetting rate. Several studies have 
+reported that a non-zero forgetting rate improves the good-
+ness of fit to behavioral data (e.g., Ito & Doya 2009; Toyama 
+et al. 2017; Katahira et al. 2017), whereas the forgetting rate 
+/u1D6FCF has often been set to zero (i.e., the action value of the 
+unchosen option is not updated).
+To model the effects of choice history (choice hyster -
+esis), the choice trace (or choice kernel; Wilson & Collins 
+2019) Ct(i) , which quantifies how frequently option i  has 
+been chosen recently, is computed as follows:
+where the indicator function I(⋅) is 1 if the statement is true 
+and 0 if the statement is false. The initial values are set to 
+zero, i.e., C1(1)=C 1(2)=0  . The parameter /u1D70F∈[ 0, 1] is the 
+decay rate of the choice trace.
+Using the action values and the choice traces, the pref-
+erence used in the softmax function (Eqs. (1 ) and (2 )) is 
+given by Wt(i)=/u1D6FDQt(i)+/u1D711Ct(i) , where the inverse tem-
+perature parameter /u1D6FD∈[ 0, ∞) controls how sensitive the 
+choice probabilities are to the value difference between 
+actions, and the choice trace weight /u1D711∈ (−∞, ∞) controls 
+the tendency to repeat (when 𝜑> 0 ) or avoid (when 𝜑< 0 ) 
+recently chosen options. In the two-alternative choice case, 
+(7)Qt+1 (j)=( 1 − /u1D6FCF )Qt(j)
+(8)Ct+1 (i)=(1 − /u1D70F)Ct(i)+ /u1D70FI(at = i),
+Fig. 1  Sample behaviors of 
+RL models considered in the 
+present study. The simulation of 
+the two-armed bandit task was 
+performed by using an actor-
+critic model (as a true model), 
+and a standard Q-learning 
+model (“Q”-model) was fitted 
+to the data. A The probability 
+of choosing option 1 calculated 
+from the actor-critic model 
+(blue line) and fitted Q-learning 
+model (orange line). B Prefer-
+ences Wt (i) and state value V 
+of the actor-critic model. C 
+Action values (Q values) of the 
+Q-learning. The first 160 trials 
+of the session are depicted
+0.00
+0.25
+0.50
+0.75
+1.00
+0 50 051001
+Prob. choosing option 1
+Actor−critic Q−learning
+−2
+0
+2
+Tr ial number
+Preference/
+State value
+W(1) W(2) VActor−critic
+0.00
+0.25
+0.50
+0.75
+1.00Q−value
+Q(1) Q(2)Q−learning
+rewarded
+unrewarded
+Tr ial number
+Tr ial number
+0 50 051001
+0 50 051001
+A
+B
+C
+Option 1 
+chosen
+Option 2
+chosen
+
+
+--- Page 5 ---
+176 Computational Brain & Behavior (2023) 6:172–194
+1 3
+the choice is equivalently modeled by computing the rela -
+tive choice trace as follows:
+where C1 = 0 , and the logit is ht = /u1D6FD(Qt(1)− Qt(2)) +/u1D711Ct.
+We consider four variants of Q-learning models, termed 
+the “Q,” “Q+C,” “Q+A,” and “Q+CA” models. All mod -
+els have the forgetting rate (  /u1D6FCF ) as a free parameter. The 
+Q model has symmetric learning rates ( /u1D6FC+
+L = /u1D6FC−
+L  ) and no 
+choice-autocorrelation factor ( /u1D711= 0 ). The Q+C model has 
+symmetric learning rates ( /u1D6FC+
+L = /u1D6FC−
+L  ) and the choice-auto-
+correlation factor ( /u1D711 and /u1D70F are free parameters). The Q+A 
+model has asymmetric learning rates (both /u1D6FC+
+L  and /u1D6FC−
+L  are free 
+parameters) and no choice-autocorrelation factor ( /u1D711= 0 ). 
+The Q+CA model is the full model in which all parameters 
+are free parameters.
+Q-learning is similar to actor-critic in that it changes pref-
+erences in the direction that minimizes the RPE. Thus, the 
+overall behaviors of these two model types are expected to 
+be similar. The orange line in Fig. 1A shows the time course 
+of the choice probability of the Q model (with the symmetric 
+learning rate and no choice-autocorrelation factor) fitted to 
+the data generated by the actor-critic model. The pattern of 
+change in the choice probability is approximately similar to 
+that of actor-critic in Q-learning as expected, but the two 
+models differ in some trials. The nature of these differences 
+between the two models is discussed later.
+A model recovery analysis shows that the actor-critic 
+model considered in this study is statistically distinguishable 
+from the four variants of Q-learning models (Appendix 6 ). 
+This means that the actor-critic model is not flexible enough 
+to fit the data even when the Q-learning model is the true 
+model. A parameter recovery analysis also confirms that the 
+parameters of the actor-critic model can be recovered by 
+model fitting (Appendix 7).
+Logistic Regression Models
+As mentioned above, the logistic regression model directly 
+models logit ht (Eq. (3 )) as a linear combination of the 
+history of rewards and choices (e.g., Lau & Glimcher 
+2005; Seymour et al. 2012; Kovach et al. 2012) or their 
+interactions.
+Following the convention in Lau and Glimcher (2005) 
+and Corrado et al. (2005), we represent the reward history 
+Rt as
+Ct+1 =
+/braceleft.s3(1− /u1D70F)Ct + /u1D70Fif at = 1
+(1− /u1D70F)Ct − /u1D70Fif at = 2 ,
+(9)
+Rt =
+⎧
+⎪
+⎨
+⎪⎩
+1 if option 1 is chosen and a reward is given at trial t
+−1 if option 2 is chosen and a reward is given at trial t
+0 if no reward is given at trial t
+,
+and the choice history Ct as
+This coding of histories is naturally obtained by assuming 
+that the effects of past rewards and choices are symmetric 
+around options, i.e., rewards or choices from option 1 have 
+exactly the opposite effect from that of a reward or choice 
+from option 2 (Lau & Glimcher 2005).
+Using these history variables, the logistic regression 
+model with only main effects (with no interaction term) is 
+constructed as follows:
+where b(m)
+r  and b(m)
+c  are the regression coefficients of the 
+reward and choice at trial t − m , respectively. The constants 
+Mr and Mc are the history lengths of the reward history and 
+the choice history, respectively.
+We also consider a logistic model with interaction terms 
+comprising rewards and choices at same/different trials. The 
+(full) model with the past two trials includes interaction 
+terms, such as Rt−1Ct−1 , Rt−1Ct−2 , Rt−2Ct−2 , Rt−1Ct−1Ct−2 , 
+and  Rt−1Rt−2Ct−1Ct−2 (in total, there are 11 possible interac-
+tion terms), in addition to the main effect terms, Rt−1 , Rt−2 , 
+Ct−1 , and Ct−2.
+Task Settings
+In the two-alternative choice task used for the simulations, 
+one option was associated with a high reward probability, 
+0.7, while the other option was associated with a low reward 
+probability, 0.3. With the probability of the chosen option, 
+the reward was given ( rt = 1 ); otherwise, no reward was 
+given ( rt = 0).2 After each 100-trial block, the reward prob-
+abilities of the two options were reversed.
+History Dependence of the Actor‑Critic 
+Model
+In this section, we examine the history dependence of the 
+actor-critic model by expanding the model equations and 
+mapping it to the logistic regression model as previously 
+applied to Q-learning models (Katahira 2015, 2018).
+(10)Ct =
+/braceleft.s31 if option 1 is chosen at trial t
+−1 if option 2 is chosen at trial t .
+(11)ht =
+Mr/uni2211.s1
+m=1
+b(m)
+r Rt−m +
+Mc/uni2211.s1
+m=1
+b(m)
+c Ct−m ,
+2 The scale of the reward value only affects the scale of the policy 
+learning rate, /u1D719 , in the actor-critic model, that of the inverse tempera-
+ture parameter, /u1D6FD , in the Q-learning model and that of the regression 
+coefficient for reward history in logistic regression but not the qualita-
+tive properties of these models.
+
+
+--- Page 6 ---
+177Computational Brain & Behavior (2023) 6:172–194 
+1 3
+The update rule for the actor (Eq. (5 )) can be expanded 
+as follows:
+From Eq. (12), we can evaluate the logit ht for the actor-
+critic model as follows:
+where we defined Δ t = I(at = 1)−I (at = 2) . When the 
+initial preferences are identical between actions (i.e., 
+W1(1)= W1(2) ), the first term vanishes. Thus, we basically 
+neglect this initial value effect.
+When the State Value Can Be Regarded 
+as a Constant
+First, we consider a comprehensible case in which the 
+state value Vt is constant ( Vt = Vconst for all t ). This situ-
+ation is an approximation of a case in which the critic 
+learning rate /u1D6FC is so small that the change in V  is suf-
+ficiently slow and can be regarded as a constant over 
+a short period. From Eq. (13), in this case, the logit ht 
+becomes
+Notably, Ct =Δ t , Rt =Δ trt in the logistic regression 
+model formulation (see Eqs. (9 ) and (10)), from which 
+Eq. (14) can be rewritten as follows:
+(12)
+Wt(i)=/u1D702Wt−1 (i)+ I(at−1 = i)/u1D719(rt−1 − Vt−1 )
+=/u1D702t−1 W1(i)+
+t−1/uni2211.s1
+m=1
+/u1D702m−1 I(at−m = i)/u1D719(rt−m − Vt−m ).
+(13)ht = Wt (1)− Wt (2)=/u1D702t−1 (W1 (1)−W 1 (2)) +
+t−1/uni2211.s1
+m=1
+/u1D702m−1 Δ t−m /u1D719(rt−m − Vt−m ),
+(14)ht = /u1D719
+t−1/uni2211.s1
+m=1
+/u1D702m−1Δt−mrt−m − /u1D719
+t−1/uni2211.s1
+m=1
+/u1D702m−1Δt−mVconst.
+Since the coefficients of both R ’s and C’s are constant, 
+this model is equivalent to a logistic regression with only 
+the main effect with the following relationships:
+if /u1D702 is sufficiently small so that any terms beyond the his-
+tory length that are not included in the model are negligi-
+ble. Notably, when the constant state value Vconst is positive, 
+i.e., Vconst > 0 , the coefficients of the choice history, bc’s, are 
+negative because 𝜙> 0 and 𝜂> 0 . This effect results from 
+the assumption that the update of preferences is proportional 
+to the RPE and the fact that the expectation (here Vconst ) has a 
+negative sign in the RPE. Thus, the higher the expectation is, 
+the lower the increase in the preference for the chosen option 
+becomes. This effect reduces the probability of repeating 
+the same choice with higher expectations. More specifically, 
+the preference for a chosen action decreases by /u1D719Vconst (in 
+addition to the increment due to rewards; see Eq. (5)), while 
+the preference for the unchosen option is only subject to the 
+decay effect when 𝜂< 1.
+Figure  2 plots the regression coefficients of the logistic 
+models with main effects only applied to the data from the 
+actor-critic with a constant state value (symbols). The cor -
+responding analytical results given by Eqs. (16) and (17) 
+are also plotted (solid lines). We observe that the analyti-
+cal result coincides with the regression coefficients of the 
+simulated data. It should be noted that this coincidence 
+occurs only when the decay rate is not close to 1; when 
+the decay rate is close to 1, the effect of reward does not 
+(15)ht = /u1D719
+t−1/uni2211.s1
+m=1
+/u1D702m−1Rt−m − /u1D719
+t−1/uni2211.s1
+m=1
+/u1D702m−1VconstCt−m.
+(16)b(k)
+r =/u1D719/u1D702k−1 ,
+(17)b(k)
+c =−/u1D719/u1D702k−1 Vconst,
+Fig. 2  The effects of the reward 
+and choice history of actor-critic 
+learning when the state value is 
+constant. The symbols represent 
+the regression coefficients of the 
+logistic regression model fitted 
+to simulated data generated by 
+actor-critic models with a varied 
+constant value of V (see legend). 
+Left, the reward history. Right, 
+the choice history. Error bars 
+representing the standard error 
+of the mean (SEM) are plotted 
+but almost invisible due to the 
+small SEM. The solid lines 
+represent the analytical predic-
+tions obtained using Eqs. (16) 
+and (17)
+Reward Choice
+123456789 101112 12345678 91 01112
+−0.25
+0.00
+0.25
+0.50
+Lag (trials into past)
+Regression coefficient
+4JNVMBUJPO
+V = −0.4 
+V = 0.0
+V = 0.4
+V = 0.8
+5IFPSZ
+
+
+--- Page 7 ---
+178 Computational Brain & Behavior (2023) 6:172–194
+1 3
+decay, and the history in the distant past (beyond what 
+can be included in the logistic regression) influences the 
+current choice. As the theory predicted, the constant state 
+value Vconst does not affect the dependence on the reward 
+history (left panel) while it does influence the dependence 
+on the choice history (right panel); the larger Vconst is, the 
+larger the negative choice history dependence becomes. 
+This finding suggests that if the expectation of the reward 
+(i.e., Vconst ) is large, the choice is easily switched. When 
+the state value is negative, the positive dependence on 
+the choice history appears (gray line); the greater the 
+agent’s negative expectations, the more likely the agent is 
+to choose the same option. Although this is an unrealistic 
+assumption in the current setting in which outcome ( rt ) 
+has a non-negative value, such a situation can occur when 
+the outcome has a negative value (i.e., when an aversive 
+outcome, such as an electric shock, is given), such as in 
+an avoidance task (Maia 2010).
+General Case
+Next, we consider a more general case in which the learn-
+ing rate /u1D6FC is not close to zero, and the variation in the state 
+value Vt is not negligible. First, note that the update rule of 
+V (Eq. (4 )) can be rewritten as
+from which we have
+In this case, since /u1D6FC is assumed not to be small, the effect 
+of the initial value of V , which is represented by the term 
+(1 − /u1D6FC)t−1 V1 , can be neglected. By inserting this result into 
+Eq. (13) (with W1(1)= W1(2) ), we obtain
+If we consider only the effect of a reward at trials t − 1 , 
+t − 2 , and t − 3 , we obtain the following (see Appendix 3):
+A schematic illustrating how the impact of a reward 
+changes as the trial proceeds in this situation is shown in 
+Fig.  3. These graphs show how the impact of the reward 
+(contribution to the logit) given at trial t  changes at trial 
+t + 1 , trial t + 2 , and trial t + 3 . Specifically, they plot the 
+coefficient of reward rt in the logits ht+1 (for lag 1), ht+2 (for 
+lag 2), and ht+3 (for lag 3). Due to the effect of the decay of 
+Vt =( 1 − /u1D6FC)Vt−1 + /u1D6FCrt−1 ,
+(18)Vt = /u1D6FC
+t−1/uni2211.s1
+k=1
+(1− /u1D6FC)k−1 rt−k +( 1 − /u1D6FC)t−1 V1.
+(19)
+ht = /u1D719
+t−1/uni2211.s1
+m=1
+/u1D702m−1 Δ t−m
+/parenleft.s4
+rt−m − /u1D6FC
+t−1−m/uni2211.s1
+k=1
+(1− /u1D6FC)k−1 rt−m−k
+/parenright.s4
+.
+(20)
+ht = /u1D719
+/bracketleft.s1
+Δ t− 1rt− 1 +(/u1D702Δ t− 2 − /u1D6FCΔ t− 1 )rt− 2 +(/u1D7022 Δ t− 3 − /u1D702Δ t− 2 /u1D6FC−Δ t− 1/u1D6FC(1− /u1D6FC))rt− 3
+/bracketright.s1.
+preference ( /u1D702 ), the impact basically decays, but when /u1D6FC is 
+non-zero, the effect changes after trial t + 1 depending on 
+which choice was made previously. Interestingly, when /u1D6FC 
+is large ( /u1D6FC= 0.5 , panel B), depending on the subsequent 
+choice, the effect of the reward may become stronger over 
+time (at trial t + 2 , when 𝜂 + 𝛼> 1 ) and may even become 
+negative at trial t + 3.
+This pattern of history dependence can be captured by a 
+logistic regression model with interaction terms. For sim-
+plicity, considering only the effect of a reward at trials t − 1 
+and t − 2 in Eq. (20), we have
+where we used the expression given in Eqs. ( 9) and (10). 
+The general form of the impact of past rewards is given 
+in Appendix 4 . Equation ( 21) clarifies that when /u1D6FC has a 
+nonzero value, a third-order interaction between the choices 
+and reward, Ct−1Ct−2Rt−2 , exists because the effect of the 
+reward at trial t − 2 is included in the state value of next trial 
+Vt−1 , and the next choice determines how Vt−1 will influence 
+subsequent choices. The reward at trial t − 2 increases expec-
+tation Vt−1 and thus decreases the preference for the action 
+chosen at trial t − 1 . This property arises from the peculiar -
+ity of actor-critic learning whereby the reward expectation 
+(i.e., the state value) is shared by different actions and modi-
+fied by any action chosen at the same state. Therefore, the 
+effects of past rewards are also modified by which actions 
+are subsequently chosen. This causes an interaction between 
+choice history and reward history that is specific to actor-
+critic learning.
+Figure  4 shows the results of the simulation exam-
+ining how the characteristics of the actor-critic model 
+are captured by the logistic regression analysis. Here, 
+the critic learning rate /u1D6FC varied among 0, 0.5, and 0.8. 
+Panel A shows the effect of the logistic regression with 
+the main effect only. The effect of the critic learning 
+rate is not very pronounced in this case. As the above 
+theoretical considerations indicate, the effect of the 
+critic learning rate is observed in the interactions (panel 
+B). The bars represent the estimates of the regression 
+coefficients. The analytical predictions of Eq. (21) are 
+indicated by the red line. When /u1D6FC has a non-zero value, 
+the interaction among Ct−1 , Ct−2 , and Rt−2 becomes nega-
+tive. When /u1D6FC is zero, Vt is constant, and this interac -
+tion has a zero coefficient. These results highlight the 
+fact that a model with only a linear combination of past 
+events does not capture the characteristics of the actor-
+critic model well and that it is important to consider 
+interactions.
+Next, we consider the similarities and differences in 
+these results with the history dependence of the Q-learning 
+model (“Q model”). In Q-learning models in which the 
+(21)ht = /u1D719/bracketleft.s1Rt−1 + /u1D702Rt−2 − /u1D6FCCt−1Ct−2Rt−2
+/bracketright.s1,
+
+
+--- Page 8 ---
+179Computational Brain & Behavior (2023) 6:172–194 
+1 3
+learning rate is denoted by /u1D6FCL and the forgetting rate is 
+denoted by /u1D6FCF , the impact of a reward at trial t − m on trial 
+t is given by Katahira (2015)
+(22)/u1D6FD/u1D6FCL(1 − /u1D6FCL)nsame (1 − /u1D6FCF )ndiﬀ rt−m ,
+where nsame is the number of trials where the same choice 
+was made as at trial t − m (from trial t − m + 1 to trial t − 1 ), 
+and ndiﬀ is the number of trials in which a different choice 
+was made from that at trial t − m ( ndiﬀ = m − 1 − nsame ). If 
+the learning rate equals the forgetting rate ( /u1D6FCL = /u1D6FCF ), the 
+impact of a reward at trial m becomes /u1D6FCL(1 − /u1D6FCL)m−1  , which 
+Fig. 3  Schematic of how the 
+impact of a reward on choice 
+changes depending on the sub-
+sequent choice. A Parameters 
+were set as /u1D719= 1.5 , /u1D702= 0.7 , 
+and /u1D6FC= 0.2 . B Parameters were 
+set as /u1D719= 1.5 , /u1D702= 0.7 , and 
+/u1D6FC= 0.5
+−0.5
+0.0
+0.5
+1.0
+1.5
+−0.5
+0.0
+0.5
+1.0
+1.5
+Impact of reward (from option 1)  at trial t 
+on choosing option 1
+Impact of reward (from option 1)  at trial t 
+on choosing option 1
+Option 2 chosen
+Option 1 chosen
+B
+A
+= 0.5
+= 0.2
+t+1t +2 t+3
+Trial
+t+1t +2 t+3
+Trial
+
+
+--- Page 9 ---
+180 Computational Brain & Behavior (2023) 6:172–194
+1 3
+is independent of the subsequent choices (Katahira 2015). 
+If the learning rate is higher than the forgetting rate (i.e., 
+𝛼L >𝛼 F ), the impact of the reward decreases the more often 
+the same option is chosen later. In this respect, it is simi-
+lar to the actor-critic model, but the effect is multiplicative, 
+whereas in the actor-critic model, the effect of subsequent 
+choices is subtractive. Thus, in Q-learning, in contrast to the 
+actor-critic model, the impact of rewards does not increase 
+or become negative. Therefore, the actor-critic model and 
+Q-learning qualitatively differ in their history dependence. 
+This finding indicates that these models can be statistically 
+distinguishable based on their history dependence. Thus, to 
+what extent can Q-learning models mimic the choice behav-
+ior of the actor-critic model? If such models can mimic the 
+choice behavior to some extent, how are the parameters of 
+the two models related? We discuss these issues next.
+Mapping Actor‑Critic Learning to Q‑Learning
+We evaluate how each variant of Q-learning models can 
+mimic the choice behavior produced by the actor-critic 
+model. Specifically, we generated choice data by using the 
+actor-critic model (as the “true model”) when performing 
+Fig. 4  The effects of the reward 
+and choice history of the 
+actor-critic when the state value 
+changes. A Logistic regression 
+with main effects only. The 
+conventions are the same as 
+those in Fig. 2 but no analytical 
+results are plotted: The solid 
+lines represent the simulation 
+results. B Logistic regression 
+with an interaction. The red 
+horizontal lines represent the 
+analytical prediction given by 
+Eq. (21)
+Reward Choice
+123456789 10 123456789 10
+−0.5
+0.0
+0.5
+1.0
+1.5
+Lag (trials into past)
+Regression coefficient
+−1
+0
+1
+History
+Regression coefficient theory
+A
+B
+
+
+--- Page 10 ---
+181Computational Brain & Behavior (2023) 6:172–194 
+1 3
+the two-armed bandit task. Then, four variants of Q-learning 
+models (see the “Q-Learning Models” section) were fitted 
+to the simulated data. As a reference model, the actor-critic 
+model, which was the same structure as the true model, was 
+also fitted to the simulated data. The detailed procedures of 
+the simulation and model fitting are shown in Appendices 
+1 and 2, respectively.
+First, we varied the critic learning rate /u1D6FC in the true 
+model. Figure  5 compares the predictive performance of the 
+fitted models. Here, the predictive performance was meas-
+ured using the normalized likelihood of the test data (Ito & 
+Doya 2009), i.e., the geometric mean of the likelihood per 
+trial of the test data, which were generated using the same 
+actor-critic model with the same conditions. Our theory sug-
+gests that the larger the /u1D6FC , the larger the interaction between 
+choice and reward history (Eq. (21)), leading to a large 
+deviation from the Q-learning model. Indeed, when /u1D6FC= 0 , 
+the Q-learning model with the choice autocorrelation fac -
+tor (Q+C model) produced a normalized likelihood almost 
+identical to that of the actor-critic model (Fig.  5). However, 
+as the critic learning rate /u1D6FC increased, the likelihood of the 
+Q-learning models decreased compared to those of the actor-
+critic model. Among the Q-learning models considered in 
+this study, the Q+C and Q+CA models produce predictions 
+that are closest to those of the actor-critic model. Thus, the 
+asymmetry (“A”) of the learning rate in Q-learning is not 
+necessary for mimicking the behavior of the actor-critic 
+model, and including the effect of the choice history (“C”) 
+is sufficient. Therefore, we examined the correspondence 
+between the parameters of the Q+C model and those of the 
+actor-critic model.
+Figure  6 shows the correlation between the parameter 
+estimates of the Q-learning model (Q+C model) and the true 
+parameter values of the actor-critic model. The parameters 
+of the true model (the critic learning rate in panel A and 
+the policy learning rate in panel B) were randomly sampled 
+from uniform distributions, while the other parameters were 
+fixed. Overall, varying a single parameter of the actor-critic 
+model influences multiple parameters of the Q-learning 
+models. Thus, there is a one-to-many correspondence from 
+the actor-critic model to Q-learning models. When the critic 
+learning rate /u1D6FC was varied (panel A), the learning rate of 
+Q-learning ( /u1D6FCL ) increased correspondingly. In contrast, the 
+inverse temperature, /u1D6FD , decreased as /u1D6FC increased. The other 
+parameters (forgetting rate /u1D6FCF and those related to choice 
+autocorrelation factors, /u1D70F , /u1D711 ) are also moderately correlated 
+with /u1D6FC . When the policy learning rate, /u1D719 , was randomly var-
+ied (panel B), the inverse temperature /u1D6FD and learning rate /u1D6FCL 
+in the Q-learning model were highly positively correlated 
+with /u1D719.
+Here we found that changes in the critic and policy 
+learning rates manifest as changes across a wide variety 
+of parameters in a Q-learning model. One might be inter -
+ested in knowing what the converse is, or how changes 
+in the Q-learning parameters manifest in the parameters 
+of the actor-critic model. The simulation addressing this 
+issue is reported in Appendix 8. The results show that 
+the changes in Q-learning parameters induce changes in 
+almost all of the parameters of an actor-critic model (we 
+also find one-to-many mapping from Q-learning to actor-
+critic learning).
+In Appendix 5, as an extension of the actor-critic model, 
+we consider the asymmetries in learning that have been con-
+sidered mainly in action value-based models in the previous 
+literature (Frank et al. 2007; Niv et al. 2012; Gershman 2015; 
+Lefebvre et al. 2017; Palminteri et al. 2017; Ohta et al. 2021). 
+Here, we show that the asymmetry in the Q-learning model 
+directly corresponds to the asymmetry of the actor (rather than 
+Fig. 5  Predictive accuracy of 
+different models fitted to simu-
+lated data generated from the 
+actor-critic learning model with 
+different critic learning rates 
+/u1D6FC= 0, 0.2, 0.4, 0.8 . The predic-
+tive accuracy was measured by 
+the normalized likelihood of the 
+test data. The other parameters 
+of the actor-critic model were 
+set to /u1D702= 0.8, /u1D719= 1.5 . The 
+error bars show the mean ± 
+SEM across 50 simulations
+
+
+--- Page 11 ---
+182 Computational Brain & Behavior (2023) 6:172–194
+1 3
+the critic) in the actor-critic model. However, the mapping is 
+not one-to-one.
+Implications for Habit Formation: the Effect 
+of the Initial Expectation
+The purpose of this section is to demonstrate a situation 
+in which the properties of actor-critic learning revealed 
+in this study (specifically that a high state value induces a 
+negative choice history effect) clearly manifest in behav -
+ior. As an example, we consider a situation in which an 
+agent is trying to continue a particular action (habit for -
+mation). Even when humans want to continue a healthy 
+habit, such as exercising, or a self-improvement activity, 
+such as learning a foreign language, they may sustain the 
+behavior because of other temptations. We model such a 
+process with RL models.
+Let action 1 be the behavior an agent wants to continue. 
+First, we assume that what reinforces the action is an intrin-
+sic (subjective) reward, such as the satisfaction obtained as 
+a result of the action. Furthermore, we assumed that the 
+reward value, r, in the RL models represents the net value, 
+which is the reward obtained from the outcome minus the 
+Fig. 6  The relationship between 
+the parameter estimates of 
+Q-learning with a choice-auto-
+correlation factor (Q+C model) 
+fitted to simulated data and the 
+parameters of the true model 
+(actor-critic model). A The 
+critic learning rate /u1D6FC was sam-
+pled from a uniform distribution 
+on the range [0.1, 0.9]. B The 
+policy learning rate /u1D719 was sam-
+pled from a uniform distribution 
+on the range [0.5, 3.0]
+A
+B
+R =0 .97
+0.4
+0.6
+0.8
+0.25 0.50 0.75
+/g68
+/g68L
+R =/g3/g160.62
+0.000
+0.025
+0.050
+0.075
+0.100
+0.25 0.50 0.75
+/g68
+/g68F
+R =0 .41
+0.00
+0.25
+0.50
+0.75
+1.00
+0.25 0.50 0.75
+/g68
+/g87
+R =/g3/g160.92
+2
+3
+4
+5
+0.25 0.50 0.75
+/g68
+/g69
+R =0 .86
+−3
+−2
+−1
+0
+0.25 0.50 0.75
+/g68
+/g77
+R = 0.81
+0.3
+0.4
+0.5
+0.6
+0.7
+12 3
+/g73
+/g68L
+R =/g3/g160.11
+0.00
+0.02
+0.04
+0.06
+12 3
+/g73
+/g68F
+R =0 .16
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+123
+/g73
+/g87
+R = 0.96
+1
+2
+3
+4
+12 3
+/g73
+/g69 R =
+/g3/g16
+0.28
+,
+−7.5
+−5.0
+−2.5
+0.0
+12 3
+/g73
+/g77
+Q-learning parameter estimatesQ-learning parameter estimates
+Critic learning rate in true model 
+Policy learning rate in true model 
+/g3/g16
+
+
+--- Page 12 ---
+183Computational Brain & Behavior (2023) 6:172–194 
+1 3
+mental cost of the action (e.g., Pessiglione et al. 2018). 
+Until an agent becomes accustomed to the behavior to some 
+extent, the mental cost is high, and the (net) reward value 
+is assumed to be small. Moreover, even once people are 
+accustomed to the behavior, the mental cost increases if the 
+behavior is not performed for a long time, and the reward 
+value is assumed to diminish. Based on these assumptions, 
+we assume that the reward resulting from performing action 
+1 is initially r = 0.2 , and each time action 1 is performed, the 
+reward value is updated as r ← r + 0.2 ×( 1 − r) . If action 1 
+is not performed at a discrete time step, the reward value is 
+updated as r ← 0.8 × r , and the reward value decays toward 
+zero. Let action 2 be an action that provides some degree 
+of satisfaction without a cost, such as watching a video on 
+a smartphone, and assume that choosing action 2 always 
+yields a constant reward value r = 0.5 . Therefore, action 1 
+will have a higher reward than action 2 if it is chosen with 
+some persistence. However, if action 1 is not selected for a 
+certain period, action 2 will yield a higher reward than action 
+1. Note that these reward settings are designed to emphasize 
+the property of actor-critic learning. We do not argue that 
+this is a valid model for this situation. It is necessary to 
+examine the validity of this model setting in light of empiri-
+cal data.
+Initially, when the agent decides to maintain the action, 
+the agent intends to perform action 1; thus, in the actor-critic 
+model, it would be appropriate to set the initial value of the 
+preference for action 1 high and the preference for action 
+2 low. Here, we set W1(1)= 5 and W1(2)= 0 . This setting 
+was applied to ensure that action 1 is strongly preferred at 
+the beginning.
+Here, we consider the effects of the initial expectation and 
+the learning rate. In the actor-critic model, the initial expec-
+tation corresponds to the initial value of the state value, V1 ; 
+in Q-learning, it is represented per action, where Q1(1) is the 
+expectation for action 1.
+Figure  7A shows an example behavior of the actor-critic 
+model when the state value remains unchanged and the ini-
+tial value is kept low ( V1 = 0.2 , /u1D6FC= 0 ). The other parameters 
+were set as /u1D702= 0.9 and /u1D719= 2.0 , which were the same as the 
+Fig. 7  Examples of simulations of habit formation with an actor-
+critic model. A An example with a low initial expectation, V1 = 0.2 , 
+where the expectation is not updated (critic learning rate /u1D6FC= 0 ). B 
+Case with a high initial expectation,V1 = 0.8 , where the expectation is 
+not updated. C An example with a high initial expectation, V1 = 0.8 , 
+where the expectation is updated relatively slowly (critic learning rate 
+/u1D6FC= 0.05).  D An example with a high initial expectation, V1 = 0.8 , 
+where expectation is updated relatively quickly ( V1 = 0.8 , critic 
+learning rate /u1D6FC= 0.2 ). In each example, the upper panel shows the 
+reward (orange), state value (i.e., expectation; yellow line), and the 
+probability of choosing action 1 (blue line). The gray dot on the top 
+indicates that action 1 was selected, while the gray dot on the bottom 
+indicates that action 2 was selected. The bottom panel shows the pref-
+erence for action 1 ( Wt (1) , magenta line) and the preference for action 
+2 ( Wt (2) , green line)
+
+
+--- Page 13 ---
+184 Computational Brain & Behavior (2023) 6:172–194
+1 3
+other conditions. In this example, action 1 was selected first, 
+and since the reward obtained was as expected or did not 
+greatly differ from the initial expectation ( r ≈ 0.2 ), the RPE 
+was small even if it was positive for a short duration, and 
+the preference decreased due to the effect of decay. However, 
+once the reward obtained by action 1 and the positive RPE 
+increased, Wt(1) increased until it was balanced by the effect 
+of the decay, and action 1 was continuously selected.
+Figure  7B shows the behavior when the expectation for 
+reward remains high and unchanged ( V1 = 0.8 and /u1D6FC= 0 ). 
+In this example, action 1 was initially selected, and since 
+the reward was less than expected ( r < 0.8 ), the preference 
+for action 1 decreased due to negative RPE. The reward of 
+0.5 obtained by action 2 was also less than V = 0.8 ; thus, 
+the effect of the negative selection history dominated, and 
+action switching was repeated. Action 1 was selected with 
+some frequency, but because it was intermittent, the reward 
+value obtained by action 1 did not increase to exceed the 
+reward value obtained by action 2.
+The results of the cases in which the expectation, Vt , is 
+updated ( 𝛼> 0 ) are shown in Fig.  7C–D. Even when the 
+initial expectation was high ( V1 = 0.8 ), if Vt converges to 
+the stable reward obtained by action 2, action 2 can become 
+dominant (Fig.  7C). However, if Vt decreases to the reward 
+value obtained by action 1 while action 1 is still frequently 
+selected, the negative RPE will not be experienced as much, 
+and the reward obtained by action 1 will increase such that 
+action 1 is selected at a high frequency (Fig.  7D). The latter 
+case is more likely to occur when Vt is more likely to change 
+quickly, i.e., when /u1D6FC is larger.
+Next, we systematically examined the effects of ini-
+tial expectations and the critic learning rate in actor-critic 
+learning. Figure  8A shows the fraction of selecting action 
+1 from the 100th trial to the 200th trial as a function of 
+the initial expectation for several critic learning rates. One 
+hundred simulations were performed under each condi -
+tion, and the averages are connected by a line. The over -
+all selection rate of action 1 tends to decrease as the initial 
+expectation increases. When Vt does not change ( /u1D6FC= 0 ) or 
+changes slowly ( /u1D6FC= 0.01 ), the selection rate of action 1 is 
+concentrated at 1 and 0.5 because, as we saw in Fig.  7B, 
+the preference for action 2 does not increase, and therefore, 
+action 2 does not become dominant. If /u1D6FC is larger than that, 
+the decrease in the probability of choosing action 1 due to 
+the increase in the initial expectation tends to be suppressed.
+In Q-learning, the effect of the initial expectation is the 
+opposite of that in actor-critic learning (Fig. 8B). In Q-learn-
+ing, we assumed that the initial action value of action 1, 
+Q1(1) , corresponds to the initial expectation (of the reward 
+obtained from action 1) and was varied in the simulation. 
+The learning rate /u1D6FCL and the forgetting rate /u1D6FCF were varied 
+among 0, 0.05, 0.1, and 0.2 ( /u1D6FCL = /u1D6FCF ). The initial action 
+value of action 2 was set to Q2(1)=0  . The inverse tempera-
+ture parameter was set to /u1D6FD= 5.0 , which produces the same 
+initial choice probability as actor-critic when Q1(1)=1  . Fig-
+ure  8B shows that the probability of choosing action 1 tends 
+to increase as the initial expectation increases in Q-learning. 
+This occurs because although the amplitude of the negative 
+RPE increases as the action value increases, the order rela-
+tion is preserved as follows. With the same learning rate, the 
+higher the Q value is, the higher the next Q value becomes. 
+That is, from the update rule, Qt+1 ← (1− /u1D6FC)Qt + /u1D6FCrt , we 
+can confirm that if Qt < Q/uni2032.var
+t , then Qt+1 < Q�
+t+1 is always true 
+for the given /u1D6FC and rt . Therefore, if the learning rate is the 
+same, it is unlikely that there will be a reversal phenomenon 
+such that the larger the initial action value is, the smaller 
+0.00
+0.25
+0.50
+0.75
+1.00
+0.00 0.25 0.50 0.75 1.00
+Fraction of choosing Action 1
+Critic 
+learning rate
+0
+0.01
+0.05
+0.1
+0.2
+A
+0.00
+0.25
+0.50
+0.75
+1.00
+0.00 0.250 .500 .75 1.00
+0
+0.05
+0.1
+0.2
+BFraction of choosing Action 1
+Learning rate
+Fig. 8  The effects of the initial expectation on the fraction of choosing action 1. A Actor-critic model. B Q-learning model (“Q” model). The 
+critic learning rate of the actor-critic model and the learning rate of Q-learning were varied (see legends)
+
+
+--- Page 14 ---
+185Computational Brain & Behavior (2023) 6:172–194 
+1 3
+the subsequent action value becomes (reversal may occur in 
+some situations due to a change in action selection depend-
+ing on the initial action value).
+Discussion
+The present study investigated the statistical, transient prop-
+erty of actor-critic learning. Specifically, we explored how 
+recent reward and choice histories influence subsequent 
+choices rather than focusing on the long-term asymptotic 
+behavior of the model. We emphasized the commonality 
+and differences from the Q-learning model, which has com-
+monly been used to model learning and decision-making in 
+value-based choice tasks. The actor-critic and Q-learning 
+models share the basic property that causes repetition of the 
+choice that leads to reward. Therefore, the overall trend in 
+their choice probabilities should be similar. However, the 
+details of how the histories of the reward and the choice 
+affect behavior differ. Specifically, differences arise from 
+the main effects, interactions between reward and choice 
+histories, and their balance. The analytical results of this 
+study play an important role in clarifying how the model 
+parameter affects the pattern of the interaction. Figure 4, for 
+example, shows how the critic learning rate, /u1D6FC , determines 
+the strength of the interaction between the choice history 
+and reward history.
+A notable feature of the actor-critic model is that the 
+model produces a negative dependence on choice history 
+when the state value (i.e., expectation of reward) is posi-
+tive. This effect arises because the expectation has a nega-
+tive impact on RPE (the higher the expectation, the smaller 
+the RPE) and, thus, decreases the preference for the chosen 
+option. This negative effect of choice can be stronger when 
+the critic learns optimistically (i.e., updates the value of a 
+positive outcome more than of negative ones) or when the 
+initial state value is high and persists due to a low critic 
+learning rate. The negative choice history effects inher -
+ent in the actor-critic model might explain the exploratory 
+behavior. Suzuki et al. (2021) found that participants tended 
+to avoid the most recently chosen option in a three-armed 
+bandit task. While Suzuki et al. modeled this tendency with 
+a Q-learning model with choice-autocorrelation factor, the 
+choice history effect may also be explained by the actor-
+critic model. Suzuki et al. also found that the tendency to 
+avoid the most recently selected option was weaker in indi-
+viduals with obsessive-compulsive tendencies (Suzuki et al. 
+2021). Given the results of the present study, another pos-
+sibility might be that such individuals tend to have a low 
+expectation of reward.
+This negative effect of the expectation causes the qualita-
+tive differences between actor-critic models and action-value 
+based models, such as Q-learning, in the effects of reward 
+expectation. In the “Implications for Habit Formation: the 
+Effect of the Initial Expectation” section, we show that in the 
+actor-critic learning, if the initial expectation is too high and 
+persists (due to the small critic learning rate), the behavior 
+is less likely to be retained. These results may provide the 
+implications of the actor-critic model for habit formation. 
+For example, this model may provide guidelines for how to 
+intervene when people want to continue a behavior. If the 
+actor-critic model is plausible for habit formation (although 
+this is not yet widely appreciated), when a behavior needs to 
+be continued and made a habit, it may be important to keep 
+expectations not too high and maintain a positive RPE. The 
+effects of such initial expectations have not yet been empiri-
+cally observed and should be confirmed in future studies. 
+Furthermore, the basic findings presented in this study could 
+be useful in designing experimental paradigms and models.
+In computational modeling, the effect of model misspeci-
+fication is crucial when the purpose is to interpret the param-
+eters as a measure of the characteristics of psychological or 
+cognitive processes (Nassar & Gold 2013; Katahira 2018; 
+Toyama et al. 2019 ; Sugawara & Katahira 2021). As the 
+present study shows, if the “true processes” and the model 
+used for fitting are different, a change in a single true process 
+can affect the estimates of multiple parameters in the fitted 
+model. Specifically, we have shown that if the actor-critic 
+model is the “true model” and the Q-learning model is fitted, 
+the difference in a single parameter of the actor-critic model 
+will appear as a difference in almost all parameters in the 
+Q-learning model (e.g., a change in the policy learning rate 
+influences both the learning rate and the inverse temperature 
+in Q-learning). The true processes and the fitted models are 
+generally considered to be different (Eckstein et al. 2021). 
+These facts may lead to inconsistency across studies that 
+report the association between RL parameters and psychi-
+atric disorders. For example, several studies reported that 
+the inverse temperature parameter (or equivalently, reward 
+sensitivity) of Q-learning is smaller in individuals with 
+depression, whereas other studies associated a diminished 
+learning rate with depressive symptoms (for a review, see 
+Robinson & Chase (2017)). However, if the policy learn-
+ing rate is weakened in such patients, the argument regard-
+ing which parameters, i.e., inverse temperature or learning 
+rates, are associated with the symptoms may be meaningless; 
+the inconsistency may be due to the one-to-many mapping 
+from true processes to fitted model parameters. The situa -
+tion examined in this study may serve as an illustration of a 
+possible scenario of such an issue.
+Applying a dimensionality reduction technique, such as 
+a principal component analysis (PCA) or factor analysis, to 
+a set of parameter estimates may be an approach to address 
+this issue (Eckstein et al. 2021; Moutoussis et al. 2021). The 
+interpretation of a dimension consisting of multiple param-
+eters rather than an individual parameter may lead to more 
+
+
+--- Page 15 ---
+186 Computational Brain & Behavior (2023) 6:172–194
+1 3
+consistent results. In addition, while it is important to evalu-
+ate a model by its goodness of fit, it may be better to evaluate 
+a model by considering the ease of the interpretation of its 
+parameters as follows: a model with fewer parameters that 
+correspond to individual characteristics of a behavior may 
+be considered a better model.
+To mitigate the problem of model misspecification, it is 
+recommended that researchers focus on model-independent 
+measures that capture the characteristics of the processes 
+in which they are interested (Palminteri et al. 2017; Wilson 
+& Collins 2019). As a model-independent analysis, logistic 
+regression with only main effects of past events has been 
+frequently performed. However, along with previous stud-
+ies (Katahira 2015, 2018), the present study revealed that 
+there are elements of the computational process that do 
+not directly emerge as main effects; instead, such effects 
+(e.g., the difference in the critic learning rate) may appear 
+in certain interactions between past events. Thus, including 
+an interaction term in the regression model is sometimes 
+required. However, the longer the history to be considered, 
+the larger the number of interactions. To determine which 
+interactions are most likely to reveal traces of a particular 
+process, it may be useful to plan the analysis in advance by 
+simulating a RL model that explicitly models the process.
+A limitation of the present study is that we only consider 
+RL models with no state variable. Although much research 
+in psychology and neuroscience has been conducted using 
+RL models without state variables, several studies employ -
+ing RL model-based analyses have used RL models that 
+incorporate state variables (e.g., Tanaka et al. 2004; Sch-
+weighofer et al. 2008; Spiegler et al. 2020). However, the 
+basic results of the present study can be applied to mod -
+els with state variables. For example, the results could be 
+applied to examine how choice in a particular state is influ-
+enced by the history of events experienced when staying at 
+the same state as that of the past. Specifically, the negative 
+dependence on choice history can also occur in a multistate 
+actor-critic model: the action selected in a particular state 
+will be less likely to be selected when the agent visits the 
+next time. In addition, the specific interactions found in the 
+present study may be observed between the reward (plus 
+next state value) and choice histories under a particular state.
+Although the actor-critic model is only one of a wider 
+class of RL models, the findings of the present study and the 
+framework of the analysis may be applicable to other mod-
+els. For example, the results may have implications for algo-
+rithms that perform value estimations and policy updates in 
+different systems, such as policy-gradient approaches, which 
+have attracted attention (Mongillo et al. 2014; Bennett et al. 
+2021). When considering the online learning of continuous 
+actions, such as in determining response vigor, a policy-
+gradient method based on the REINFORCE algorithm (Wil-
+liams 1992) is often used (Niv 2007; Lindström et al. 2021). 
+In such models, the effect of the reward reflected in the 
+reward expectation (average reward) does not appear imme-
+diately; it appears only after the expectation is used in RPE 
+in a subsequent policy update. Thus, the effect of rewards 
+can have an interaction with subsequent actions depending 
+on the values of the parameters as the present study shows 
+in the actor-critic model. These complex effects may cause 
+the model to not behave as intended and may require careful 
+parameter tuning and model design. However, by analyzing 
+data focusing on such interactions, it is possible to verify 
+whether such computational processes actually exist. The 
+findings and analytical framework of the present study could 
+be useful when considering such issues.
+The actor-critic model without the state variable itself 
+also has several possible variants. For example, the opponent 
+actor learning (OpAL) model is an extension of actor-critic 
+learning that incorporates neuroscientific knowledge (Col-
+lins & Frank 2014). The OpAL model is characterized by 
+the fact that for each action, preference is determined by a 
+combination of two weights, called the Go weight and NoGo 
+weight, and these update rules include a nonlinear Hebbian 
+component. Additionally, the gradient bandit algorithm 
+(Sutton & Barto 2018) can be considered another variant 
+of the actor critic model; it updates the preference of the 
+unchosen action in the opposite direction to the preference 
+of the chosen action. Another possible extension would be a 
+model that adds a decay parameter (such as /u1D702 for the prefer-
+ence update) not only to preference updates but also to state 
+value updates. From the insights gained from our analytical 
+results, these models can also be expected to have the basic 
+properties discussed in our study, but understanding their 
+specific properties will be a subject for future work.
+Appendix 1. Simulation settings
+Here, we detail the settings of each simulation. All simula-
+tions, statistical analyses, and figure plots were conducted 
+using R version 4.0.0 (R Core Team 2015).
+The procedures of the simulations of the choice task 
+based on the actor-critic model are as follows. First, we gen-
+erated choice data from actor-critic models that were applied 
+to a two-armed bandit task (see the “ Task Settings” sec -
+tion for details).
+To generate the sample behavior of RL models (Fig.  1), 
+the parameters of the actor-critic model were set as /u1D702= 0.7 , 
+/u1D719= 2.0 , and /u1D6FC= 0.2 . The model performed the two-armed 
+bandit task consisting of 4000 trials. The Q-learning model 
+without learning asymmetry and choice-autocorrelation fac-
+tor (Q model) was fit to the data.
+To investigate the history dependence of the actor-critic 
+models (logistic regression analysis; Figs. 2, 4, 9, and 10), we 
+generated hypothetical data for 1000 sessions per condition. 
+
+
+--- Page 16 ---
+187Computational Brain & Behavior (2023) 6:172–194 
+1 3
+Each session consisted of 2000 trials. The logistic regression 
+model was fitted to the simulated data using the maximum 
+likelihood method. Specifically, we used the “glm” function 
+implemented in the R programming language. The length of the 
+history included in the logistic regression model with only main 
+effects was set to 12 for both the reward and choice histories 
+( Mr = Mc = 12 ). In the logistic regression with the interaction 
+terms, all combinations of histories from two trials ago were 
+included as interaction terms. However, in the resulting figure, 
+only the terms that could be non-zero were plotted.
+Regarding the simulations in which the mapping from the 
+actor-critic model to the Q-learning model was examined 
+(Figs.  6 and 11), in total, 200 actor-critic parameter sets were 
+generated, and 2000 trials of choice data were generated for 
+each. For the simulations shown in Fig.  5, the parameters /u1D702 
+and /u1D719 were fixed at 0.8 and 1.5, respectively. Regarding the 
+parameters to be varied, the critic learning rate /u1D6FC was varied 
+among 0, 0.2, 0.4, and 0.8 in Fig.  5 and was generated from 
+a uniform distribution on the range [0.1, 0.9] in Fig.  6A. In 
+Fig.  6B, /u1D719 was generated from a uniform distribution on the 
+range [0.5, 3.0]. In the simulation in Fig.  11 considering the 
+asymmetry of the learning rate, the critic learning rates were 
+set as /u1D6FC+ = 0.5 + x and /u1D6FC− = 0.5 − x (Fig.  11A), and the 
+policy learning rate was set /u1D719+ = 1.5 + x and /u1D719− = 1.5 − x 
+(Fig.  11B), where x  was a uniform random number on the 
+range [−0.4, 0.4].
+Appendix 2. Model fitting to the simulated 
+choice data
+To estimate the model parameters, a maximum likelihood 
+estimation (MLE) was separately performed for the data 
+of each session. MLE searches a single parameter set to 
+maximize the log-likelihood of the model for all trials. 
+This maximization was performed using the rsolnp 1.15 
+package, which implements the augmented Lagrange mul-
+tiplier method with an SQP interior algorithm (Ghalanos 
+& Theussl 2011). To facilitate finding the global optimum 
+solution, the algorithms were run 5 times; each run was ini-
+tiated from a random initial value, and the parameter set that 
+provided the lowest negative log likelihood was selected.
+Appendix 3. Derivation of Eq. (20)
+By writing the terms up to three trials back for Eq. (19), 
+we obtain
+By reorganizing the terms including the reward up to 3 tri-
+als back, we obtain Eq. (20).
+Appendix 4. General form of the impact 
+of the reward in the actor‑critic model
+The general form of the impact of the reward from m  trials 
+ago is given by
+ht = /u1D719
+3/uni2211.s1
+m=1
+/u1D702m−1 Δ t−m
+/parenleft.s1rt−m − /u1D6FCrt−m−1 − /u1D6FC(1− /u1D6FC)rt−m−2
+/parenright.s1
+=/u1D719
+/bracketleft.s2
+Δ t−1
+/parenleft.s1rt−1 − /u1D6FCrt−2 − /u1D6FC(1− /u1D6FC)rt−3
+/parenright.s1
++ /u1D702Δ t−2
+/parenleft.s1rt−2 − /u1D6FCrt−3 − /u1D6FC(1− /u1D6FC)rt−4
+/parenright.s1
++ /u1D7022Δ t−3
+/parenleft.s1rt−3 − /u1D6FCrt−4 − /u1D6FC(1− /u1D6FC)rt−5
+/parenright.s1/bracketright.s2
+.
+(23)/u1D719
+/parenleft.s4
+/u1D702m−1 − /u1D6FC
+m−1/uni2211.s1
+n=1
+/u1D702m−n−1 (1− /u1D6FC)n−1 Ct−m+n Ct−m
+/parenright.s4
+Rt−m .
+A
+B
+Reward Choice
+123456789 10 12345678 910
+−1.0
+−0.5
+0.0
+0.5
+1.0
+1.5
+Lag (trials into past)
+Regression coefficient
+−0.5
+0.0
+0.5
+1.0
+1.5
+History
+Regression coefficient
+Fig. 9  The effect of asymmetry in the critic. A Logistic regression 
+with main effects only. The convention is the same as that in Fig.  4. 
+B Logistic regression with interaction. The critic learning rate was 
+varied (see legend), and the other parameters were fixed as /u1D702= 0.5 , 
+/u1D719= 1.5
+
+
+--- Page 17 ---
+188 Computational Brain & Behavior (2023) 6:172–194
+1 3
+As this indicates, the impact of a past reward on the cur -
+rent choice is influenced by all subsequent choices as fol-
+lows: the effect of the reward decreases the more often the 
+same choice is repeated (i.e., Ct−m+n = Ct−m).
+Appendix 5. Asymmetric learning 
+in actor‑critic learning
+In this Appendix, we consider an extension of the actor-
+critic model and discuss its statistical properties. Specifi-
+cally, we consider the asymmetries in learning that have 
+been considered mainly in action value-based models in the 
+previous literature (Frank et al. 2007; Niv et al. 2012; Gersh-
+man 2015; Lefebvre et al. 2017; Palminteri et al. 2017; Ohta 
+et al. 2021). In actor-critic learning, two types of asymmetry, 
+namely, asymmetries in the critic (state value update) and 
+the actor (policy update), can be considered, although such 
+models have not yet been used for model fitting to behavioral 
+data.3 We examine the effect of these asymmetries on the 
+history dependence of choice behavior. We also examine 
+the relationship between these asymmetric learning rates in 
+the actor-critic model and the parameters of the Q-learning 
+model with asymmetric learning rates.
+Fig. 10  The effect of asymme-
+try in the policy learning rate. 
+The conventions are the same 
+as those in Fig. 9. A Logistic 
+regression with main effects 
+only. B Logistic regression with 
+interaction. The policy learning 
+rate was varied (see legend), 
+and the other parameters were 
+fixed as /u1D702= 0.5 and /u1D6FC= 0.5
+A
+B
+−1
+0
+1
+Reward Choice
+123456789 10 123456789 10
+−1.0
+−0.5
+0.0
+0.5
+1.0
+1.5
+Lag (trials into past)
+Regression coefficientRegression coefficient
+History
+3 Collins and Frank (2014) considered the “win-loss model,” which 
+has different critic learning rates depending on the sign of the pre-
+diction error, although they did not fit the model to actual behavioral 
+data.
+
+
+--- Page 18 ---
+189Computational Brain & Behavior (2023) 6:172–194 
+1 3
+5.1 Asymmetry in the critic
+First, we consider a case in which the critic learning rate 
+is asymmetric. Let the critic learning rate for positive RPE 
+be /u1D6FC+ and that for negative RPE be /u1D6FC− . Figure  9 shows the 
+results obtained from applying logistic models fitted to the 
+simulated data when the critic learning rate was varied as 
+/u1D6FC+ ∕/u1D6FC− = 0.7∕0.3 (“optimistic”), 0.5/0.5 (symmetric), and 
+0.3/0.7 (“pessimistic”). When we fit a logistic regression 
+with only main effects (panel A), the effect of the choice 
+history becomes more negative as the critic becomes more 
+optimistic ( /u1D6FC+ is larger than /u1D6FC− ). This trend is opposite to the 
+effect of asymmetry in Q-learning, where the effect of choice 
+history is more positive as it becomes more optimistic (Kata-
+hira 2018). The mechanism of this effect can be understood 
+based on the result presented in the “ When the State Value 
+Fig. 11  The relationship 
+between asymmetric actor-
+critic models (true models) and 
+the parameter estimates of the 
+Q-learning (Q-CA) model. A 
+Asymmetry of the actor (policy 
+update) was varied. B Asym-
+metry of the critic (state value 
+update) was varied
+R/g3=/g3/g160.36
+−0.2
+0.0
+0.2
+0.4
+−0.5 0.0 0.5
+/g68+ /g16/g68-
+/g68+ /g16/g68−
+R/g3=/g3/g160.22
+0.0
+0.1
+0.2
+0.3
+−0.5 0.0 0.5
+/g68+ /g16/g68-
+/g68F
+R/g3=/g3/g160.17
+0.00
+0.25
+0.50
+0.75
+1.00
+−0.5 0.0 0.5
+/g68+ /g16/g68-
+/g87
+R/g3=/g30.61
+2
+3
+4
+5
+6
+−0.5 0.0 0.5
+/g68+ /g16/g68-
+/g69
+R/g3=/g3/g160.79
+−10.0
+−7.5
+−5.0
+−2.5
+0.0
+−0.5 0.0 0.5
+/g68+ /g16/g68-
+/g77
+Asymmetry in critic in true model 
+Q-learning parameter estimates
+B
+A
+R/g3=/g30.82
+−0.25
+0.00
+0.25
+−1.0 −0.5 0.0 0.5 1.0
+/g73+ /g16/g73−
+/g68+ /g16/g68−
+R/g3=/g30.5
+0.00
+0.05
+0.10
+0.15
+−1.0 −0.5 0.0 0.5 1.0
+/g73+ /g16/g73−
+/g68F
+R /g3= /g30.21
+0.00
+0.25
+0.50
+0.75
+1.00
+−1.0 −0.5 0.00 .5 1.0
+/g73+ /g16/g73−
+/g87
+R/g3=/g3/g160.48
+2.5
+3.0
+3.5
+−1.0 −0.5 0.0 0.5 1.0
+/g73+ /g16/g73−
+/g69
+R
+/g3
+=
+/g3
+0.1
+−10.0
+−7.5
+−5.0
+−2.5
+0.0
+−1.0 −0.5 0.0 0.5 1.0
+/g73+ /g16/g73−
+/g77
+Asymmetry in actor in true model 
+Q-learning parameter estimates
+
+
+--- Page 19 ---
+190 Computational Brain & Behavior (2023) 6:172–194
+1 3
+Can Be Regarded as a Constant” section; The more opti-
+mistic the critic, the higher the state value V. As discussed 
+in the analysis in which the state value was assumed to be 
+constant, the higher the state value, the larger the negative 
+effect of choice history.
+The results of the logistic regression including inter -
+actions between the history of the previous two trials are 
+shown in Fig.  9B. In the asymmetric case of Q-learning, 
+there is an interaction between rewards Rt−1 and Rt−2 (given 
+that Ct−1 = Ct−2 ; Katahira 2018), but no such interaction 
+between past rewards appears in the actor-critic model. 
+This finding is explained as follows. The impact of a reward 
+through the state value appears only two trials later. In addi-
+tion, the value of /u1D6FC− has no effect on the subsequent choice 
+because when a reward is given, the critic learning rate is 
+/u1D6FC+ , and when no reward is given, the reward r  has no con-
+tribution to the logit. Thus, the effect of asymmetry in the 
+critic learning rate is first observed in the influence of the 
+reward three trials ago as explained in the following.
+Let /u1D6FC− = /u1D6FC+ − /u1D705 be the learning rate corresponding to 
+the negative RPE: /u1D705 represents the strength of the asym-
+metry. Expanding the logit to three trials ago, we obtain 
+the following:
+From this, we can observe that the asymmetry of the 
+critic learning rate emerges only with the interaction term 
+Ct−1Ct−2Ct−3Rt−2Rt−3 and the main effect term Rt−3.
+The analysis shown in Fig.  9B only examined the effects 
+for up to two trials, and thus, we did not observe the inter -
+action between rewards.
+5.2 Asymmetry in the actor
+Next, we consider a case in which there is asymmetry in 
+the actor (i.e., in the update of policy). Here, the policy 
+learning rate for positive PRE is denoted by /u1D719+ and that 
+for negative RPE by /u1D719− . Figure  10 shows the results of the 
+history dependence when varying the policy learning rate 
+as /u1D719+ ∕/u1D719− = 1.0∕2.0 (“pessimistic”), 1.5/1.5 (“symmetric”), 
+and 1.0/2.0 (“optimistic”). When we applied the logistic 
+regression with only main effects (panel A), the effect of 
+choice history becomes positive as the actor becomes opti-
+mistic, which contrasts the case in which the critic is asym-
+metric (compare with Fig.  9A). This finding is consistent 
+with the effect of asymmetry in the learning rate in Q-learn-
+ing. The mechanism is the same as that in Q-learning as 
+follows: the more optimistic the agent, the greater the effect 
+(24)
+ht = /u1D719Δ t−1 rt−1 + /u1D719(/u1D702Δ t−2 − /u1D6FC+ Δ t−1 )rt−2
+− [Δ t−1 /u1D6FC+ (1 − /u1D6FC+ + /u1D705(1 − rt−2 )) +/u1D702Δ t−2 (−/u1D6FC+ )]rt−3
+= /u1D719Rt−1 + /u1D719/u1D702Rt−2 − /u1D719/u1D6FC+ Ct−1 Ct−2 Rt−2 − /u1D6FC+ (1 − /u1D6FC+ + /u1D705)Rt− 3
++ /u1D719/u1D6FC+ /u1D705Ct−1 Ct−2 Ct−3 Rt−2 Rt−3 − /u1D719/u1D702/u1D6FC+ Ct−2 Ct−3 Rt−3 .
+of the reward, and the smaller the effect of the negative out-
+come (absence of reward). This results in a positive choice 
+dependence (Katahira 2018).
+The results of the logistic regression including the inter -
+action terms up to two trials ago are shown in Fig.  9B. In 
+addition to the interaction term among Ct−1 , Ct−2 , and Rt−2 , 
+which also has a non-zero value in the standard actor-critic 
+model, the coefficient of the interaction among Rt−1 , Rt−2 , 
+and Ct−2 has a non-zero value when there is asymmetry in 
+the policy learning rate. The emergence of this interaction 
+is explained as follows. We define the degree of asymme-
+try /u1D705 such that /u1D719− = /u1D719+ − /u1D705 . Expanding the logit to up to 
+two trials ago, we obtain the following:
+From this, the interaction Rt−1Rt−2Ct−2 has a non-zero 
+coefficient only when there is asymmetry in the policy 
+update ( /u1D705≠ 0 ). Notably, this interaction is enhanced as the 
+critic learning rate /u1D6FC increases.
+5.3 Fitting the asymmetric Q‑learning model
+Finally, we examine how these different types of asymmetry in 
+the actor-critic model are mapped onto the Q-learning model 
+with asymmetric learning rates. We generated the choice data 
+by using the actor-critic model with different levels and dif-
+ferent types of asymmetry. Then, the Q-learning model with 
+asymmetric learning rates and choice-autocorrelation factor 
+(Q+CA model) was fitted to the data. Figure 11A and B shows 
+the resulting parameter estimates when the asymmetry in the 
+actor (panel A) and the critic (panel B) were varied. The asym-
+metry of the actor ( /u1D719+ − /u1D719− ) is strongly correlated with the 
+asymmetry of the learning rate in Q-learning ( /u1D6FC+
+L − /u1D6FC−
+L ), but 
+it also modestly affects the other parameters (panel A). The 
+asymmetry of the critic is also moderately correlated with the 
+asymmetry of the learning rate in Q-learning, but the trend is 
+opposite to the asymmetry of the actor (panel B).
+For the standard actor-critic model without learning 
+asymmetry, the estimated learning rate for Q-learning 
+(Q+CA model) is near symmetric ( /u1D6FC+
+L − /u1D6FC−
+L = 0 ), as shown 
+by the results for /u1D719+ − /u1D719− = 0 in the upper left panel of 
+Fig.  11A, i.e., learning asymmetry was not identified. On 
+the other hand, if the Q-learning model without the choice 
+autocorrelation factor (Q+A model) is fitted, learning 
+asymmetry is expected to be identified for the following 
+reason. As we show in the present study, the actor-critic 
+model has a negative choice history effect (when the state 
+value is positive). The negative effect of choice history is 
+represented by including the choice autocorrelation factor 
+in Q-learning (as perseverance parameter /u1D711 is negative 
+(25)
+ht = /u1D719+ Δ t−1 rt−1 + /u1D719+ /u1D702Δ t−2 rt−2 −(/u1D719+ − /u1D705+ /u1D705rt−1 )/u1D6FCΔ t−1 rt−2
+= /u1D719+ Rt−1 + /u1D719+ /u1D702Rt−2 − /u1D6FC(/u1D719+ − /u1D705)Ct−1 Ct−2 Rt−2 − /u1D6FC/u1D705Rt−1 Rt−2 Ct−2 .
+
+
+--- Page 20 ---
+191Computational Brain & Behavior (2023) 6:172–194 
+1 3
+in Fig.  11A). In Q-learning without the autocorrelation 
+factor, however, the negative effect of choice history is 
+captured by learning rate asymmetry since the symmetric 
+learning rate can also induce choice autocorrelation, albeit 
+with the interaction between past rewards; when the learn-
+ing rate for the negative outcome is higher than that for 
+the positive outcome, negative dependence on the choice 
+history will arise (Katahira 2018).
+Appendix 6. Model recovery
+To show that actor-critic and four variants of Q-learning 
+models (Q, Q+C, Q+A, and Q+CA) are statistically dis-
+tinguishable, we performed a model recovery analysis 
+(Wilson & Collins 2019). Specifically, we simulated 
+the behavior of the actor-critic model and Q-learning 
+models with the two-armed bandit task described in the 
+“Task Settings” section with each involving 1000 trials. 
+The parameters of the simulated model were sampled 
+from uniform distributions on the following ranges: 
+[0.2, 0.8] for /u1D6FC , /u1D6FCL , and /u1D70F ; [0.5, 3.0] for /u1D719 ; [2.0, 5.0] for 
+/u1D6FD ; and [1.0, 3.0] for /u1D711 . One hundred simulated datasets 
+per model were generated, and the frequency of being 
+the best fit model was calculated for each model. Model 
+selection was performed based on Akaike’s information 
+criterion (AIC):
+where LL is the log likelihood function for the model and k is 
+the number of estimated parameters in the model. A smaller 
+AIC denotes a better model fit to the data.
+Figure  12  shows the confusion matrix resulting 
+from the model recovery. The numbers denote the fre-
+quency with which each fitted model was selected for 
+each simulated model. Although confusion was often 
+observed among the variants of the Q-learning models 
+(especially when Q+CA was the simulated model), the 
+actor-critic model was rarely selected when a Q-learn-
+ing model was true. The opposite was not the case at 
+all. These results indicate that the actor-critic model 
+and the Q-learning models are identifiable in our simu -
+lation setting.
+Appendix 7. Parameter recovery
+In parameter recovery analysis, we examined whether the 
+true parameters used for simulating choice data were suc-
+cessfully estimated by the model fitting to the simulated 
+data (Wilson & Collins 2019). Specifically, 100 sets of 
+three parameters of the actor-critic model were generated 
+(26)AIC =− 2LL + 2k,
+0.97
+0
+0
+0
+0
+0.02
+0.68
+0.01
+0.37
+0.02
+0.01
+0.15
+0.76
+0.11
+0.65
+0
+0.08
+0.09
+0.39
+0.13
+0
+0.09
+0.14
+0.13
+0.2
+QQ +C Q+A Q+CA
+Q+CA
+Q+A
+Q+C
+Q
+actor−critic
+Selected model
+Simulated model
+0.00
+0.25
+0.50
+0.75
+Freq
+actor−critic
+Fig. 12  Results of model recovery. The confusion matrix represents 
+the frequency with which data generated with each model are best fit 
+by each model. The model with the smallest AIC was adopted as the 
+best fit model for the data. The value in each cell indicates the pro-
+portion of the best fit model of 100 simulation runs
+R = 0.96
+0.00
+0.25
+0.50
+0.75
+1.00
+0.000 .25 0.500 .75 1.00
+true 
+R = 0.99
+1
+2
+3
+12 3
+true 
+R =0 .98
+0.00
+0.25
+0.50
+0.75
+1.00
+0.00 0.25 0.50 0.75 1.00
+true 
+Fig. 13  Parameter recovery analysis of the actor-critic model. For each of the three parameters (critic learning rate /u1D6FC , policy learning rate /u1D719 , and 
+decay rate /u1D702 ), the recovered parameter estimates are plotted against the true ones used in the simulation
+
+
+--- Page 21 ---
+192 Computational Brain & Behavior (2023) 6:172–194
+1 3
+from uniform distributions, and each parameter set was 
+used to simulate the choice data in the two-armed bandit 
+task involving 2000 trials. The ranges of uniform distri-
+butions from which each parameter was drawn were [0.1, 
+0.9] for the critic learning rate /u1D6FC , [0.5, 2.0] for the policy 
+learning rate /u1D719 , and [0.1, 0.9] for the decay rate /u1D702 . We fit 
+the actor-critic model to the choice data and examined the 
+correlation between the estimates and the true parameters. 
+Figure  13 shows the results. For all three parameters, the 
+recovered and true parameters are highly correlated, con-
+firming that these parameters are identifiable.
+Appendix 8. Mapping Q‑learning 
+to actor‑critic learning
+Here we examined how changes in Q-learning parameters 
+manifest as changes in the parameters of an actor-critic 
+model. We simulated the choice data using the Q-learn-
+ing model with a choice-autocorrelation factor (Q+C 
+model) while randomly sampling a single focal parameter 
+from a uniform distribution whose range is [0.2, 0.8] for 
+/u1D6FCL , [0.5, 3.0] for /u1D6FD , [0.5, 3.0] for /u1D711 , and [0.2, 0.8] for /u1D70F , 
+while the other parameters were fixed to /u1D6FCL = 0.5 , /u1D6FD= 2.0 , 
+/u1D711= 2.0 , and /u1D70F= 0.5 . The actor-critic model with symmetric 
+Fig. 14  The relationship 
+between the parameter estimates 
+of the actor-critic model fitted 
+to simulated data using Q+C 
+model and the true parameters. 
+One of the model parameters 
+(A, learning rate; B, inverse 
+temperature parameter; C, 
+choice trace weight; and D, the 
+decay rate of the choice trace) 
+was sampled from a uniform 
+distribution
+R = 0.53
+0.5
+1.0
+12 3
+R =0 .81
+0.85
+0.90
+0.95
+1.00
+123
+R =0 .28
+0.00
+0.25
+0.50
+0.75
+1.00
+12 3
+A
+BActor-critic parameter estimates
+R = 0.48
+0.0
+0.5
+1.0
+1.5
+0.20 .4 0.60 .8
+L
+R = 0.025
+0.4
+0.6
+0.8
+1.0
+0.20 .4 0.60 .8
+L
+R =0 .27
+0.00
+0.25
+0.50
+0.75
+1.00
+0.20 .4 0.60 .8
+L
+R = 0.47
+0.0
+0.3
+0.6
+0.9
+1.2
+123
+R =0 .27
+0.6
+0.7
+0.8
+0.9
+1.0
+12 3
+R = 0.076
+0.00
+0.25
+0.50
+0.75
+1.00
+123
+True parameters in Q-leaning
+C
+R = 0.38
+0.5
+1.0
+1.5
+2.0
+0.20 .4 0.60 .8
+R = 0.17
+0.925
+0.950
+0.975
+1.000
+0.20 .4 0.60 .8
+R =0 .33
+0.00
+0.25
+0.50
+0.75
+1.00
+0.20 .4 0.60 .8
+D
+
+
+--- Page 22 ---
+193Computational Brain & Behavior (2023) 6:172–194 
+1 3
+learning rates was fitted to the simulated data. Figure  14 
+shows the resulting parameter estimates. These results show 
+that changes in any Q-learning parameter are mapped onto 
+changes in almost all of the parameters of an actor-critic 
+model. Thus, we conclude that there is also one-to-many 
+mapping from Q-learning to actor-critic learning.
+Author Contribution All authors contributed to the study conception 
+and design. Simulations and analysis were performed by Kentaro Kata-
+hira. The first draft of the manuscript was written by Kentaro Katahira 
+and Kenta Kimura commented on previous versions of the manuscript. 
+All authors read and approved the final manuscript.
+Funding This work was partially supported by JSPS KAKENHI Grant 
+Numbers 19H04902 and 18K03173.
+Availability of Data and Material Not applicable. (This manuscript does 
+not contain any raw data.)
+Code Availability All code used for the simulations, analyses, and fig-
+ures is available at https:// osf. io/ zq5ma/.
+Declarations 
+Conflict of Interest The authors declare no competing interests.
+Open Access This article is licensed under a Creative Commons Attri-
+bution 4.0 International License, which permits use, sharing, adapta-
+tion, distribution and reproduction in any medium or format, as long 
+as you give appropriate credit to the original author(s) and the source, 
+provide a link to the Creative Commons licence, and indicate if changes 
+were made. The images or other third party material in this article are 
+included in the article's Creative Commons licence, unless indicated 
+otherwise in a credit line to the material. If material is not included in 
+the article's Creative Commons licence and your intended use is not 
+permitted by statutory regulation or exceeds the permitted use, you will 
+need to obtain permission directly from the copyright holder. To view a 
+copy of this licence, visit http:// creat iveco mmons. org/ licen ses/ by/4. 0/.
+References
+Barto, A. G. (1995). Adaptive critics and the basal ganglia. In: Models 
+of information processing in the basal ganglia (pp. 215–232). 
+MA, USA: MIT Press Cambridge.
+Barto, A. G., Sutton, R. S., & Anderson, C. W. (1983). Neuronlike 
+adaptive elements that can solve difficult learning control prob-
+lems. IEEE Transactions on Systems, Man, and Cybernetics, 5, 
+834–846.
+Bennett, D., Niv, Y., & Langdon, A. J. (2021). Value-free reinforce-
+ment learning: Policy optimization as a minimal model of operant 
+behavior. Current Opinion in Behavioral Sciences, 41, 114–121.
+Collins, A. G., & Frank, M. J. (2014). Opponent actor learning (OpAL): 
+Modeling interactive effects of striatal dopamine on reinforcement 
+learning and choice incentive. Psychological Review, 121(3), 337.
+Corrado, G., & Doya, K. (2007). Understanding neural coding through 
+the model-based analysis of decision making. Journal of Neuro-
+science, 27(31), 8178.
+Corrado, G., Sugrue, L. P., Seung, H. S., & Newsome, W. T. (2005). 
+Linear-nonlinear-Poisson models of primate choice dynamics. 
+Journal of the Experimental Analysis of Behavior, 84(3), 581–617.
+Daw, N. (2011). Trial-by-trial data analysis using computational mod-
+els. Decision Making, Affect, and Learning: Attention and Per -
+formance XXIII, 23, 1.
+Daw, N., Gershman, S. J., Seymour, B., Dayan, P., & Dolan, R. J. 
+(2011). Model-based influences on humans’ choices and striatal 
+prediction errors. Neuron, 69(6), 1204–1215.
+Eckstein, M. K., Master, S. L., Xia, L., Dahl, R. E., Wilbrecht, L. & 
+Collins, A.G.E. (2021). Learning rates are not all the same: The 
+interpretation of computational model parameters depends on the 
+context. bioRxiv
+Eckstein, M. K., Wilbrecht, L., & Collins, A. G. (2021). What do rein-
+forcement learning models measure? Interpreting model parame-
+ters in cognition and neuroscience. Current Opinion in Behavioral 
+Sciences, 41, 128–137.
+Frank, M. J., Moustafa, A. A., Haughey, H. M., Curran, T., & Hutch-
+ison, K. E. (2007). Genetic triple dissociation reveals multiple 
+roles for dopamine in reinforcement learning. Proceedings of the 
+National Academy of Sciences, 104(41), 16311–16316.
+Gershman, S. J. (2015). Do learning rates adapt to the distribution 
+of rewards? Psychonomic Bulletin & Review, 22(5), 1320–1327.
+Ghalanos, A., & Theussl, S. (2011). Rsolnp: General non-linear opti-
+mization using augmented Lagrange multiplier method. Version, 
+1, 15.
+Houk, JC., & Adams, JL. (1995). 13 a model of how the basal ganglia 
+generate and use neural signals that. Models of Information Pro-
+cessing in the Basal Ganglia, 249.
+Ito, M., & Doya, K. (2009). Validation of decision-making models and 
+analysis of decision variables in the rat basal ganglia. Journal of 
+Neuroscience, 29(31), 9861.
+Joel, D., Niv, Y., & Ruppin, E. (2002). Actor-critic models of the basal 
+ganglia: New anatomical and computational perspectives. Neural 
+Networks, 15(4–6), 535–547.
+Katahira, K. (2015). The relation between reinforcement learning 
+parameters and the influence of reinforcement history on choice 
+behavior. Journal of Mathematical Psychology, 66, 59–69.
+Katahira, K. (2018). The statistical structures of reinforcement learning 
+with asymmetric value updates. Journal of Mathematical Psychol-
+ogy, 87, 31–45.
+Katahira, K., & Toyama, A. (2021). Revisiting the importance of model 
+fitting for model-based fMRI: It does matter in computational 
+psychiatry. PLoS Computational Biology, 17(2), e1008738.
+Katahira, K., Yuki, S., & Okanoya, K. (2017). Model-based estimation 
+of subjective values using choice tasks with probabilistic feed-
+back. Journal of Mathematical Psychology, 79, 29–43.
+Kovach, C. K., Daw, N., Rudrauf, D., Tranel, D., O’Doherty, J. P., 
+& Adolphs, R. (2012). Anterior prefrontal cortex contributes to 
+action selection through tracking of recent reward trends. Jour -
+nal of Neuroscience, 32(25), 8434–42. https:// doi. org/ 10. 1523/ 
+JNEUR OSCI. 5468- 11. 2012.
+Lau, B., & Glimcher, P. W. (2005). Dynamic response-by-response 
+models of matching behavior in rhesus monkeys. Journal of the 
+Experimental Analysis of Behavior, 84(3), 555–579.
+Lefebvre, G., Lebreton, M., Meyniel, F., Bourgeois-Gironde, S., & 
+Palminteri, S. (2017). Behavioural and neural characterization of 
+optimistic reinforcement learning. Nature Human Behaviour, 1, 
+0067.
+Li, J., & Daw, N. D. (2011). Signals in human striatum are appropriate 
+for policy update rather than value prediction. Journal of Neuro-
+science, 31(14), 5504–5511.
+Lindström, B., Bellander, M., Schultner, D. T., Chang, A., Tobler, P. 
+N., & Amodio, D. M. (2021). A computational reward learning 
+account of social media engagement. Nature Communications,  
+12(1), 1–10.
+
+
+--- Page 23 ---
+194 Computational Brain & Behavior (2023) 6:172–194
+1 3
+Loewenstein, Y., & Seung, H. S. (2006). Operant matching is a generic 
+outcome of synaptic plasticity based on the covariance between 
+reward and neural activity. Proceedings of the National Academy 
+of Sciences, 103(41), 15224–15229.
+Maia, T. V. (2010). Two-factor theory, the actor-critic model, and con-
+ditioned avoidance. Learning & Behavior, 38(1), 50–67.
+Maia, T. V., & Frank, M. J. (2011). From reinforcement learning mod-
+els to psychiatric and neurological disorders. Nature Neurosci-
+ence, 14(2), 154–162.
+Mongillo, G., Shteingart, H., & Loewenstein, Y. (2014). The misbehav-
+ior of reinforcement learning. Proceedings of the IEEE, 102(4), 
+528–541.
+Moutoussis, M., Garzón, B., Neufeld, S., Bach, D. R., Rigoli, F., 
+Goodyer, I., et al. (2021). Decision-making ability, psychopathol-
+ogy, and brain connectivity. Neuron, 109(12), 2025–2040.
+Nassar, M. R., & Gold, J. I. (2013). A healthy fear of the unknown: 
+Perspectives on the interpretation of parameter fits from compu-
+tational models in neuroscience. PLoS Computational Biology,  
+9(4), e1003015.
+Niv, Y. (2007). The effects of motivation on habitual instrumental 
+behavior. The Hebrew University of Jerusalem.
+Niv, Y., Edlund, J., Dayan, P., & O’Doherty, J. (2012). Neural predic-
+tion errors reveal a risk-sensitive reinforcement-learning process 
+in the human brain. Journal of Neuroscience, 32(2), 551–562.
+O’Doherty, J. (2014). The problem with value. Neuroscience & Biobe-
+havioral Reviews, 43, 259–268.
+O’Doherty, J., Dayan, P., Schultz, J., Deichmann, R., Friston, K., & 
+Dolan, R. (2004). Dissociable roles of ventral and dorsal stria-
+tum in instrumental conditioning. Science, 304(5669), 452–454.
+Ohta, H., Satori, K., Takarada, Y., Arake, M., Ishizuka, T., Morimoto, 
+Y., & Takahashi, T. (2021). The asymmetric learning rates of 
+murine exploratory behavior in sparse reward environments. Neu-
+ral Networks, 143, 218–229.
+Palminteri, S., Lefebvre, G., Kilford, E. J., & Blakemore, S. J. (2017). 
+Confirmation bias in human reinforcement learning: Evidence 
+from counterfactual feedback processing. PLOS Computational 
+Biology, 13(8), e1005684.
+Palminteri, S., Wyart, V., & Koechlin, E. (2017). The importance of 
+falsification in computational cognitive modeling. Trends in Cog-
+nitive Sciences, 21(6), 425–433.
+Pessiglione, M., Seymour, B., Flandin, G., Dolan, R. J., & Frith, C. D. 
+(2006). Dopamine-dependent prediction errors underpin reward-
+seeking behaviour in humans. Nature, 442(7106), 1042–5.
+Pessiglione, M., Vinckier, F., Bouret, S., Daunizeau, J., & Le Bouc, R. 
+(2018). Why not try harder? Computational approach to motiva-
+tion deficits in neuro-psychiatric diseases. Brain, 141(3), 629–650.
+R Core Team (2015). R: A language and environment for statisti-
+cal computing. Vienna, Austria: R Foundation for Statistical 
+Computing.
+Redish, A. D. (2004). Addiction as a computational process gone awry. 
+Science, 306(5703), 1944–1947.
+Robinson, O. J., & Chase, H. W. (2017). Learning and choice in mood 
+disorders: Searching for the computational parameters of anhedo-
+nia. Computational Psychiatry, 1, 208–233.
+Sakai, Y., & Fukai, T. (2008). The actor-critic learning is behind the 
+matching law: Matching versus optimal behaviors. Neural Com-
+putation, 20(1), 227–251.
+Sakai, Y., & Fukai, T. (2008). When does reward maximization lead to 
+matching law? PLoS ONE, 3(11), e3795.
+Samejima, K., Ueda, Y., Doya, K., & Kimura, M. (2005). Represen-
+tation of action-specific reward values in the striatum. Science,  
+310(5752), 1337–1340.
+Schweighofer, N., Bertin, M., Shishida, K., Okamoto, Y., Tanaka, S. C., 
+Yamawaki, S., & Doya, K. (2008). Low-serotonin levels increase 
+delayed reward discounting in humans. Journal of Neuroscience, 
+28(17), 4528–4532.
+Seymour, B., Daw, N., Roiser, J. P., Dayan, P., & Dolan, R. (2012). 
+Serotonin selectively modulates reward value in human decision-
+making. Journal of Neuroscience,  32(17), 5833–42. https:// doi. 
+org/ 10. 1523/ JNEUR OSCI. 0053- 12. 2012
+Spiegler, K. M., Palmieri, J., Pang, K. C., & Myers, C. E. (2020). A 
+reinforcement-learning model of active avoidance behavior: Dif-
+ferences between Sprague Dawley and Wistar-Kyoto rats. Behav-
+ioural Brain Research, 393, 112784.
+Sugawara, M., & Katahira, K. (2021). Dissociation between asym-
+metric value updating and perseverance in human reinforcement 
+learning. Scientific Reports, 11(1), 1–13.
+Sutton, R. S., & Barto, A. G. (2018). Reinforcement learning: An intro-
+duction. Cambridge: MIT Press.
+Suzuki, S., Yamashita, Y., & Katahira, K. (2021). Psychiatric symp-
+toms influence reward-seeking and loss-avoidance decision-
+making through common and distinct computational processes. 
+Psychiatry and Clinical Neurosciences, 75(9), 277–285.
+Tanaka, S. C., Doya, K., Okada, G., Ueda, K., Okamoto, Y., & 
+Yamawaki, S. (2004). Prediction of immediate and future rewards 
+differentially recruits cortico-basal Ganglia loops. Nature Neuro-
+science, 7(8), 887–893.
+Toyama, A., Katahira, K., & Ohira, H. (2017). A simple computational 
+algorithm of model-based choice preference. Cognitive, Affective, 
+& Behavioral Neuroscience, 17(4), 764–783.
+Toyama, A., Katahira, K., & Ohira, H. (2019). Biases in estimating the 
+balance between model-free and model-based learning systems 
+due to model misspecification. Journal of Mathematical Psychol-
+ogy, 91, 88–102.
+Williams, R. J. (1992). Simple statistical gradient-following algorithms 
+for connectionist reinforcement learning. Machine Learning, 8(3), 
+229–256.
+Wilson, R. C., & Collins, A. G. (2019). Ten simple rules for the com-
+putational modeling of behavioral data. eLife, 8, e49547.
+Yechiam, E., Busemeyer, J., Stout, J., & Bechara, A. (2005). Using 
+cognitive models to map relations between neuropsychological 
+disorders and human decision-making deficits. Psychological Sci-
+ence, 16(12), 973–978.

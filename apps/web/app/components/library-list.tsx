@@ -51,7 +51,7 @@ export function LibraryList() {
           {items.map((item) => (
             <Link
               className="report-row"
-              href={`/scholarly-objects/${item.scholarly_object.id}`}
+              href={`/works/${item.scholarly_object.id}`}
               key={item.id}
             >
               <div>

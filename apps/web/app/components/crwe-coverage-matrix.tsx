@@ -53,7 +53,7 @@ export function CrweCoverageMatrix({
 }: {
   nodes: CWENode[];
   facts: Fact[];
-  /// e.g. `/scholarly-objects/<id>/review` — `?criterion=<node_id>` is added.
+  /// e.g. `/works/<id>/review` — `?criterion=<node_id>` is added.
   reviewHrefBase?: string;
   anchorPrefix?: string;
 }) {

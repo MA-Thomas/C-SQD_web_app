@@ -18,9 +18,11 @@ PAPERS_CSV = ROOT / "metadata" / "papers.csv"
 CODING_GUIDE = ROOT / "coding" / "coding_guide.md"
 
 # Dimension sets are rubric-version specific. The causal-abstraction dimensions are
-# unchanged across pilot versions to date; the statistical-inductivist scale was
-# de-duplicated in v0.2 (the v0.1 dimensions weak_mechanism, local_validation, and
+# unchanged across versions; the statistical-inductivist scale was de-duplicated in the
+# consolidated rubric (the seed-only dimensions weak_mechanism, local_validation, and
 # limited_intervention were sign-flipped copies of causal dimensions and were removed).
+# v0.0-seed is the frozen original 0-2 rubric; v0.1-pilot is the consolidated live rubric.
+# (The paradigm-marker instrument is not generated into substantive packets here.)
 _CAUSAL_DIMS_COMMON = [
     "entity_specification",
     "causal_relation",
@@ -34,11 +36,12 @@ _CAUSAL_DIMS_COMMON = [
 ]
 
 RUBRIC_DIMENSIONS = {
-    "v0.1-pilot": {
+    "v0.0-seed": {
         "causal": list(_CAUSAL_DIMS_COMMON),
         "statistical": [
             "significance_dependence",
-            "prediction_dependence",
+            "terminal_model_warrant",
+            "covariate_control_warrant",
             "high_dimensional_search",
             "flexible_pipeline",
             "weak_mechanism",
@@ -46,11 +49,12 @@ RUBRIC_DIMENSIONS = {
             "limited_intervention",
         ],
     },
-    "v0.2-pilot": {
+    "v0.1-pilot": {
         "causal": list(_CAUSAL_DIMS_COMMON),
         "statistical": [
             "significance_dependence",
-            "prediction_dependence",
+            "terminal_model_warrant",
+            "covariate_control_warrant",
             "high_dimensional_search",
             "flexible_pipeline",
         ],

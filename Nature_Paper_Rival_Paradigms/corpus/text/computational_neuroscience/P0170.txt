@@ -1,0 +1,1726 @@
+--- Page 1 ---
+ORIGINAL RESEARCH ARTICLE
+published: 02 January 2013
+doi: 10.3389/fncom.2012.00097
+Learned graphical models fo r probabilistic planning
+provide a new class of movement primitives
+Elmar A. Rückert1*, Gerhard Neumann 1, Marc T oussaint2 and Wolfgang Maass 1
+1 Institute for Theoretical Computer Science, Graz University of T echnology, Austria
+2 Department of Computer Science, Freie Universität Berlin, Germany
+Edited by:
+Andrea D’ Avella, IRCCS Fondazione
+Santa Lucia, Italy
+Reviewed by:
+Cees Van Leeuwen, Katholieke
+Universiteit Leuven, Belgium
+Andrey Olypher, Emory University,
+USA
+Petar Kormushev, Italian Institute of
+T echnology, Italy
+*Correspondence:
+Elmar A. Rückert, Institute for
+Theoretical Computer Science,
+Graz University of T echnology,
+Inffeldgasse 16b/1,
+8010 Graz, Austria.
+e-mail: rueckert@igi.tugraz.at
+Biological movement generation combines three interesting aspects: its modular
+organization in movement primitives (MPs), its characteristics of stochastic optimality
+under perturbations, and its efﬁciency in terms of learning. A common approach to
+motor skill learning is to endow the primitives with dynamical systems. Here, the
+parameters of the primitive indirectly deﬁne the shape of a reference trajectory. We
+propose an alternative MP representation b ased on probabilistic inference in learned
+graphical models with new and interesting properties that complies with salient features
+of biological movement control. Instead of endowing the primitives with dynamical
+systems, we propose to endow MPs with an intrinsic probabilistic planning system,
+integrating the power of stochastic optimal control (SOC) methods within a MP .T h e
+parameterization of the primitive is a graphical model that represents the dynamics
+and intrinsic cost function such that inference in this graphical model yields the control
+policy. We parameterize the intrinsic cost function using task-relevant features, such as
+the importance of passing through certain via-points. The system dynamics as well as
+intrinsic cost function parameters are learned in a reinforcement learning (RL) setting.
+We evaluate our approach on a complex 4-link balancing task. Our experiments show
+that our movement representation facilitates learning signiﬁcantly and leads to better
+generalization to new task settings without re-learning.
+Keywords: movement primitives, motor planning, reinforcement learning, optimal control, graphical models
+1. INTRODUCTION
+Efﬁcient motor skill learning in redundant stochastic systems is
+of fundamental interest for both, understanding biological motor
+systems as well as applications in robotics.
+Let us ﬁrst discuss three aspects of human and animal move-
+ment generation the combination of which is the motivation for
+our approach: (1) its modular organization in terms of movement
+primitives, (2) its variability and behavior under perturbations,
+and (3) the efﬁciency in learning such movement strategies.
+First, concerning the movement primitives (MPs) in biolog-
+ical motor systems, the musculoskeletal apparatus is a high-
+dimensional redundant stochastic system and has many more
+degrees-of-freedom (DoF) than needed to perform a speciﬁc
+action (Bernstein, 1967). A classical hypothesis is that such redun-
+d a n c yi sr e s o l v e db yac o m b i n a t i o no fo n l yas m a l ln u m b e ro f
+functional units, namely MPs ( d’Avella et al., 2003; Bizzi et al.,
+2008; d’Avella and Pai, 2010 ). In other terms, MPs can be under-
+stood as compact parameterizations of elementary movements
+which allows for an efﬁcient abstraction of the high-dimensional
+continuous action spaces. This abstraction has been shown to
+facilitate learning of complex movement skills ( d’Avella et al.,
+2003; Schaal et al., 2003; Neumann et al., 2009 ).
+A second important aspect about biological movement are
+the characteristics of motor variability under perturbations or
+stochasticity. If humans perform the same task several times,
+the resulting movement trajectories vary considerably. Stochastic
+optimal control (SOC), besides its high relevance in engineering
+problems, has proven itself as an excellent computational the-
+ory of this effect ( T odorov and Jordan, 2002; T rommershauser
+et al., 2005 ). An implication of SOC, the minimum intervention
+principle, states that we should only intervene in the system if
+it is necessary to fulﬁll the given task. If the task constraints are
+not violated it is inefﬁcient to suppress the inherent noise in the
+stochastic system. The fact that biological movements account for
+such principles suggests that SOC principles are involved on the
+lowest level of movement generation.
+These biological perspectives suggest that the third aspect, efﬁ-
+cient motor skill learning, is facilitated by this combination of
+MPs with low level SOC principles. While existing MP meth-
+ods have demonstated efﬁcient learning of complex movement
+skills ( d’Avella et al., 2003; Schaal et al., 2003; Neumann et al.,
+2009) they lack an integration of SOC principles within MPs.
+Instead, in current approaches the parameters of the MP com-
+pactly determine the shape of the desired trajectory either directly
+or indirectly. This trajectory is then followed by feedback control
+laws. An example for an indirect trajectory parameterization are
+the widely used Dynamic Movement Primitives (DMPs) ( Schaal
+et al., 2003), which use parameterized dynamical systems to deter-
+mine a movement trajectory. The idea of DMPs to endowing
+MPs with an intrinsic dynamical system has several beneﬁts: they
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 1
+COMPUTATIONAL NEUROSCIENCE
+
+
+--- Page 2 ---
+Rückert et al. Planning movement primitives
+provide a linear policy parameterization which can be used for
+imitation learning and policy search ( Kober and Peters, 2011 ).
+T h ec o m p l e x i t yo ft h et r a j e c t o r yc a nb es c a l e db yt h en u m b e r
+of parameters ( Schaal et al., 2003 ) and one can adapt meta-
+parameters of the movement such as the movement speed or
+the goal state of the movement ( Pastor et al., 2009; Kober et al.,
+2010). Further, the dynamical system of a DMP is to some degree
+also reactive to perturbations by adapting the time progression of
+the canonical system depending on joint errors and thereby de-
+or accelerating the movement execution as needed ( Ijspeert and
+Schaal, 2003; Schaal et al., 2003 ). However, the trajectory shape
+itself is ﬁxed and non-reactive to the environment.
+In our approach we aim to go beyond MPs that parameter-
+ize a ﬁxed reference trajectory and instead truly integrate SOC
+principles within the MP . The general idea is to endow MPs with
+an intrinsic probabilistic planning system instead of an intrinsic
+dynamical system. Such a Planning Movement Primitive (PMP)
+can react to the environment by optimizing the trajectory for
+the speciﬁc current situation. The intrinsic probabilistic plan-
+ning system is described as a graphical model that represents the
+SOC problem ( Kappen et al., 2009; T oussaint, 2009 ). T raining
+such a MP therefore amounts to learning a graphical model
+such that inference in the learned graphical model will generate
+an appropriate policy. This has several implications. First, this
+approach implies a different level of generalization compared to a
+dynamical system that generates a ﬁxed (temporally ﬂexible) ref-
+erence trajectory. For instance, if the end effector target changes
+between training and testing phase, an intrinsic planning system
+will generalize to a new target without retraining. A system that
+directly encodes a trajectory would either have to be retrained or
+use heuristics to be adapted ( Pastor et al., 2009 ). Second, this
+approach truly integrates SOC principles within the MP . The
+resulting policy follows the minimum intervention principle and
+is compliant compared to a feedback controller that aims to follow
+a reference trajectory.
+As with DMPs, a PMP is trained in a standard RL setting.
+Instead of parameterizing the shape of the trajectory directly, a
+PMP has parameters that determine the intrinsic cost function of
+the intrinsic SOC system. While the reward function (typically)
+gives a single scalar reward for a whole movement, the learned
+intrinsic cost function is in the standard SOC form and deﬁnes
+task and control costs for every time-step of the movement. In
+other terms, training a PMP means to learn from a sparse reward
+signal an intrinsic cost function such that the SOC system will,
+with high probability, generate rewarded movements. Parallel to
+this learning of an intrinsic cost function, a PMP also exploits the
+data to learn an approximate model of the system dynamics. This
+approximate dynamics model is used by the intrinsic SOC system.
+Therefore, PMP learning combines model-based and model-free
+RL: it learns a model of the system dynamics while at the same
+time training PMP parameters based on the reward signal. It does
+not learn an approximate model of the reward function itself.
+W e can exploit supervised learning methods such asVijayakumar
+et al. (2005)a n d Nguyen-T uong et al. (2008a,b) for learning the
+system dynamics and at the same time use policy search meth-
+ods to adapt the PMP parameters that determine the intrinsic
+cost function. This two-fold learning strategy has the promising
+property of fully exploiting the data by also estimating the system
+dynamics instead of only adapting policy parameters.
+As mentioned above, our approach is to represent the intrinsic
+SOC system as a graphical model, building on the recent work
+on Approximate Inference Control (AICO), ( T oussaint, 2009).
+AICO generates the movement by performing inference in the
+graphical model that is deﬁned by the system dynamics and the
+intrinsic cost function. Since we learn both from experience, all
+conditional probability distributions of this graphical model are
+learned in the RL setting. The output of the planner is a linear
+feedback controller for each time slice.
+Our experiments show that by the use of task-relevant features,
+we can signiﬁcantly facilitate learning and generalization of com-
+plex movement skills. Moreover, due to the intrinsic SOC planner,
+our MP representation implements the principles of optimal con-
+trol, which allows to learn solutions of high quality which are not
+representable with traditional trajectory-based methods.
+In the following section we review in more detail related pre-
+vious work and the background on which our methods build.
+Section 3 then introduces the proposed PMP . In section 4 we
+evaluate the system on a one-dimensional via-point task and
+a complex dynamic humanoid balancing task and compare to
+DMPs. W e conclude with a discussion in section 5.
+2. RELATED WORK AND BACKGROUND
+We review here the related work based on parameterized move-
+ment policies, policy search methods and SOC.
+2.1. PARAMETERIZED MOVEMENT POLICIES
+MPs are a parametric description of elementary movements
+(d’Avella et al., 2003; Schaal et al., 2003; Neumann et al., 2009 ).
+W e will denote the parameter vector of a MP by θ and the pos-
+s i b l ys t o c h a s t i cp o l i c yo ft h ep r i m i t i v ea sπ(u|x, t; θ),w h e r eu is
+the applied action and x denotes the state. The key idea of the
+term “primitive” is that several of these elementary movements
+can be combined not only sequenti ally but also simultaneously
+in time. However, in this paper, we want to concentrate on the
+parameterization of a single MP . Thus we only learn a single ele-
+mentary movement. Using several MPs simultaneously is part of
+future work for our approach as well as for existing approaches
+such as Schaal et al. (2003)a n dNeumann et al. (2009).
+Many types of MPs can be found in the literature. The cur-
+rently most widely used movement representation for robot
+control are the DMPs (Schaal et al., 2003). DMPs evaluate param-
+eterized dynamical systems to generate trajectories. The dynami-
+cal system is constructed such that the system is stable. In order
+to do so, a linear dynamical system is used which is modulated by
+a learnable non-linear function f . A great advantage of the DMP
+approach is that the functionf depends linearly on the parameters
+θ of the MP: f (s) = /Phi1(s)T θ,w h e r es is the time or phase variable.
+As a result, imitation learning for DMPs is straightforward, as
+t h i sc a ns i m p l yb ed o n eb yp e r f o r m i n gal i n e a rr e g r e s s i o n(Schaal
+et al., 2003 ). Furthermore, it also allows the use of many well-
+established RL methods such as policy gradient methods ( Peters
+and Schaal, 2008 ) or Policy Improvements by Path Integrals PI 2
+(Theodorou et al., 2010 ). The complexity of the trajectory can
+be scaled by the number of features used for modeling f .W ec a n
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 2
+
+
+--- Page 3 ---
+Rückert et al. Planning movement primitives
+also adapt meta-parameters of the movement such as the move-
+ment speed or the goal state of the movement ( Pastor et al., 2009;
+Kober et al., 2010 ). However, as the features /Phi1(s) are ﬁxed, the
+ability of the approach to extract task-relevant features is lim-
+ited. Y et, the change of the desired trajectory due to the change of
+the meta-parameters is based on heuristics and does not consider
+task-relevant constraints. While the dynamical system of a DMP is
+to some degree reactive to the environment—namely by adapting
+the time progression of the canonical system depending on joint
+errors and thereby de- or accelerating the movement execution as
+needed ( Ijspeert and Schaal, 2003; Schaal et al., 2003 )—the tra-
+jectory shape itself is ﬁxed and non-reactive to the environment.
+As the DMPs are the most common movement representation,
+we will use it as a baseline in our experiments. A more detailed
+discussion of the DMP approach can be found in the Appendix.
+Another type of movement representation was introduced in
+Neumann et al. (2009) by the movement template framework.
+Movement templates are temporally extended, parameterized
+actions, such as sigmoidal torque, velocity or joint position pro-
+ﬁles, which can be sequenced in time. This approach uses a more
+complex parameterization as the DMPs. For example, it also
+incorporates the duration of different phases, like an acceleration
+or deceleration phase. The division of a movement into single
+phases allows the use of RL methods to learn how to sequence
+these primitives. However, as the approach still directly speciﬁes
+the shape of the trajectory, deﬁning complex movements for high-
+dimensional systems is still complicated, which has restricted the
+use of movement templates to rather simple applications.
+An interesting movement representation arizing from analysis
+of biological data are muscle synergies ( d’Avella et al., 2003; Bizzi
+et al., 2008). They have been used to provide a compact represen-
+tation of electromyographic muscle activation patterns. The key
+idea of this approach is that muscle activation patterns are linear
+sums of simpler, elemental patterns, called muscle synergies. Each
+muscle synergy can be shifted in time and scaled with a linear fac-
+tor to construct the whole activation pattern. While the synergy
+approach has promising properties such as the linear superpo-
+sition and the ability to share synergies between tasks, except for
+some smaller applications (Chhabra and Jacobs, 2006), these MPs
+have only been used for data analysis, and not for robot control.
+All the so far presented MPs are inherently local approaches.
+The speciﬁed trajectory and hence the resulting policy are only
+valid for a local (typically small) neighborhood of our initial state.
+If we are in a new situation, it is likely that we need to re-estimate
+the parameters of the MP . The generation of the reference trajec-
+tory for these approaches is often an ofﬂine process and does not
+incorporate knowledge of the system dynamics, proprioceptive or
+other sensory feedback. Because the reference trajectory itself is
+usually created without any knowledge of the system model, the
+desired trajectory might not be applicable, and thus, the real tra-
+jectory of the robot might differ considerably from the speciﬁed
+trajectory.
+There are only few movement representations which can also
+be used globally, i.e., for many different initial states of the sys-
+tems. One such methods is the Stable Estimator of Dynamical
+Systems (Khansari-Zadeh and Billard, 2011 ) approach. However,
+this method has so far only been applied to imitation learning,
+using the approach for learning or improving new movement
+skills is not straight forward. We will therefore restrict our dis-
+cussion to local movement representations.
+Our PMP approach is, similar as the DMPs, a local approach.
+In a different situation, different abstract goals and features might
+be necessary to achieve a given task. However, as we extract
+task-relevant features and use them as parameters, the same
+parameters can be used in different situations as long as the task-
+relevant features do not change. As we will show, the valid region
+where the local MPs can still be applied is much larger for the
+given control tasks in comparison to trajectory-based methods.
+2.2. POLICY SEARCH FOR MOVEMENT PRIMITIVES
+Let x denote the state and u the control vector. A trajectory τ
+is deﬁned as sequence of state control pairs, τ =⟨ x1:T, u1:T− 1⟩,
+where T is the length of the trajectory. Each trajectory has asso-
+ciated costs C(τ) (denoted as extrinsic cost), which can be an
+arbitrary function of the trajectory. It can, but need not be com-
+posed of the sum of intermediate costs during the trajectory. For
+example, it could be based on the minimum distance to a given
+point throughout the trajectory. W e want to ﬁnd a MP’s parame-
+ter vector θ∗ = argminθJ(θ) which minimizes the expected costs
+J(θ) = E [C(τ)|θ]. W e assume that we can evaluate the expected
+costs J(θ) for a given parameter vector θ by performing roll-outs
+on the real system.
+In order to ﬁnd θ∗ we can apply policy search methods. Here
+a huge variety of possible methods exists. Policy search meth-
+ods can be coarsely divided into step-based exploration and
+episode-based exploration approaches. Step-based exploration
+approaches such as Peters and Schaal (2008), Kober and Peters
+(2011), and Theodorou et al. (2010) apply an exploration noise
+to the action of the agent at each time-step of the episode.
+Subsequently, the policy is updated such that the (noisy) trajecto-
+ries with higher reward are more likely to be repeated. In order to
+do this update, step-based exploration techniques strictly rely on a
+policy which is linear in its parameters. This is true for the DMPs
+(Schaal et al., 2003 ). Currently, the most common policy search
+methods are step-based approaches, including the REINFORCE
+(Williams, 1992 ), the episodic Natural Actor Critic ( Peters and
+Schaal, 2008 ), the PoWER ( Kober and Peters, 2011 ), or the PI
+2
+(Theodorou et al., 2010 ) algorithm. This also explains partially
+the popularity of the DMP approach for motor skill learning
+because DMPs are, from those introduced above, the only rep-
+resentation which can be used for these step-based exploration
+methods (apart from very simple ones like linear controllers).
+However, recent research has also intensiﬁed on episode-based
+exploration techniques that make no assumptions on a speciﬁc
+form of a policy (Hansen et al., 2003; Wierstra et al., 2008; Sehnke
+et al., 2010 ). These methods directly perturb the policy param-
+eters θ and then estimate the performance of the perturbed θ
+parameters by performing roll-outs on the real system. During
+the episode no additional exploration is applied (i.e., a determin-
+istic policy is used). The policy parameters are then updated in
+the estimated direction of increasing performance. Thus, these
+exploring methods do not depend on a speciﬁc form of param-
+eterization of the policy. In addition, they allow the use of
+second order stochastic search methods that estimate correlations
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 3
+
+
+--- Page 4 ---
+Rückert et al. Planning movement primitives
+between policy parameters ( Hansen et al., 2003; Wierstra et al.,
+2008; Heidrich-Meisner and Igel, 2009b ). This ability to apply
+correlated exploration in parameter-space is often beneﬁcial in
+comparison to the uncorrelated exploration techniques applied
+by all step-based exploration methods, as we will demonstrate in
+the experimental section.
+2.3. STOCHASTIC OPTIMAL CONTROL AND PROBABILISTIC
+INFERENCE FOR PLANNING
+SOC methods such as To d o r o v a n d L i(2005), Kappen (2007),
+and T oussaint(2009) have been shown to be powerful methods
+for movement planning in high-dimensional robotic systems. The
+incremental Linear Quadratic Gaussian (iLQG) ( T odorov and Li,
+2005) algorithm is one of the most commonly used SOC algo-
+rithms. It uses T aylor expansions of the system dynamics and cost
+function to convert the non-linear control problem in a Linear
+dynamics, Quadratic costs and Gaussian noise system (LQG). The
+algorithm is iterative—the T aylor expansions are recalculated at
+the newly estimated optimal trajectory for the LQG system.
+In T oussaint(2009), the SOC problem has been reformulated
+as inference problem in a graphical model, resulting in the AICO
+algorithm. The graphical model is given by a simple dynamic
+Bayesian network with states xt ,a c t i o n sut and task variables
+g[i] (representing the costs) as nodes, see Figure 1.T h ed y n a m i c
+Bayesian network is fully speciﬁed by conditional distributions
+encoded by the cost function and by the state transition model.
+If beliefs in the graphical model are approximated as Gaussian
+the resulting algorithm is very similar to iLQG. Gaussian message
+passing iteratively re-approximates local costs and transitions as
+LQG around the current mode of the belief within a time slice.
+A difference to iLQG is that AICO uses forward messages instead
+of a forward roll-out to determine the point of local LQG approx-
+imation and can iterate belief re-approximation with in a time
+slice until convergence, which may lead to faster overall conver-
+gence. For a more detailed discussion of the AICO algorithm with
+Gaussian message passing see section 3.5.
+FIGURE 1 | Planning Movement Primitives are endowed with an
+intrinsic planning system, which performs inference in a learned
+graphical model. States are denoted by xt , controls by ut ,a n dt h et i m e
+horizon is ﬁxed to T time-steps. In this example the graphical model is used
+to infer the movement by conditioning on two abstract goals g[1] and g[2],
+which are speciﬁed in the learned intrinsic cost function L(τ; θ).
+Local planners have the advantage that they can be applied
+to high-dimensional dynamical systems, but the disadvantage of
+requiring a suitable initialization. Global planning ( Kuffner and
+LaV alle, 2000) on the other hand does not require an initial solu-
+tion, however, they have much higher computational demands.
+Our motivation for using only a local planner as component of a
+PMP is related to the learning of an intrinsic cost function.
+Existing planning approaches for robotics typically use hand-
+crafted intrinsic cost functions and the dynamic model is either
+analytically given or learned from data ( Mitrovic et al., 2010 ).
+PMPs use RL to train an intrinsic cost function for planning
+instead of trying to learn a model of the extrinsic reward directly.
+The reason is that a local planner often fails to directly solve real-
+istically complex tasks by optimizing directly the extrinsic cost
+functions. From this perspective, PMPs learn to translate complex
+tasks to a simpler intrinsic cost function that can efﬁciently be
+optimized by a local planner. This learning is done by trial-and-
+error in the RL setting: the PMP essentially learns from experience
+which intrinsic cost function the local planner can cope with
+and uses it to generate good trajectories. Thereby, the RL of the
+intrinsic cost function can compensate the limitedness of the local
+planner.
+3. MATERIALS AND METHODS
+In this section we introduce the proposed PMPs, in particular the
+parameterization of the intrinsic cost function. The overall sys-
+tem will combine three components: (1) a regression method for
+learning the system dynamics, (2) a policy search method for ﬁnd-
+ing the PMP parameters, and (3) a SOC planner for generating
+movements with the learned model and PMP parameters.
+3.1. PROBLEM DEFINITION
+W e consider an unknown dynamical system of the form
+xt+1 = fDyn(ut, xt) + ϵt, (1)
+with state variable xt , controls ut and Gaussian noise ϵt ∼
+N(0, σ). The agent has to realize a control policy π : xt ↦→ ut ,
+which in our case will be a linear feedback controller for each
+time slice. The problem is to ﬁnd a policy that minimizes the
+expected costs of a ﬁnite-horizon episodic task. That is, we assume
+there exists a cost function C(τ),w h e r eτ = (x
+1:T, u1:T− 1) is a
+roll-out of the agent controlling the system. W e do not assume
+that the cost function C(τ) is analytically known or can be writ-
+ten as sum over individual costs for each time-step, i.e., C(τ) =∑
+t ht(xt, ut). This would imply an enormous credit assignment
+problem with separate costs at each time-step. Thus more gen-
+erally, we only get a single scalar reward C(τ) for the whole
+trajectory. The problem is to ﬁnd argminπ ⟨C(τ)⟩π .
+The system dynamics fDyn as well as the cost function C(τ) are
+analytically unknown. Concerning the system dynamics we can
+estimate an approximate model of the systems dynamics from a
+set of roll-outs—as standard in model-based RL. However, con-
+cerning costs, we only receive the single scalar cost C(τ) after a
+roll-out indicating the quality or success of a movement. Note
+that C(τ) is a function of the whole trajectory, not only of the
+ﬁnal state. Learning C from data would be an enormous task,
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 4
+
+
+--- Page 5 ---
+Rückert et al. Planning movement primitives
+more complex than learning an immediate reward function xt ↦→
+rt as in standard model-based RL where rt denotes the reward
+at time t.
+Generally, approaches to learn C(τ) directly in a form useful
+for applying SOC methods seems an overly complex task and vio-
+lates the maxim “never try to solve a problem more complex than
+the original. ” Therefore, our approach will not try to learn C(τ)
+f r o md a t ab u tt oe m p l o yR Lt ol e a r nsome intrinsic cost function
+that can efﬁciently be optimized by SOC methods and generates
+control policies that, by empiricism, minimizes C(τ).
+3.2. PARAMETERIZATION OF PMP’S INTRINSIC COST FUNCTION
+In PMPs the parameters θ encode task-relevant abstract goals or
+features of the movement, which specify an intrinsic cost function
+L(τ; θ) :=
+T∑
+t=0
+l(xt, ut, t; θ) + cp(xt, ut), (2)
+where l denotes the intermediate intrinsic cost function for
+every time-step and cp(xt, ut) is used to represent basic known
+task constraints, such as torque or joint limits. W e will assume
+that such basic task constraints are part of our prior knowl-
+edge, thus cp is given and not included in our parameterization.
+For the description of PMPs we will neglect the constraints
+cp for simplicity. W e will use a via-point representation for
+the intermediate intrinsic cost function l(xt, ut, t; θ). Therefore,
+parameter learning corresponds to extracting goals which are
+required to achieve a given task, such as passing through a
+via-point at a given time. As pointed out in the previous sec-
+tion, L(τ; θ) is not meant to approximate C(τ).I tp r o v i d e sa
+feasible cost function that empirically generates policies that
+minimize C(τ).
+There are many ways to parameterize the intermediate intrin-
+sic cost function l. In this paper we choose a simple via-point
+approach. However, in an ongoing study we additionally imple-
+mented a desired energy state of a pendulum on a cart, which
+simpliﬁes the learning problem. The movement is decomposed in
+N shorter phases with duration d
+[i], i = 1, ..,N.I ne a c hp h a s et h e
+cost function is assumed to be quadratic in the state and control
+vectors. In the ith phase ( t < d[1] for i = 1a n d ∑i− 1
+j=1 d[i] < t ≤
+∑i
+j=1 d[i] for i > 1) we assume the intrinsic cost has the form:
+l(xt, ut, t; θ) = (xt − g[i])T R[i](xt − g[i]) + uT
+t H[i]ut. (3)
+It is parameterized by the via-point g[i] in state space; by the
+precision vector r[i] which determines R[i] = diag(exp r[i]) and
+therefore how steep the potential is along each state dimension;
+and by the parameters h[i] which determine H[i] = diag(exp h[i])
+and therefore the control costs along each control dimension. We
+represent the importance factors r[i] and h[i] both in log space as
+we are only interested in the relationship of these factors. At the
+end of each phase (at the via-point), we multiply the quadratic
+state costs by the factor 1 //Delta1t where /Delta1t is the time-step used for
+planning. This ensures that at the end of the phase the via-point is
+reached, while during the phase the movement is less constraint.
+With this representation, the parameters θ of our PMPs are given
+by
+θ =[ d[1], g[1], r[1], h[1] ... d[N], g[N], r[N], h[N]]. (4)
+C o s tf u n c t i o n so ft h i st y p ea r ec o m m o n l yu s e d — a n dh a n d -
+crafted—in control problems. They allow to specify a via-point,
+but also to determine whether only certain dimensions of the state
+need to be controlled to the via-point, and how this trades off with
+control cost. Instead of hand-designing such cost functions, our
+method will use a policy search method to learn these parameters
+of the intrinsic cost function. As for the DMPs we will assume
+that the desired ﬁnal state at time index T is known, and thus g[N]
+is ﬁxed and not included in the parameters. Furthermore, since
+we consider ﬁnite-horizon episodic tasks the duration of the last
+phase is also ﬁxed: d[N] = T − ∑N− 1
+i=1 d[i]. Still, the algorithm can
+choose the importance factors r[N] and h[N] of the ﬁnal phase.
+3.3. DYNAMIC MODEL LEARNING
+PMPs are endowed with an intrinsic planning system. For plan-
+ning we need to learn a model of the system dynamics fDyn in
+Equation ( 1). The planning algorithm can not interact with the
+real environment, it solely has to rely on the learned model. Only
+after the planning algorithm is ﬁnished, the resulting policy is
+executed on the real system and new data points ⟨[xt, ut], ˙xt⟩ are
+collected for learning the model.
+Many types of function approximators can be applied in this
+context (Vijayakumar et al., 2005; Nguyen-T uong et al., 2008a,b).
+W e use the lazy learning technique Locally W eighted Regression
+(LWR) (Atkeson et al., 1997 ) as it is a very simple and effective
+approach. LWR is a memory-base d, non-parametric approach,
+which ﬁts a local linear model to the locally-weighted set of data
+points. For our experiments, the size of the data set was limited
+to 10 5 points implemented as a ﬁrst-in-ﬁrst-out queue buffer,
+because the computational demands of LWR drastically increase
+with the size of the data set. In particular we used a Gaussian
+kernel as distance function with the bandwidth parameters hφ =
+0.25 for joint angles, h˙φ = 0.5f o rv e l o c i t i e s ,a n dhu = 0f o rc o n -
+trols 1. For more details we refer to Chapter 4 in Atkeson et al.
+(1997).
+3.4. POLICY SEARCH FOR PMP’S INTRINSIC COST FUNCTION
+Model learning takes place simultaneously to learning the param-
+eters θ of the MP . In general this could lead to some instability.
+However, while the distribution P(xt) depends on the policy and
+the data for model learning is certainly non-stationary, the con-
+ditional distribution P(xt+1|ut, xt) is stationary. A local learning
+scheme as LWR behaves rather robust under such type of non-
+stationarity of the input distribution only. On the other hand,
+from the perspective of θ optimization, the resulting policies
+may change and lead to different payoffs C(τ) even for the same
+parameters θ due to the adaption of the learned system dynamics.
+1The bandwidth parameter for controls is set to zero as the matrizes A and
+B in the linearized model, i.e., ˙x = A(x)x + B(x)u are independent on the
+controls u.
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 5
+
+
+--- Page 6 ---
+Rückert et al. Planning movement primitives
+Since the resulting control policies of our PMPs depend non-
+linearly on the parameters θ, step-based exploration techniques
+can not be used in our setup. Hence, we will use the second order
+stochastic search method CMA (Covariance Matrix Adaptation,
+Hansen et al. 2003) which makes no assumptions on the parame-
+terization of the MP .
+W e employ the second order stochastic search method CMA
+to optimize the parameters θ w.r.t. C(τ). The parameter space
+is approximated using a multivariate Gaussian distribution.
+Roughly, CMA is an iterative procedure that, from the current
+Gaussian distribution, generates a number of samples, evaluates
+the samples, computes second order statistics of those samples
+that reduced C(τ), and uses these to update the Gaussian search
+distribution. In each iteration, all parameter samples θ use the
+same learned dynamic model to evaluate C(τ).F u r t h e r ,C M A
+includes an implicit forgetting in its update of the Gaussian dis-
+tribution and therefore behaves robust under the non-stationarity
+introduced by adaptation of the system dynamics model.
+We will compare our PMP approach to both, DMPs learned
+with CMA policy search and DMPs learned with the state of the
+a r ts t e p - b a s e dm e t h o dP I2 (Theodorou et al., 2010). However, we
+focus in this work on the characteristics of the movement rep-
+resentation and place less emphasis on a speciﬁc policy search
+method.
+Note that even if the learned model is only a rough approxima-
+tion of the true dynamics, the policy search for parameters of the
+intrinsic cost function can compensate for an imprecise dynam-
+ics model: the policy search approach ﬁnds parameters θ of the
+intrinsic cost function such that—even with a mediocre model—
+the resulting controller will lead to low extrinsic costs in the real
+system.
+3.5. PROBABILISTIC PLANNING ALGORITHM
+W e use the probabilistic planning method AICO ( T oussaint,
+2009) as intrinsic planning algorithm. It offers the interpreta-
+tion that a MP can be represented as graphical model and the
+movement itself is generated by inference in this graphical model.
+The graphical model is fully determined by the learned system
+dynamics and the learned intrinsic cost function, see Figure 1.I n
+order to transform the minimization of L(τ; θ) into an inference
+problem, for each time-step an individual binary random variable
+zt is introduced. This random variable indicates a reward event.
+Its probability is given by
+P(zt = 1|xt, ut, t) ∝ exp(− l(xt, ut, t; θ)),
+where l(xt, ut, t; θ) denotes the cost function for time-step t
+deﬁned in Equation ( 3). AICO now assumes that a reward event
+zt = 1 is observed at every time-step. Given that evidence, AICO
+calculates the posterior distribution P(x1:T, u1:T− 1|z1:T = 1) over
+trajectories.
+W e will use the simplest version of AICO ( T oussaint, 2009),
+where an extended Kalman smoothing approach is used to esti-
+mate the posterior distribution P(x1:T, u1:T− 1|z1:T = 1).T h e
+extended Kalman smoothing approach uses T aylor expansions to
+linearize the system and subsequently uses Gaussian messages for
+belief propagation in a graphical model. Gaussian message pass-
+ing iteratively re-approximates local costs and transitions as a
+LQG around the current mode of the belief within a time slice.
+For more details we refer to T oussaint(2009).
+AICO is only a local optimization method and we have to pro-
+vide an initial solution which is used for the ﬁrst linearization.
+W e will use the direct path (or the straight line) to the via-points
+g[i] in Equation ( 3) as initial solution. Before learning the via-
+points g[i] with i = 1..N − 1 are set to the initial state x1.T h e
+ﬁnal via-point is ﬁxed and set to the desired ﬁnal state g[N] = xT .
+AICO provides us with a linear feedback controller for each
+time slice of the form
+ut = Ot xt + ot, (5)
+where Ot is the inferred feedback control gain matrix and ot
+denotes the linear feedback controller term. This feedback control
+l a wi su s e da sp o l i c yo ft h eM Pa n di se v a l u a t e do nas i m u l a t e do r
+a real robot.
+The original formulation of the AICO method ( T oussaint,
+2009) does not consider torque limits, which are important for
+many robotic experiments as well for the dynamic balancing
+experiments we consider in this paper. Therefore we extended
+the algorithm. This extension yields not only a modiﬁed form of
+the immediate cost function but also results in different update
+equations for the messages and ﬁnally different equations of
+the optimal feedback controller. A complete derivation of the
+extension including the resulting messages and the correspond-
+ing feedback controller is given in Rückert and Neumann (2012).
+Also the algorithm is listed in that work.
+On overview of the interactions between policy search of the
+PMP’s intrinsic cost function and the planning process using
+AICO is sketched in Figure 2. The learning framework is orga-
+nized the following: given the parameters θ from the policy
+search method CMA, AICO is initialized with an initial solu-
+tion which is the direct path to the via-points. AICO is then
+used to optimize the parameterized intrinsic cost function L(τ; θ)
+to estimate a linear feedback controller for each time-step, see
+Equation ( 5). The feedback controller is subsequently executed
+on the simulated or the real robot and the extrinsic cost C(τ) is
+evaluated. Based on this evidence CMA will update its distribu-
+tion over the policy search space and computes a new parameter
+vector. Simultaneously we collect samples of the system dynam-
+ics ⟨[x
+t, ut], ˙xt⟩ w h i l ee x e c u t i n gt h eM P .T h e s es a m p l e sa r eu s e d
+to improve our learned dynamics model, which is used for
+planning.
+4. RESULTS
+W e start our evaluation of the proposed PMP approach on a
+one-dimensional via-point task to illustrate basic characteristics.
+In order to demonstrate our approach on a more challenging
+dynamic robot task we choose a complex 4-link humanoid bal-
+ancing task. At the end of this section we discuss an important
+issue: the computational time of PMPs for simulated and real
+world tasks.
+In our experiments, we focus on investigating the optimal-
+ity of the solution, the robustness to noise for learning, and the
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 6
+
+
+--- Page 7 ---
+Rückert et al. Planning movement primitives
+FIGURE 2 | We decompose motor skill learning into two different
+learning problems. At the highest level we learn parameters θ of an intrinsic
+cost function L(τ; θ) using policy search (model- free RL). Given parameters θ
+the probabilistic p lanner at the lower level uses the intrinsic cost function
+L(τ; θ) and the learned dynamics model to estimate a linear feedback
+controller for each time-step (model -based RL). The feedback controller is
+subsequently executed on the simulated or the real robot and the extrinsic
+cost C(τ) is evaluated. Based on this evidence the policy search method
+computes a new parameter vector. Simultaneously we collect samples of the
+system dynamics ⟨[x
+t, ut], ˙xt⟩ while executing the movement primitive.
+These samples are used to improve our learned dynamics model which is
+used for planning.
+generalizability to different initial or ﬁnal states. For the 4-link
+task we additionally demonstrate how model learning inﬂuences
+the learning performance.
+For a comparison we take the commonly used DMPs as a
+baseline where we use the newest version of the DMPs ( Pastor
+et al., 2009 ) as discussed in detail in Appendix A. As described
+above we use 2nd order stochastic search to learn the PMP
+and DMP parameters. In order to compare to a more com-
+monly used policy search algorithm we additionally test the
+PI
+2 algorithm ( Theodorou et al., 2010 ) for learning the DMP
+parameters. For all experiments we empirically evaluate the opti-
+mal settings of the algorithms (such as the exploration rate
+of CMA and PI 2, the number of centers for the DMPs, or
+the number of via-points for the PMPs), which are listed in
+Appendix B.
+4.1. ONE-DIMENSIONAL VIA-POINT TASK
+In this task the agent has to control a one-dimensional point mass
+of 1 kg. The state at time t is denoted by xt =[ φt, ˙φt]T and we
+directly control the acceleration ut . The time horizon was limited
+to T = 50 time-steps, which corresponds to a simulation time of
+0.5 s with a time-step of /Delta1t = 10 ms. Starting at x1 =[ 0, 0]T the
+agent has to pass through a given via-point gv =− 0.2a t tv = 30.
+T h ev e l o c i t yo ft h ep o i n tm a s sa tt h ev i a - p o i n ti sn o ts p e c i ﬁ e da n d
+can have any value. The ﬁnal targetgT was set to 1. The movement
+is shown in Figure 3. For this task we deﬁne the extrinsic cost
+function:
+C(τ) = 104(˙φ2
+T + 10(gT − φT)2) + 105(gv − φt30 )2
++ 5 · 10− 3
+T∑
+t=1
+u2
+t .
+The ﬁrst two terms punish deviations from the target gT and the
+via-point gv,w h e r eφt30 denotes the ﬁrst dimension of the state
+xt =[ φt, ˙φt]T at time index 30. The target should be reached with
+zero velocity at T = 50. The last term punishes high energy con-
+sumption where ut denotes the applied acceleration. The control
+action is noisy, we always add a Gaussian noise term with a stan-
+dard deviation of σ = 20 to the control action. As this is a very
+simple task, we use it just to show different characteristics of the
+DMPs (using 10 Gaussians for that representation was optimal)
+and PMPs (apparently 2 via-points are sufﬁcient for this task).
+A quite similar task has been used in T odorov and Jordan
+(2002) to study human movement control. The experiments
+showed that humans were able to reach the given via-points with
+high accuracy, however, in between the via-points, the trial-to-
+trial variability was rather high. This is a well-known concept
+from optimal control, called the minimum intervention principle ,
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 7
+
+
+--- Page 8 ---
+Rückert et al. Planning movement primitives
+FIGURE 3 | This ﬁgur e illustrates the best available policies for the
+DMPs and the PMPs for the via-point task. From left-to-right shown are
+the point mass trajectories, the variance of these trajectories, the velocity
+of the point mass, and the applied accelerations. The agent has to pass
+the via-point at t
+v = 0.3 s and deal with the stochasticity of the system
+(Gaussian control noise with a variance of 20 2 ). The plots show 100
+trajectories reproduced with the optimal parameters for the DMPs (A) and
+100 trajectories with the (hand-crafted) optimal parameters for PMPs (B).
+The PMP approach is able to reduce the variance of the movement if it is
+relevant for the task, while the DMPs can only suppress the noise in the
+system throughout the trajectory in order to get an acceptable score. This
+advantage is also reﬂected by the average costs over 1000 trajectories.
+The DMP solution achieved cost values of 1286 ± 556 whereas the PMP
+result was 1 173 ± 596.
+showing also that human movement control follows basic rules of
+optimal control.
+4.1.1. Optimality of the solutions
+We ﬁrst estimate the quality of the best available policy with the
+DMP and the PMP approach. We therefore use the PMPs with
+two via-points and set the parameters θ per hand. As we are using
+a linear system model and a simple extrinsic cost function, the
+PMP parameters can be directly obtained by looking at the extrin-
+sic costs. As the PMPs use the AICO algorithm, which always
+produces optimal policies for LQG systems, the PMP solution
+is the optimal solution. We subsequently use the mean trajec-
+tory returned by AICO and use imitation learning to ﬁt the DMP
+parameters. W e also optimized the feedback controllers used for
+the DMPs
+2.I n Figure 3 we plotted 100 roll-outs of the DMP
+and PMP approach using this optimal policies. The second col-
+umn illustrates the trial-to-trial variability of the trajectories.
+The optimal solution has minimum variance at the via-point
+and the target. As expected this solution is reproduced with the
+2The control gains, i.e., the two scalars kpos and kvel of the linear feedback
+c o n t r o l l e ri nE q u a t i o n(7) in the Appendix are learned using a 2nd order
+stochastic search method.
+PMP approach, because the parameters of the PMPs are able
+to reﬂect the importance of passing through the via-point. The
+DMPs could not adapt the variance during the movement because
+the used (optimized) feedback controller uses constant controller
+gains. As we can see, the variance of the DMP trajectory is simply
+increasing with time.
+Comparing the optimal solutions we ﬁnd that PMPs, in con-
+trast to DMPs, can naturally deal with the inherent noise in
+the system. This is also reﬂected by the average cost values over
+1000 trajectories, 1286 ± 556 for the DMPs and 1173 ± 596 for
+the PMPs. The ± symbol always denotes the standard deviation.
+PMPs perform signiﬁcantly better than DMPs ( t-test: p < 10
+− 3).
+4.1.2. Robustness to noise for learning
+T h i sa d v a n t a g ew o u l dn o tb ev e r yu s e f u li fw ew e r en o ta b l et o
+learn the optimal PMP parameters from experience. Next we test
+using CMA policy search to learn the parameters for the DMPs
+and the PMPs. In addition, in order to compare to a more com-
+m o n l yu s e dp o l i c ys e a r c hm e t h o d ,w ea l s oc o m p a r et ot h eP I2
+approach (Theodorou et al., 2010 ) which we could only evaluate
+for the DMP approach. W e evaluated the learning performance in
+the case of no control noise, Figure 4A,a n di nt h ec a s eo fc o n t r o l
+noise σ = 20, Figure 4B performing 15 runs.
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 8
+
+
+--- Page 9 ---
+Rückert et al. Planning movement primitives
+FIGURE 4 | This ﬁgur e illustrates the learning performance of the two
+movement representations, DMPs and PMPs, for the one-dimensional
+via-point task. Illustrated are mean values and standard deviations over 15
+runs after CMA policy search. In addition, we also compare to the PI
+2
+approach (Theodorou et al., 2010) which we could only evaluate for the DMP
+approach. Without noise the ﬁnal costs of the two representations are similar
+if CMA policy search is used (A). In the second example (B) we use
+zero-mean Gaussian noise with σ = 20 for the controls. In this setup we
+needed to average each performance evaluation for CMA over 20 roll-outs.
+For both setups the PMPs could considerably outperform the DMPs in terms
+of learning speed. For the noisy setup the PMPs could additionally produce
+policies of much higher quality as they can adapt the variance of the
+trajectories to the task constraints. PI
+2 could not ﬁnd as good solutions as
+the CMA policy search approach in both setups.
+Without control noise the quality of the learned policy found
+by 2nd order search is similar for the DMPs (657 .5 ± 0.18) and
+the PMPs (639 .6 ± 0.01). PI 2 could not ﬁnd as good solutions
+as the stochastic search approach. The reason for this is that PI 2
+could not ﬁnd the very large weight values which are needed for
+the last few centers of the DMPs in order to have exactly zero
+velocity at the ﬁnal state (note that the weights of the DMPs
+are multiplied by the phase variable s which almost vanishes in
+the end of the movement and therefore these weight values have
+to be very high). Because CMA policy search uses second order
+information, such large parameter values are easily found. This
+comparison clearly shows that using 2nd order search for pol-
+icy search is justiﬁed. If we compare the learning speed in terms
+of required episodes or roll-outs between DMPs and PMPs, we
+ﬁnd an advantage for PMPs which could be learned an order of
+magnitude faster than the DMPs.
+The second experiment (with control noise of σ = 20) was
+considerably harder to learn. Here, we needed to average each per-
+formance evaluation over 20 roll-outs. The use of more sophis-
+ticated extensions of CMA ( Heidrich-Meisner and Igel, 2009a )
+which can deal with noisy performance evaluations and hence
+improve the learning speed of CMA policy search in the noisy
+setup is part of future work. In Figure 4B we ﬁnd that the PMPs
+could be learned an order of magnitude faster than the DMPs. As
+expected from the earlier experiment, the PMPs could ﬁnd clearly
+better solutions as the DMPs as they can adapt the variance of the
+trajectory to the task constraints. Again, PI
+2 showed a worse per-
+formance than 2nd order search. Illustrated are mean values and
+standard deviations over 15 runs of learning (1034 ± 1.46 for the
+PMPs and 1876 ± 131 for the DMPs using CMA). T o compare
+these results to the optimal costs we evaluated the best learned
+policies of both approaches and generated 1000 trajectories. The
+learned solution for the PMPs was similar to the hand-coded
+optimal solution, 1190 ± 584 versus costs of 1173 ± 596 for the
+optimal solution. DMPs achieved costs of 1478 ± 837, illustrat-
+ing that, eventhough the DMPs are able to represent much better
+solutions with costs of 1286 ± 556 (see Figure 3), it is very hard
+to ﬁnd this solution.
+In Ta b l e 1, we show the mean and variance of the found
+parameters averaged over 15 runs for the ﬁrst via-point in
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 9
+
+
+--- Page 10 ---
+Rückert et al. Planning movement primitives
+T able 1 | Learned parameters using PMPs for the via-point task (1st via-point).
+Scenario d[1] g[1] log(r[1]) log(h[1])
+Optimal 0 .3 −0.2 [5, 0]− 2.3
+No noise 0 .29 ± 0.01 −0.27 ± 0.03 [4.08 ± 4.18,− 0.8 ±− 0.77]− 3.05 ±− 4
+With noise 0 .29 ± 0.01 −0.23 ± 0.05 [4.93 ± 5.29,− 0.31 ±− 0.12]− 2.85 ±− 3
+The symbol ± denotes the standard deviation.
+comparison to the optimal PMP parameters. W e can see that the
+found parameters matched the optimal ones. Interestingly, in the
+experiment with no noise, the found parameters had a larger devi-
+ation from the optimal ones, especially for the ﬁrst via-point g[1]
+in Ta b l e 1. The reason for this is the simple observation that with-
+out noise, we can choose many via-points which results in the
+s a m et r a j e c t o r y ,w h e r e a sw i t hn o i s ew eh a v et oc h o o s et h ec o r r e c t
+via-point in order to reduce the variance of the trajectory at this
+point in time.
+4.1.3. Generalizability to different task settings
+Next, we investigate the ability of both approaches to adapt to
+different situations or to adapt to different priors. In the previ-
+ous task, Figure 3 the initial and the target state were assumed
+as prior knowledge. The movement was learned for the ini-
+tial state φ1 = 0a n df o rt h et a r g e ts t a t eφT = 1. W e want to
+investigate if the same learned parameters can be re-used to gen-
+erate different movements, e.g., used for different initial or target
+states.
+For PMPs we use the new initial or ﬁnal states denoted by x1
+and g[N] in the graphical model in Figure 1 and re-plan the move-
+ment (using the same learned parameters). The change of the
+initial state or the target state is also allowed by the DMP frame-
+work. However, how the movement is generalized to these new
+situations is based on heuristics ( Pastor et al., 2009) and does not
+consider any task constraints (in this example to pass through the
+via-point).
+In Figure 5 the learned policies are applied to reach dif-
+ferent initial states φ1 ∈{ −0.6,− 0.4,− 0.2, 0, 0.2, 0.4, 0.6}
+(Figures 5A,B) and different goal states φT ∈
+{1.5, 1.25, 1, 0.75, 0.5} (Figures 5C,D). All plots show the
+mean trajectory. In order to change the initial or the target
+state of the movement we have to change the point attractor of
+t h eD M P s ,w h i c hc h a n g e st h ec o m p l e t et r a j e c t o r y .D u et ot h i s
+heuristic, the resulting DMP trajectories shown in Figures 5A,C
+do not pass through the via-point any more. Note that we use
+a modiﬁed version of the DMPs ( Pastor et al., 2009 ) which has
+already been built for generalization to different initial or target
+points. The PMPs on the other hand still navigate through the
+learned via-point when changing the initial or the goal state as
+shown in Figures 5B,D.
+4.1.4. Concluding summary
+As we have seen the PMPs implement all principles of optimal
+control, which allows to learn solutions for stochastic systems of
+a quality which is not representable with traditional trajectory-
+based methods such as the DMPs. The optimal movement trajec-
+tory could be learned from scratch up to one order of magnitude
+faster compared to DMPs. This difference was even more visible
+in the stochastic case, where the DMPs needed more than 30 , 000
+episodes to ﬁnd satisfactory solutions. In the setting with control
+noise the learned parameters matches the optimal ones because
+o n l yb yt h eu s eo fn o i s et h ep a r a m e t e r sa r eu n i q u e l yd e t e r m i n e d .
+Finally the PMPs could extract the task-relevant feature, the via-
+point. Even if the task changes—e.g., the initial or the ﬁnal state
+are changed, the movement trajectory still passes through the
+learned via-point. The DMPs on the other hand heuristically scale
+the trajectory which offers no control for fulﬁlling task-relevant
+constraints.
+With DMPs 12 parameters were learned, where we used 10
+Gaussian kernels and optimized 2 control gains. For the PMPs 2
+via-points were sufﬁcient, where the last one was ﬁxed. However,
+for both via-points we could specify 3 importance weights. Thus,
+in total 8 = 2 + 3 + 3 parameters were learned.
+4.2. DYNAMIC HUMANOID BALANCING TASK
+In order to assess the PMPs on a more complex task, we evaluate
+the PMP and DMP approach3 on a dynamic non-linear balancing
+task (Atkeson and Stephens, 2007). The robot gets pushed with a
+speciﬁc force F and has to keep balance. The push results in an
+immediate change of the joint velocities. The motor torques are
+limited, which makes direct counter-balancing of the force unfea-
+sible. The optimal strategy is therefore to perform a fast bending
+movement and subsequently return to the upright position, see
+Figure 6. This is a very non-linear control problem, applying any
+type of (linear) balancing control or local optimal control algo-
+rithm such as AICO with the extrinsic cost function fails. Thus,
+we have to use a parametric movement representation. Like in
+the previous experiment, we take the DMP ( Schaal et al., 2003 )
+approach as a baseline.
+W e use a 4-link robot as a simplistic model of a
+humanoid (70 kg, 2 m) ( Atkeson and Stephens, 2007 ). The
+eight-dimensional state xt is composed of the arm, the hip,
+the knee and the ankle positions and their velocities. T able 1
+in Rückert and Neumann (2012) shows the initial velocities
+(resulting from the force F which always acts at the shoul-
+der of the robot) and the valid joint angle range for the task.
+In all experiments the applied force was F = 25Ns. If one of
+the joints leaves the valid range the robot is considered to be
+fallen. Additionally to the joint limits, the controls are limited
+to the intervals [±250,±500, ±500,±70] Nm (arm, hip, knee,
+and ankle). For more details we refer to Atkeson and Stephens
+(2007).
+3For PMPs again 2 via-points were optimal. DMPs performed best when using
+10 Gaussian kernels per dimension.
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 10
+
+
+--- Page 11 ---
+Rückert et al. Planning movement primitives
+FIGURE 5 | For the previous task illustrated in Figure 3 the
+movement was learned for a single initial state φ1 = 0a n da
+single target state φT = 1. The initial and the target state were
+assumed as prior knowledge. In this experiment we evaluated the
+generalization of the learned policies to different initial states
+φ
+1 ∈{ −0.6,− 0.4,− 0.2, 0, 0.2, 0.4, 0.6} (A–B) and different target states
+φT ∈{ 1.5, 1.25, 1, 0.75, 0.5} (C–D). Always the same parameters θ have
+been used, i.e., the parameters were not re-learned. Illustrated are the
+mean trajectories. The DMPs (A,C) are not aware of task-relevant
+features and hence do not pass through the via-point any more. (B,D)
+PMPs can adapt to varying initial or target states with small effects on
+passing through the learned via-point.
+FIGURE 6 | This ﬁgur e illustrates a dynamic balancing movement
+learned using the proposed Planning Movement Primitives. The 4-link
+robot modeling a humanoid (70 kg, 2 m) gets pushed from behind with a
+speciﬁc force ( F = 25 Ns) and has to move such that it maintains balance.
+The optimal policy is to perform a fast bending movement and
+subsequently return to the upright robot posture. The circles denote the
+ankle, the knee, the hip, and the shoulder joint. The arm link is drawn as
+dotted line to differentiate it from the rest of the body.
+Let ts b et h el a s tt i m ei n d e xw h e r et h er o b o th a sn o tf a l l e n
+and let xts be the last valid state. The ﬁnal state or rest-
+ing state (upright position with zero velocity) is denoted by
+xr. The movement was simulated for 5 s with a /Delta1t = 10 ms
+resulting in T = 500 time-steps. As extrinsic cost function C(τ)
+we use:
+C(τ) = 20(ts − T)2 + (xts − xr)T RE(xts − xr)
++
+ts∑
+t=1
+uT
+t HEut. (6)
+The ﬁrst term (ts − T)2 is a punishment term for falling over. If
+the robot falls over, this term typically dominates. The precision
+matrix RE determines how costly it is not to reach xr.T h ed i a g -
+onal elements of RE are set to 10 3 for joint angles and to 10 for
+joint velocities. Controls are punished byHE = 5 · 10− 6I.B e c a u s e
+of the term (ts − T)2 we cannot directly encode the extrinsic
+cost function as a sum of intermediate costs, which is usually
+required for SOC algorithms. But we can use PMPs to trans-
+form this reward signal into an intrinsic cost function for a local
+probabilistic planner.
+4.2.1. Optimality of the solutions
+W e use additive zero-mean Gaussian noise with a standard devi-
+ation σ = 1 0 .I nc o n t r a s tt ot h es i m p l ev i a - p o i n tt a s kw h e r e
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 11
+
+
+--- Page 12 ---
+Rückert et al. Planning movement primitives
+imitation learning was used to compare the trajectories shown
+in Figure 3 are the policies for the 4-link task learned from
+scratch. Figure 7 illustrates the best learned policies for DMPs
+(left column) and PMPs (right column). Shown are the joint
+angle trajectories (Figures 7A,B) and the variance of these trajec-
+tories (Figures 7C,D). The corresponding controls are illustrated
+in Figure 8. W e evaluated 100 roll-outs of the best policies found
+by both approaches. While the DMPs cannot adapt the variance
+during the movement Figure 7C,t h eP M P sc a ne x p l o i tt h ep o w e r
+of SOC and are able to reduce the variance at the learned via-
+point (marked by crosses) Figure 7D.A st h eP M P sa r ea b l et o
+control the variance of the trajectory, we can see that the vari-
+ance of the movement is much higher compared to the DMPs
+(Figures 7C,D). Accuracy only matters at the via-points. W e can
+also see that the arm trajectory has a high variance after the robot
+is close to a stable up-right posture Figure 7B,b e c a u s ei ti sn o t
+necessary to strictly control the arm in this phase. The best found
+policy of the DMPs had costs of 568 while the best result using
+PMPs was 307. This strongly suggests that it is advantageous to
+reduce the variance at certain points in time in order to improve
+the quality of the policy.
+4.2.2. Robustness to noise for learning
+Next, we again want to assess the learning speed of both
+approaches. W e again used CMA policy search for the PMPs and
+DMPs as well as PI 2 for the DMP approach. The average over 20
+FIGURE 7 | This ﬁgure illustrates the best learned policies for the 4-link
+balancing task using DMPs (left column) and PMPs (right column).
+Shown are the joint angle trajectories (A–B) and the variance of these
+trajectories (C–D). The applied controls are illustrated in Figure 8.W e
+evaluated 100 roll-outs using the same parameter setting θ for each approach.
+The controls were perturbed by zero-mean Gaussian noise with σ = 10 Ns.
+PMPs can exploit the power of stochastic optimal control and the system is
+only controlled if necessary, see t he arm joint trajectories in (B). The learned
+via-points are marked by crosses in (B) and (C). For DMPs the variance of the
+joint trajectories (C) is determined by the learned controller gains of the
+inverse dynamics controller. As constant controller gains are used the
+variance can not be adapted during the movement and is smaller compared
+to (D). For DMPs the best available policy achieved cost values of 568
+whereas the best result using PMPs was 307.
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 12
+
+
+--- Page 13 ---
+Rückert et al. Planning movement primitives
+runs of the learning curves are illustrated in Figure 9.U s i n gt h e
+PMPs as movement representation, good policies could be found
+at least one order of magnitude faster compared to the trajectory-
+based DMP approach. The quality of the found policies was better
+for the PMP approach (mean values and standard deviations after
+learning: 993 ± 449 for the DMPs and 451 ± 212 for the PMPs).
+For the DMP approach we additionally evaluated PI 2 for policy
+search, however, PI 2 was not able to ﬁnd good solutions—the
+robot always fell over.
+4.2.3. Generalizability to different task settings
+In the next step we again test the generalization to different ini-
+tial or ﬁnal states. More speciﬁc we investigate how well the
+approaches can adapt to different priors of the arm joint.
+In the previous task the target was assumed to be known
+prior knowledge and the policy was learned for a ﬁnal arm
+posture of φTarm = 0. W e used this learned policy to generate
+movements to different ﬁnal targets of the arm joint φTarm ∈
+{3, 2.5, 2, 1.5, 1, 0.5, 0, − 0.2,− 0.4,− 0.6}. W e only change either
+the arm-position of the last via-point or the point attractor of
+the dynamical system. The results shown in Figure 10 conﬁrm
+the ﬁndings of the one-dimensional via-point task. The PMPs
+ﬁrst move to the via-point, always maintaining the extracted task
+constraints, and afterward move the arm to the desired position
+while keeping balance. All desired target positions of the arm
+could be fulﬁlled. In contrast, the DMPs managed to keep bal-
+ance only for few target positions. The valid range of the target
+arm position with DMPs was φTarm ∈[ −0.2, 1]. This shows the
+advantage of generalization while keeping task constraints versus
+generalization per using the DMP heuristics.
+The ability of the two approaches to adapt to different ini-
+tial states is illustrated in Figure 11.W eu s e dt h el e a r n e dp o l i c y
+for φ1arm = 0 to generate movements using different initial states
+of the arm joint: φ1arm ={ 1, 0.5, 0.2, 0,− 0.2,− 0.4,− 0.6}.T h e
+push perturbing the robot results in an immediate change of the
+joint velocities, which are shown in Ta b l e A 5in the Appendix for
+these different initial states. For the DMPs only the joint angles 0
+and − 0.2 resulted in successful policies. Whereas with PMPs the
+valid range of the initial arm position was φ1arm ∈[ −0.6, 0.5].
+4.2.4. Model learning using PMPs
+So far all experiments for the PMPs were performed using the
+known model of the system dynamics, these experiments are
+denoted by PMP in Figure 12. Note that also for the DMPs the
+known system model has been used for inverse dynamics con-
+trol. Now we want to evaluate how model learning affects the
+performance of our approach. This can be seen in Figure 12.I n
+the beginning of learning the extrinsic costs are larger compared
+to motor skill learning with a given analytic model. However, as
+the number of collected data-points ⟨[xt; ut], ˙xt⟩ increases the
+PMPs with model learning quickly catch up and converge ﬁnally
+to the same costs. The PMP representation with model learning
+in parallel considerably outperforms the trajectory-based DMP
+approach in learning speed and in the ﬁnal costs.
+4.2.5. Computational time
+For our simulations we used a standard personal computer
+(2.6 Ghz, 8 Gb ram) with implementations of the algorithms in
+C++. For the 4-link pendulum the DMPs could generate the
+movement trajectory within less than 0 .1 s. With the proposed
+PMPs it took less than 1 s (including model learning). The time
+horizon was 5 s and we used a time-step of /Delta1t = 10 ms.
+4.2.6. Concluding summary
+In contrast to the via-point task the optimal solution for this
+dynamic balancing task is unknown. The comparison to the
+FIGURE 8 | This ﬁgure illustrates the controls of best learned policies for
+the 4-link balancing task using DMPs (A) and PMPs (B). The
+corresponding joint angle trajectories are shown in Figure 7. The controls
+were perturbed by zero-mean Gaussian noise with σ = 10 Nm. Shown are
+100 roll-outs using the same parameter setting θ for each approach. The
+dotted horizontal lines in the last row indicate the control constraints.
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 13
+
+
+--- Page 14 ---
+Rückert et al. Planning movement primitives
+FIGURE 9 | The ﬁgure illustrates the learning perf ormance of the
+two movement representations, DMPs and PMPs for the 4-link
+balancing task. Illustrated are mean values and standard deviations
+over 20 runs after CMA policy search. The controls (torques) are
+perturbed by zero-mean Gaussian noise with σ = 10 Nm. The PMPs are
+able to extract characteristic featu res of this task which is a speciﬁc
+posture during the bending movement, shown in Figure 7B .U s i n gt h e
+proposed Planning Movement Primitives good policies could be found at
+least one order of magnitude faster compared to the trajectory-based
+DMP approach. Also, the quality of the best-found policy was
+considerably better for the PMP approach (993 ± 449 for the DMPs and
+451 ± 212 for the PMPs). For the DMP approach we additionally
+evaluated PI
+2 for policy search, which could not ﬁnd as good solutions
+as the CMA policy search approach.
+FIGURE 10 | This ﬁgur e illustrates the joint a ngle trajectories (arm,
+hip, knee, and ankle) of a 4-link robot model during a balancing
+movement for different ﬁnal targets of the arm joint (3, 2.5, 2, 1.5,
+1, 0.5, 0, −0.2, −0.4, −0.6). The applied policies were learned for a ﬁnal
+arm posture of φ
+Tarm = 0. (A) The valid range of the arm joint using
+DMPs is φTarm ∈[ −0.2, 1]. Large dots in the plot indicates that the robot
+has fallen. (B) PMPs could generate valid policies for all ﬁnal arm
+conﬁgurations.
+DMPs shows a similar result as for the via-point task. With the
+PMPs we could ﬁnd movements of signiﬁcantly higher quality
+compared to the DMPs and the motor skill could be learned up
+to one order of magnitude faster with PMPs. W e again applied
+the same parameters to different initial or ﬁnal states to demon-
+strate the generalization ability. Now we can see the advantage
+of the learned task-relevant features. While the PMPs still try to
+fulﬁll the extracted task-relevant constraints and therefore suc-
+ceeded for almost all initial/ﬁnal state conﬁgurations, the DMPs
+again just heuristically scale the trajectory, which results in the
+robot falling in almost all but the learned conﬁgurations. Finally
+we showed that the dynamic model could be learned in parallel
+for the 4-link balancing task.
+For all balancing experiments shown in this section the robot
+was pushed with the speciﬁc force F = 2 5 N s .W eh a v ep e r -
+formed the same evaluations for various forces and the results
+are basically the same. For example, a comparison of the learn-
+i n gp e r f o r m a n c e su s i n gt h en e g a t i v ef o r c eF =− 25 Ns is shown
+in Figure 13. The executed movement of the best learned policy
+u s i n gP M P si ss h o w ni nFigure 14.
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 14
+
+
+--- Page 15 ---
+Rückert et al. Planning movement primitives
+FIGURE 1 1 | This ﬁgur e illustrates the joint a ngle trajectories (arm,
+hip, knee and ankle) of a 4-link robot model during a balancing
+movement for different initial states of the arm joint (1, 0.5, 0.2,
+0, −0.2, −0.4, −0.6). The applied policies were learned for an initial
+arm posture of φ
+1arm = 0. (A) The valid range of the arm joint using
+DMPs is φ1arm ∈[ −0.2, 0]. Large dots in the plot indicates that the
+robot has fallen. (B) PMPs could generate valid policies for
+φ1arm ∈[ −0.6, 0.5].
+FIGURE 12 | This ﬁgure shows the inﬂuence of model learning on the
+4-link balancing task. Illustrated are mean values and standard deviations
+over 20 runs. The learning performance with the given system model is
+denoted by PMP. Instead of using the given model we now want to learn
+the system model from data (as described in section 3.3), which is
+denoted by PMP-M. In the beginning of learning the extrinsic costs are
+larger compared to motor skill learning with a given analytic model.
+However, as the number of collected data-points ⟨[x
+t; ut], ˙xt⟩ increases the
+PMPs with model learning quickly catch up and converge ﬁnally to the
+same costs. The PMP representation with model learning in parallel
+considerably outperforms the trajectory-based DMP approach in learning
+speed and in the ﬁnal costs.
+In total 40 weights and 8 control gains were learned with
+DMPs. For PMPs we used 2 via-points where the second one was
+ﬁxed. Thus, we learned 8 parameters specifying the ﬁrst via-point
+and additionally 12 importance weights for each via-point. This
+results in 32 parameters.
+5. DISCUSSION
+In this paper we concentrated on three aspects of biological
+motor control, which are also interesting for robotic motor
+skill learning: (1) the modularity of the motor system, which
+makes it possible to represent high-dimensional action spaces in
+terms of lower-dimensional MPs, (2) its variability and behavior
+under stochasticity, and (3) the efﬁciency in learning movement
+strategies.
+In order to achieve similar properties also for robotic motor
+skill learning we propose to exploit the power of SOC already at
+the level of the MP . Instead of endowing a MP with a dynami-
+cal system, like the DMPs ( Schaal et al., 2003 ), we endow a MP
+with an intrinsic probabilistic planning system. The resulting MP
+is called PMP . For the dynamical systems approach the parame-
+ters of the MP indirectly deﬁne the shape of the trajectory. In our
+case, the parameters of the MP deﬁne the intrinsic cost function of
+a graphical model, which represents a SOC problem. Performing
+inference in this graphical model yields the controls for executing
+the movement.
+Due to the use of the intrinsic planning system our represen-
+tation complies with basic principles of SOC. For example, the
+PMPs are able to account for the motor variability often observed
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 15
+
+
+--- Page 16 ---
+Rückert et al. Planning movement primitives
+FIGURE 13 | This ﬁgur e illustrates the learning performance of the two
+movement representations, DMPs and PMPs for the 4-link balancing
+task. But in contrast to the evaluations shown in the experimental
+section did we here apply a negative force F =− 25 Ns. Illustrated are
+mean values and standard deviations over 20 runs after CMA policy search.
+The controls (torques) are perturbed by zero-mean Gaussian noise with
+σ = 10 Nm. Using the proposed Planning Movement Primitives good policies
+could be found at least one order of magnitude faster compared to the
+trajectory-based DMP approach. Als o, the quality of the best-found policy
+was considerably better for the PMP approach (720 ± 323 for the DMPs and
+227 ± 1 12 for the PMPs). For the DMP approach we additionally evaluated PI
+2
+for policy search which could not ﬁnd good policies.
+FIGURE 14 | This ﬁgur e illustrates a dynamic balancing movement
+learned using the proposed Planning Movement Primitives. The 4-link
+robot modelling a humanoid ( 70 kg, 2 m) gets pushed with the speciﬁc
+force (F =− 25 Ns) and has to move such that it maintains balance. The
+circles denote the ankle, the knee, the hip, and the shoulder joint.
+in human motion. Instead of suppressing the noise of the sys-
+tem by following a single reference trajectory, the PMPs are able
+to learn to intervene the system only if it is necessary to fulﬁll
+a given task, also known as the minimum intervention principle
+(T odorov and Jordan, 2002). This allows a much higher variance
+in parts of the trajectory where less accuracy is needed. Current
+methods which rely on a reference trajectory are not able to
+reproduce these effects.
+The parameters of PMPs encode learned task-relevant features
+of the movement, which are used to specify the intrinsic cost
+function for the MP’s intrinsic planning system. Our experiments
+have shown that such a task-related parameterization facilitates
+learning and generalization of movement skills. Policies of higher
+quality could be found an order of magnitude faster than with
+the competing DMP approach. In addition, as conﬁrmed by our
+experiments, the intrinsic planner also allows a wide generaliza-
+tion of the learned movement, such as generalization to different
+initial or goal positions. The DMPs on the other hand have to use
+heuristics for this generalization ( Pastor et al., 2009 ), which had
+the consequence that the robot typically fell over in a new situ-
+ation. In this case relearning is needed for the DMPs while the
+PMPs allow to reuse the learned parameters.
+In traditional SOC methods ( T odorov and Li, 2005; Kappen,
+2007; T oussaint, 2009 ) the intrinsic cost function is typically
+hand-crafted. In contrast we learn the cost function from expe-
+rience. W e considered a general class of motor skill learning tasks
+where only a scalar reward is observed for the whole movement
+trajectory. Thus, with PMPs this external sparse reward signal
+is used to learn the intrinsic cost function. W e applied the sec-
+ond order stochastic search method CMA ( Hansen et al., 2003 )
+for ﬁnding appropriate intrinsic cost functions. In this paper
+we focused on the representation of movements, and placed less
+emphasis on a speciﬁc policy search method. W e want to point
+out again that our method does not depend on the used pol-
+icy search method, any episode-based exploring policy search
+method can be used. W e also do not want to argue for using
+episode-based exploring methods for policy search, however, as
+our experiments show, these methods provide useful alternatives
+to the more commonly used step-based approaches such as the
+PI2 algorithm ( Theodorou et al., 2010 ). Future work will con-
+centrate on more grounded approaches for extracting immediate
+costs from a sparse reward signal. This can also be of interest
+for imitation learning, where we do not know the immediate
+costs used by the demonstrator, but often we can evaluate the
+demonstrators behavior by an external reward signal.
+The planner requires to know the system dynamics, which
+we also learn from data. As shown by our experiments this
+can be done without signiﬁcant loss of performance. Hence,
+our approach combines model-based and model-free RL. As in
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 16
+
+
+--- Page 17 ---
+Rückert et al. Planning movement primitives
+model-based RL, we learn a system model to plan with. Model-
+free RL is used as method to search for appropriate intrinsic cost
+functions. We used the LWR ( Atkeson et al., 1997 ) for learning
+the system dynamics as it is a very simple and effective approach.
+Future work will also concentrate on more complex robot models
+where more sophisticated methods like Vijayakumar et al. (2005),
+Nguyen-T uong et al. (2008a), and Nguyen-T uong et al. (2008b)
+could be applied for model learning.
+In our experiments the number of phases was ﬁxed ( N = 2).
+It was assumed as prior knowledge and can model the complex-
+ity of the movement representation (Similarly, the complexity of
+DMPs can be scaled by the number of Gaussian activation func-
+tions). During our experiments we also evaluated the balancing
+task with up to N = 5 phases, but more than 2 phases did not
+improve the quality of the learned policy. One via-point on the
+other hand was not sufﬁcient to describe the movement.
+A promising topic for future investigation is the combination
+of primitives in order to achieve several tasks simultaneously. This
+is still a mostly unsolved problem for current movement repre-
+sentations. Because of the non-linear task demands and system
+dynamics a naive linear combination in trajectory space usually
+fails. Here, our PMPs offers new opportunities. New movements
+can be inferred by a linear combination of cost functions, which
+results in a non-linear combination of the policies for the single
+tasks.
+ACKNOWLEDGMENTS
+This paper was written under partial support by the European
+Union project FP7-248311 (AMARSI) and project IST-2007-
+216886 (PASCAL2). The funders had no role in study design, data
+collection and analysis, decision to publish, or preparation of the
+manuscript.
+REFERENCES
+Atkeson, C., and Stephens, B. (2007).
+“Multiple balance strategies from
+one optimization criterion, ” in
+Proceedings of the 7th International
+Conference on Humanoid Robots ,
+57–64.
+Atkeson, C. G., Moore, A. W., and
+Schaal, S. (1997). Locally weighted
+learning for control. Artif. Intell.
+Rev. 11, 75–113.
+Bernstein, N. A. (1967). The Co-
+ordination and Regulation of
+Movements. Oxford, NY: Pergamon
+Press Ltd.; ﬁrst english edition.
+B i z z i ,E . ,C h e u n g ,V .C .K ,d ’ A v e l l a ,
+A., Saltiel, P ., and Tresch, M.
+(2008). Combining modules for
+movement. Brain Res. Rev. 57,
+125–133.
+Chhabra, M., and Jacobs, R. A. (2006).
+Properties of synergies arising
+from a theory of optimal motor
+behavior. Neural Comput. 18,
+2320–2342.
+d’Avella, A., and Pai, D. K. (2010).
+Modularity for sensorimotor con-
+trol: evidence and a new prediction.
+J. Mot. Behav. 42, 361–369.
+d’Avella, A., Saltiel, P ., and Bizzi, E.
+(2003). Combinations of muscle
+synergies in the construction of a
+natural motor behavior. Nature 6,
+300–308.
+Hansen, N., Muller, S., and
+Koumoutsakos, P . (2003). Reducing
+the time complexity of the deran-
+domized evolution strategy with
+covariance matrix adaptation
+(CMA-ES). Evol. Comput. 11,
+1–18.
+Heidrich-Meisner, V ., and Igel, C.
+(2009a). “Hoeffding and bernstein
+races for selecting policies in evo-
+lutionary direct policy search, ” in
+ICML ’09: Proceedings of the 26th
+Annual International Conference on
+Machine Learning , (Montreal, QC:
+ACM), 401–408.
+Heidrich-Meisner, V ., and Igel, C.
+(2009b). Neuroevolution strategies
+for episodic reinforcement learning.
+J. Algorithms 64, 152–168.
+Ijspeert, A. J., and Schaal, S. (2003).
+“Learning attractor landscapes
+for learning motor primitives, ” in
+Advances in Neural Information
+Processing Systems 15 , (NIPS 2003) ,
+(Cambridge, MA: MIT Press),
+1523–1530.
+Kappen, B., Gómez, V ., and Opper,
+M. (2009). Optimal control
+as a graphical model infer-
+ence problem. Comput. Res.
+Repos. arXiv:0901.0633. doi:
+10.1007/s10994-012-5278-7
+Kappen, H. J. (2007). “An introduc-
+tion to stochastic control theory,
+path integrals and reinforcement
+learning, ” in Cooperative Behavior
+in Neural Systems, Volume 887
+of American Institute of Physics
+Conference Series, (Granada, Spain),
+149–181.
+Khansari-Zadeh, S. M., and Billard, A.
+(2011). Learning stable non-linear
+dynamical systems with Gaussian
+mixture models. IEEE Trans. Robot.
+27, 943–957.
+Kober, J., Oztop, E., and Peters, J.
+(2010). “Reinforcement learning to
+adjust robot movements to new
+situations, ” in Proceedings of the
+2010 Robotics: Science and Systems
+Conference (RSS 2010), (Zaragoza,
+Spain).
+Kober, J., and Peters, J. (2011). Policy
+search for motor primitives in
+robotics.M a c h .L e a r n .J .84, 171–203.
+Kuffner, J., and LaValle, S. (2000).
+“RRT-connect: an efﬁcient
+approach to single-query path
+planning, ” inProceedings of the 2000
+IEEEE International Conference on
+Robotics and Automation ICRA ,
+(San Francisco, CA), 995–1001.
+Mitrovic, D., Klanke, S., and
+Vijayakumar, S. (2010). “Adaptive
+optimal feedback control with
+learned internal dynamics mod-
+els, ” in From Motor Learning
+to Interaction Learning in
+Robots
+, (Berlin; Heidelberg:
+Springer-V erlag), 65–84.
+Neumann, G., Maass, W., and Peters, J.
+(2009). “Learning complex motions
+by sequencing simpler motion tem-
+plates, ” in Proceedings of the 26th
+International Conference on Machine
+Learning, (ICML 2009) , (Montreal,
+QC, Canada), 753–760.
+Nguyen-Tuong, D., Peters, J., Seeger,
+M., and Schölkopf, B. (2008a).
+“Learning inverse dynamics: a
+comparison, ” in 16th European
+Symposium on Artiﬁcial Neural
+Networks, (ESANN 2008) ,( B r u g e s ,
+Belgium), 13–18.
+Nguyen-Tuong, D., Seeger, M., and
+Peters, J. (2008b). “Local gaus-
+sian process regression for real
+time online model learning and
+control, ” in Proceedings of 22nd
+Annual Conference on Neural
+Information Processing Systems ,
+(NIPS 2008) ,( V a n c o u v e r ,B C ,
+Canada), 1193–1200.
+Pastor, P ., Hoffmann, H., Asfour, T.,
+and Schaal, S. (2009). “Learning
+and generalization of motor skills
+by learning from demonstra-
+tion, ” in International Conference
+on Robotics and Automation
+(ICRA 2009), (Kobe, Japan).
+Peters, J., Mistry, M., Udwadia, F . E.,
+Nakanishi, J., and Schaal, S. (2008).
+A unifying methodology for robot
+control with redundant DOFs.
+Auton. Robots 24, 1–12.
+Peters, J., and Schaal, S. (2008).
+Reinforcement learning of motor
+skills with policy gradients. Neural
+Netw. 21, 682–697.
+Rückert, E. A., and Neumann, G.
+(2012). Stochastic optimal con-
+trol methods for investigating the
+power of morphological computa-
+tion. Artif. Life 19, 1–17.
+Schaal, S., Peters, J., Nakanishi,
+J., and Ijspeert, A. J. (2003).
+“Learning movement primitives, ”
+in International Symposium on
+Robotics Research , (ISRR 2003) ,
+(Lucerne, Switzerland), 561–572.
+Sehnke, F ., Osendorfer, C., Rückstieß,
+T . ,G r a v e s ,A . ,P e t e r s ,J . ,a n d
+Schmidhuber, J. (2010). Parameter-
+exploring policy gradients. Neural
+Netw. 23, 551–559.
+Theodorou, E., Buchli, J., and Schaal,
+S. (2010). “Reinforcement learn-
+ing of motor skills in high dimen-
+sions: a path integral approach, ” in
+Robotics and Automation (ICRA),
+2010 IEEE International Conference ,
+(Anchorage, AL), 2397–2403.
+T odorov, E., and Jordan, M. (2002).
+Optimal feedback control as a the-
+ory of motor coordination. Nat.
+Neurosci. 5, 1226–1235.
+T odorov, E., and Li, W. (2005). “A
+generalized iterative LQG method
+for locally-optimal feedback control
+of constrained nonlinear stochastic
+systems, ” in Proceedings of the 24th
+American Control Conference, vol-
+ume 1 of (ACC 2005) ,( P o r t l a n d ,
+Oregon, USA), 300–306.
+T oussaint, M. (2009). “Robot trajectory
+optimization using approximate
+inference, ” in Proceedings of the
+26th International Conference
+on Machine Learning , (ICML
+2009), (Montreal, QC, Canada),
+1049–1056.
+Trommershauser, J., Gepshtein,
+S., Maloney, L., and Banks, M.
+(2005). Optimal compensation for
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 17
+
+
+--- Page 18 ---
+Rückert et al. Planning movement primitives
+changes in task-relevant move-
+ment variability. J. Neurosci. 25,
+7169–7178.
+Vijayakumar, S., D’Souza, A., and
+Schaal, S. (2005). Incremental
+online learning in high dimensions.
+Neural Comput. 17, 2602–2634.
+Wierstra, D., Schaul, T., Peters, J.,
+and Schmidhuber, J. (2008).
+“Episodic reinforcement learn-
+ing by logistic reward-weighted
+regression, ” in Proceedings of the
+18th International Conference on
+Artiﬁcial Neural Networks, Part I ,
+(ICANN 2008) (Berlin;Heidelberg:
+Springer-V erlag), 407–416.
+Williams, R. J. (1992). Simple statistical
+gradient-following algorithms for
+connectionist reinforcement learn-
+ing. Mach. Learn. 8, 229–256.
+Conﬂict of Interest Statement: The
+authors declare that the research
+was conducted in the absence of any
+commercial or ﬁnancial relationships
+that could be construed as a potential
+conﬂict of interest.
+Received: 12 October 2012; accepted: 04
+December 2012; published online: 02
+January 2013.
+Citation: Rückert EA, Neumann G,
+Toussaint M and Maass W (2013)
+Learned graphical models for proba-
+bilistic planning provide a new class of
+movement primitives. Front. Comput.
+Neurosci. 6:97. doi: 10.3389/fncom.
+2012.00097
+Copyright © 2013 Rückert, Neu mann,
+T oussaint and Maass. This is an open-
+access article distributed under the terms
+of the Creative Commons Attribution
+License, which permits use, distribution
+and reproduction in other forums, pro-
+vided the original authors and source
+are credited and subject to any copy-
+right notices concerning any third-party
+graphics etc.
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 18
+
+
+--- Page 19 ---
+Rückert et al. Planning movement primitives
+APPENDIX
+A. DYNAMIC MOVEMENT PRIMITIVES
+The most prominent representation for movement primitives
+(MPs) used in robot control are the DMP (Schaal et al., 2003). We
+therefore used the DMPs as a baseline in our evaluations and will
+brieﬂy review this approach in order to clarify differences to our
+work. For our experiments we implemented an extension of the
+original DMPs (Pastor et al., 2009), which considers an additional
+term in the dynamical system which facilitates generalization to
+different target states. For more details we refer to Schaal et al.
+(2003)a n dPastor et al. (2009).
+DMPs generate multi-dimensional trajectories by the use of
+non-linear differential equations. The basic idea is to a use for
+each degree-of-freedom (DoF) of the robot a globally stable, lin-
+ear dynamical system which is modulated by learnable non-linear
+functions f :
+τ˙z = αzβz(g − y) − αz z − αz βz(g − y1)s + f , τ˙y = z,
+where the desired ﬁnal position of the joint is denoted byg and the
+initial position of the joint is denoted by y1.T h ev a r i a b l e sy and ˙y
+denote a desired joint position and joint velocity, which represent
+our movement plan. The temporal scaling factor is denoted by
+τ and α
+z and βz are time constants. The non-linear function f
+directly modulates the derivative of the internal state variable z.
+Thus, f modulates the desired acceleration of the movement plan.
+s denotes the phase of the movement.
+For each DoF of the robot an individual dynamical system,
+and hence an individual function f is used. The function f only
+depends on the phase s of a movement, which represents time,
+τ˙s =− αss. The phase variable s is initially set to 1 and will con-
+verge to 0 for a proper choice ofτ and αs.W i t hαs we can modulate
+the desired movement speed. The function f is constructed of the
+weighted sum of K Gaussian basis functions /Psi1i
+f(s) =
+K∑
+i=1
+/Psi1i(s)wis
+K∑
+i=1
+/Psi1i(s)
+,/Psi1i(s) = exp(− 1
+2σ2
+i
+(s − ci)2).
+As the phase variable s converges to zero also the inﬂuence of
+f vanishes with increasing time. Hence, the dynamical system is
+globally stable with g as point attractor.
+In our setting, only the linear weights wi are parameters of the
+primitive which can modulate the shape of the movement. The
+centers ci specify at which phase of the movement the basis func-
+tion becomes active and are typically equally spaced in the range
+of s and not modiﬁed during learning. The bandwidth of the basic
+functions is given by σ2
+i .
+Integrating the dynamical systems for each DoF results into
+a desired trajectory ⟨yt, ˙yt⟩ of the joint angles. W e will use an
+inverse dynamics controller to follow this trajectory ( Peters et al.,
+2008). The inverse dynamics controller receives the desired accel-
+erations ¨qdes as input and outputs the control torques u.I no r d e r
+to calculate the desired accelerations we use a simple decoupled
+linear PD-controller
+¨qdes = diag(kpos)(yt − qt) + diag(kvel)(˙yt −˙qt). (7)
+Unfortunately standard inverse dynamics control did not work in
+our setup because we had to deal with control limits of multi-
+dimensional systems. Thus, we had to use an inverse dynamics
+controller which also incorporates control constraints. For this
+reason we performed an iterative gradient ascent using the dif-
+ference between the actual (using constrained controls) and the
+desired accelerations ¨qdes as error function. This process was
+stopped after at most 25 iterations.
+For our comparison, we will learn the linear weights w for
+each DoF as well as the controller gains kpos and kvel, i.e., θ =
+[w1,..., wD, kpos, kvel].T h i sr e s u l t si n t oKD + 2D parameters
+for the movement representation, where D denotes the number
+of DoF of the robot.
+B. TASK SETTINGS AND PARAMETERS
+In this section the MP parameters and constants are speciﬁed
+for the one-dimensional via-point task and for the humanoid
+balancing task.
+B.1 ONE-DIMENSIONAL VIA-POINT TASK
+For the one-dimensional via-point task the parameters of the
+Dynamic Movement Primitives are listed in Ta b l e A 1.T h ev a l i d
+conﬁguration space for the policy search algorithm is listed in
+Ta b l e A 2. The CMA policy search algorithm has just one param-
+eter, the exploration rate. Where the best exploration rate using
+DMPs for this task found was 0.05.
+The limits of the parameterization of the Planning Movement
+Primitives (PMPs) (see Equation 4)i sl i s t e di n Ta b l e A 3.F o r
+the via-point task we choose N = 2, where the second via-point
+g
+[N] = gT was given. The exploration rate was set to 0 .1i na l l
+experiments.
+T able A1 | Via-point task: DMP movement primitive parameters.
+K αs αz βz τ
+1 0 120 . 9 0 . 1
+T able A2 | Via-point task: DMP policy search conﬁguration
+parameters.
+wk pos kvel
+Lower bound − 10 0 0 0
+Upper bound +10 0 10 0 10 0
+T able A3 | Via-point task: PMP policy search conﬁguration
+parameters with i = 1,2.
+d[1] g[1] r[i] h[i]
+Lower bound 0 .05 − 2 [1, 10− 6] 10− 4
+Upper bound 0 .4 +2 [106, 104] 10− 2
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 19
+
+
+--- Page 20 ---
+Rückert et al. Planning movement primitives
+B.2 DYNAMIC HUMANOID BALANCING TASK
+The DMP parameters for the balancing task are listed inTa b l e A 4.
+The policy search parameters are the same like for the via-point
+task, Ta b l e A 2. The exploration rate was set to 0 .1.
+T h eP M P sw e r ea g a i ne v a l u a t e dw i t hN = 2v i a - p o i n t s ,w h e r e
+the second via-point g[N] = gT (the up-right robot posture) was
+given and for the ﬁrst via-point the valid joint angle conﬁguration
+is shown in T able 1 in Rückert and Neumann (2012). The explo-
+ration rate was 0.1 and the policy search algorithm conﬁguration
+is listed in Ta b l e A 5.
+In the generalization experiment we applied the same learned
+policy of the 4-link balancing task to different initial states. For
+different initial arm joint conﬁgurations the push modulated with
+F resulted in different initial joint velocities, which are shown in
+Ta b l e A 6.
+T able A4 | Balancing task: DMP movement primitive parameters.
+K αs αz βz τ
+1 0 155 1
+T able A5 | Balancing task: PMP policy search conﬁguration
+parameters with i = 1, 2.
+d [1] r[i] h[i]
+Lower bound 0 .11 0 − 2 for angles and 10− 4 for velocities 10 − 91
+Upper bound 4 .61 0 4 for angles and 10 2 for velocities 10 − 31
+Vector 1 denotes a 4-dimensional column vector, where all elements are
+equal to 1 .
+T able A6 | Initial velocities (multiplied by 102/F ) for different initial
+states of the arm joint φ 0arm .
+φ 0arm Arm Hip Knee Ankle
+1 − 2.39 7 .56 − 8.54 1 .42
+0.5 − 3.61 6 .12 − 7.91 .32
+0.2 − 4.15 5 .29 − 7.52 1 .25
+0 − 4.27 5 .09 − 7.43 1 .24
+− 0.2 − 4.15 5 .29 − 7.52 1 .25
+− 0.4 − 3.82 5 .8 − 7.75 1 .29
+− 0.6 − 3.43 6 .38 − 81 .34
+Frontiers in Computational Neuroscience www.frontiersin.org January 2013 | Volume 6 | Article 97 | 20

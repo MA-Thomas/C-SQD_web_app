@@ -10,14 +10,14 @@ export type ActiveItem =
   | "discover"
   | "domains"
   | "method"
-  | "public-audits"
+  | "audits"
   | "element-reviews"
   | "synthesis-reviews"
   | "challenges"
   | "sponsor-console"
   | "reviewer-queue"
-  | "intake"
-  | "browse"
+  | "register"
+  | "criteria"
   | "library"
   | "sign-in";
 
@@ -29,7 +29,7 @@ type NavItem = { id: ActiveItem; href: string; label: string };
 
 const registryNavItems: NavItem[] = [
   { id: "discover", href: "/discover", label: "Discover" },
-  { id: "public-audits", href: "/public-audits", label: "Public Audits" },
+  { id: "audits", href: "/audits", label: "Audit Reports" },
   { id: "method", href: "/method", label: "Method" },
 ];
 

@@ -1,0 +1,1997 @@
+--- Page 1 ---
+RESEA RCH ARTICL E
+Identification of dynamic mass-action
+biochemical reaction networks using sparse
+Bayesian methods
+Richard Jiang
+ID
+1
+*, Prashant Singh
+ID
+2
+, Fredrik Wrede
+ID
+2
+, Andreas Hellander
+ID
+2
+,
+Linda Petzold
+ID
+1
+1 Department of Computer Science, University of California Santa Barbara, Santa Barbara, Californi a, United
+States of America, 2 Department of Informatio n Technolo gy, Uppsa la Univers ity, Uppsala, Sweden
+* rmjiang @ucsb.edu
+Abstract
+Identifying the reactions that govern a dynamical biological system is a crucial but challeng-
+ing task in systems biology. In this work, we present a data-driven method to infer the under-
+lying biochemical reaction system governing a set of observed species concentrations over
+time. We formulate the problem as a regression over a large, but limited, mass-action con-
+strained reaction space and utilize sparse Bayesian inference via the regularized horseshoe
+prior to produce robust, interpretable biochemical reaction networks, along with uncertainty
+estimates of parameters. The resulting systems of chemical reactions and posteriors inform
+the biologist of potentially several reaction systems that can be further investigated. We
+demonstrate the method on two examples of recovering the dynamics of an unknown reac-
+tion system, to illustrate the benefits of improved accuracy and information obtained.
+Author summary
+Reconstructing the correlated reactions that govern a system of biochemical species from
+observational temporal data is an essential step in understanding many biological systems.
+To facilitate this process, we propose a robust, data-driven approach based on a sparse
+Bayesian statistical model. Our approach exploits sparse Bayesian priors and an unbiased
+observational model to recover a parsimonious, interpretable reaction system from mass-
+action relations, utilizing very little user input. On a set of simulated test problems, the
+method demonstrates increased robustness and decreased bias at different levels of mea-
+surement variability, while also producing interpretable reaction systems and quantifying
+uncertainty. As a tool, the approach can be used to flexibly interrogate biological systems
+while allowing incorporation of potentially uncertain domain knowledge to improve the
+efficiency and identifiability of the problem.
+This is a PLOS Computational Biology Methods paper.
+PLOS COMP UTATIONAL  BIOLOGY
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 1 / 21
+a1111111111
+a1111111111
+a1111111111
+a1111111111
+a1111111111
+OPEN ACCESS
+Citation: Jiang R, Singh P, Wrede F, Hellander A,
+Petzold L (2022) Identification of dynamic mass-
+action biochemica l reaction networks using sparse
+Bayesian methods . PLoS Comput Biol 18(1):
+e1009830. https://d oi.org/10.1371/j ournal.
+pcbi.1009830
+Editor: Pedro Mende s, Univers ity of Connecticut
+School of Medicine, UNITED STATES
+Received: May 4, 2021
+Accepted: January 12, 2022
+Published: January 31, 2022
+Copyright: © 2022 Jiang et al. This is an open
+access article distributed under the terms of the
+Creative Commons Attribution License, which
+permits unrestricte d use, distribu tion, and
+reproduction in any medium, provided the original
+author and source are credited.
+Data Availabilit y Statement: All data and code
+used for running experime nts, model fitting, and
+plotting is available on a GitHub repository at
+https://github .com/rmjiang7/ bayes_reac tive_sindy.
+Funding: The authors acknowledg e research
+funding from NIBIB Award No. 2-R01-EB0 14877-
+04A1 (grant 2-R01-EB01487 7-04A1 to LRP). The
+content of the information does not necessaril y
+reflect the position or the policy of the funding
+agency, and no official endorsem ent should be
+inferred. The funders had no role in study design,
+
+
+--- Page 2 ---
+Introduction
+Developments in high-throughput experimental methodologies in biology have enabled the
+collection of massive amounts of time varying molecular data at small scales. This has resulted
+in significant advances in understanding the biochemical networks and mechanisms underly-
+ing physiological processes such as gene regulation. Indeed, greater understanding of regula-
+tory processes at the single cell level can aid in the development of targeted therapies for
+diseases such as cancer [1–3]. A major challenge in this process is the translation of high-
+throughput, observational molecular data into analyzable and interpretable reaction networks.
+Typically, this is accomplished by utilizing significant biological insights to first define a reac-
+tion system, and then calibrating the model based on collected data, which while accurate,
+requires substantial time and effort to iterate. An appealing avenue is to utilize data-driven
+approaches for systems identification, whereby plausible biochemical reaction networks are
+generated and estimated directly from data without the need to initially propose a system.
+While recently, many such methods have been developed to infer networks from a wide variety
+of different datasets, it remains a challenging statistical and computational task [4]. Most
+works of estimating networks typically focus on either reconstructing a network without
+assuming any known dynamics due to destructive time series measurements [5–7], or produc-
+ing networks that replicate dynamics, but without focusing on interpretability [8–12].
+In this work, we are primarily interested on identifying interpretable mass-action biochem-
+ical reaction networks using only the observed time series of species concentrations. Expand-
+ing upon the problem formulation first proposed as Reactive SINDy in [13], we automatically
+enumerate the allowable mass-action reactions given a set of species and a library of ansatz
+reactions and utilize advances in sparse Bayesian inference to generate posterior distributions
+of interpretable biochemical reaction systems. Compared with Reactive SINDy, our method
+provides uncertainty estimates over potential reaction systems, reduces a major source of bias
+in the previous method, and produces potentially several interpretable reaction networks. Fur-
+thermore, the transparent statistical formulation of the problem allows us to easily incorporate
+existing, potentially uncertain, domain knowledge via prior distributions to improve the effi-
+ciency and identifiability of the problem.
+The remainder of this paper proceeds as follows. In Materials and methods, we describe
+mass-action biochemical reaction networks and formulate the problem of inferring these net-
+works from observational data. Next, we propose improvements to the existing methodology
+and describe the specifics of the proposed model applied to inference of reaction networks. In
+Results, we demonstrate how our methodology can be used in two different examples to
+retrieve interpretable networks from observational concentration data. We close in Discussion
+by noting a few details for usage, detailing some future directions, and mentioning the limita-
+tions of our method. All implementations and code can be found at https://github.com/
+rmjiang7/bayes_reactive_sindy.
+Materials and methods
+Mass-action biochemical kinetics
+Systems of biochemical species reacting under any number of reaction channels are commonly
+modeled dynamically using the framework of chemical kinetics. Specifically, denote Xðt Þ 2
+R
+N
+as the vector of concentrations of each of N species at time t. The evolution of the system
+can be modeled using the following set of coupled ordinary differential equations (ODEs)
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 2 / 21
+data collection and analysis , decision to publish, or
+preparation of the manuscript.
+Competing interests : The authors have declared
+that no competing interests exist.
+
+
+--- Page 3 ---
+formally known as the reaction rate equations:
+d X
+dt
+¼ Sf ðXÞ;
+ð1Þ
+where S 2 Z
+N �M
+is the stoichiometric matrix with M reactions among N species and f(X) is the
+vector of all rate functions.
+Although theoretically, f(X) can take the form of any nonlinear function, in this work we
+assume that the system follows mass-action kinetics [14] and thus, the reaction rates are pro-
+portional to the product of the concentrations of each reactant in the case of multiple reactants,
+and proportional to the concentration of the reactant in single reactant reactions.
+Network inference for mass-action reaction systems
+Suppose we observe a time series of N species concentrations at T discrete times:
+^
+X ðt
+j
+Þ 2 R
+N
+; j ¼ f0; . . . ; T g:
+Given this data and assuming that the system is governed by up to 2nd-order mass-action
+kinetics and the dynamics of Eq (1), we wish to recover a parsimonious system of expressible
+reactions that can explain the observed data.
+Under these constraints, this problem can be posed as a linear regression, given a library of
+ansatz reactions. More specifically, suppose we initially specify a large set of D possible reac-
+tions among the N species in our system. Each reaction can be expanded into a stoichiometry s
+and a rate function f(X), where the rate function is known due to the assumption of mass-
+action rate kinetics. Let S
+c
+2 Z
+N×D
+denote the complete stoichiometric matrix constructed by
+stacking all D stoichiometries into a matrix. The reaction rate equations then take the form,
+d X
+dt
+¼ S
+T
+c
+k
+1
+f
+1
+ðXÞ
+k
+2
+f
+2
+ðXÞ
+� � �
+k
+D
+f
+D
+ðXÞ
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+; ð2Þ
+where k
+i
+> 0 is the unknown rate-constant and f
+i
+is simply a product of the reactants for the i-
+th reaction. Letting k = [k
+1
+, . . ., k
+D
+] denote the vector of all of the reaction rates, we aim to esti-
+mate k such that, when solved, Eq (2) replicates the observations
+^
+X at all t
+j
+. Many methods
+exist to solve these types of problems, such as ridge, LASSO, and Elastic net regression [15–
+18].
+Although S
+c
+is potentially high dimensional, conditional on the initially specified set of D
+reactions, in most situations D over-specifies the possible reactions. Hence, to replicate the
+observations, a safe assumption is that most potential reactions do not exist, which is equiva-
+lent to setting k
+i
+= 0 when the i-th reaction does not contribute to the dynamics of the system.
+This assumption can be captured by estimating k using sparse regression methods. A small
+reaction system can then be expressed by rewriting the system in terms of only the non-zero
+reactions.
+Sparse regression methods for estimating dynamical systems from data have been widely
+applied in the last few years. More generally, when Eq (1) is generated from polynomial basis
+functions rather than ansatz reactions, this becomes Sparse Identification of Nonlinear
+Dynamics (SINDy) [19], which has been applied to biological systems [8], though without the
+specific aim to recover interpretable reactions. Reactive SINDy, as described above, expands
+SINDy by constraining the basis functions to such ansatz mass-action reactions. Both of these
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 3 / 21
+
+
+--- Page 4 ---
+methods estimate the coefficients k using LASSO regularization, resulting in maximum likeli-
+hood networks that do not inform about the uncertainty associated with the particular fits, an
+especially important feature when data is sparse and noisy. Reactive SINDy uses finite differ-
+ence derivative estimates from observations to transform Eq (2) into a linear regression prob-
+lem, which can result in significant bias for estimating networks when measurements are
+sparse and noisy, as is often the case in biological systems.
+More specifically, using the assumptions of mass-action kinetics and the law of parsimony,
+Reactive SINDy solves a mixed LASSO and ridge regression optimization problem. Letting
+d
+^
+X
+dt
+ðt
+i
+Þ be the derivatives numerically estimated from the observations
+^
+X ðt
+j
+Þ via second-order
+finite differences, the optimization problem solved is
+FðX Þ ¼
+k
+1
+f
+1
+ðX ðt
+j
+ÞÞ
+k
+2
+f
+2
+ðX ðt
+j
+ÞÞ
+� � �
+k
+D
+f
+D
+ðX ðt
+j
+ÞÞ
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+k ¼ arg min
+k
+1
+2T
+k
+^
+X   FðX Þk
+2
+F
+þ alkk k
+2
+þ að1   lÞkk k
+2
+2
+� �
+sub je ct to k � 0:
+The equivalent statistical model for the LASSO optimization can be summarized as
+k
+i
+� Lapl aceðlÞ;
+d
+^
+X
+dt
+ðt
+j
+Þ � Nor mal S
+T
+c
+k
+1
+f
+1
+ðX ðt
+j
+ÞÞ
+k
+2
+f
+2
+ðX ðt
+j
+ÞÞ
+� � �
+k
+D
+f
+D
+ðX ðt
+j
+ÞÞ
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+; 1
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+; j ¼ 0; . . . ; T ;
+ð3Þ
+which can also be fit using Bayesian methods to provide uncertainty estimates.
+In this work we improve on Reactive SINDy in two key ways. First, we estimate k using the
+sparse Bayesian regularized horseshoe prior to obtain uncertainty estimates as well as to intro-
+duce a natural way of incorporate existing domain knowledge via prior distributions. Second,
+we avoid biased numerical derivative estimates by re-formulating the statistical model in terms
+of the solution of the ODE. This better captures the observational model and allows us to
+incorporate alternative models of measurement noise. Using recent advances in automatic dif-
+ferentiation software for sensitivity analysis of ODE systems [20–23], this can be solved effi-
+ciently and provides more accurate solutions, especially in the case of sparsely measured data.
+Bayesian reactive SINDy
+In this section we introduce the regularized horseshoe prior [24] used in our Bayesian formu-
+lation of the Reactive SINDy model and the modified observational model, which better cap-
+tures the measurement process and avoids biased, low-order derivative estimates. We
+construct the complete stoichiometric matrix S
+c
+using a library of possible mass-action ansatz
+reactions and all reaction rates are specified by k as indicated in Eq (2). Details for how we con-
+struct a set of ansatz reactions can be found in the S1 Appendix.
+Sparse Bayesian regularized horseshoe priors. A challenge in implementing a Bayesian
+formulation of this problem is the fact that the LASSO penalization used for sparse parameter
+estimation, which can be translated as a statistical model to Eq (3), does not result in sparse
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 4 / 21
+
+
+--- Page 5 ---
+Bayesian posterior distributions. Instead, we adapt the regularized horseshoe prior, an exten-
+sion of the standard horseshoe prior [25], which is a drop-in replacement for the LASSO
+derived Laplace prior.
+Letting N be the number of species, T be the number of observations, and D be the number
+of ansatz reactions, the regularized horseshoe prior placed on the reaction coefficients k takes
+the form
+l
+i
+� Cau chy
+þ
+ð0; 1Þ;
+~
+l
+i
+¼
+ffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffi
+c
+2
+l
+2
+i
+c
+2
+þ ðtl
+i
+Þ
+2
+s
+;
+k
+i
+� No rmal ð0; t
+~
+l
+i
+Þ; i ¼ 1; . . . ; D:
+ð4Þ
+This promotes sparse solutions in the following way: each reaction rate k
+i
+is given a normal
+prior centered around 0 with a standard deviation of τλ
+i
+, where τ is a global shrinkage parame-
+ter shared among all reaction rates and λ
+i
+is a positive parameter specific to each reaction rate.
+The heavy tailed half-Cauchy priors on the individual λ
+i
+allows for the values to grow
+extremely large. This has the following effect:
+if ðtl
+i
+Þ
+2
+� c
+2
+; t
+~
+l
+i
+! c
+if ðtl
+i
+Þ
+2
+� c
+2
+; t
+~
+l
+i
+! tl
+i
+:
+Thus, if k
+i
+is estimated to be non-zero, λ
+i
+is allowed to become large and k
+i
+breaks away from τ
+toward a regularized value of c
+2
+, which is an estimate of the scale of the non-zero terms. On the
+other hand, if k
+i
+is estimated to be zero, λ
+i
+becomes small and k
+i
+is shrunken to 0 with an often
+very small standard deviation. The horseshoe prior has the effect of placing significant prior
+mass towards 0 for all parameters, but allowing for any individual parameter to be non-zero if
+there is sufficient evidence to do so. The regularized horseshoe further shrinks non-zero esti-
+mates using a Gaussian slab with variance c
+2
+, to help when parameters are weakly identified
+and to prevent non-zero values from growing too large.
+The pivotal global shrinkage parameter τ specifies the scale of the near-zero reaction rates,
+which is relevant because, compared to the spike-and-slab prior [26], the regularized horse-
+shoe prior is continuous in all parameters, preventing any parameter from becoming exactly 0.
+Furthermore, smaller values of τ also result in sparser networks. For our problem, as reaction
+rates can often be very small, specifying the scale at which a reaction is considered negligible
+can dramatically affect the interpretation and the simulated dynamics.
+Following [24], we place a hyper-prior on the term c with distribution
+c � Inv-Gamm a ða; bÞ:
+The c parameter regularizes by essentially placing a N ð0; c
+2
+Þ prior on non-zero rates, prevent-
+ing them from getting too large. The non-regularized horseshoe is retrieved when c
+2
+! 1.
+The regularized horseshoe prior offers a few distinct advantages compared to other sparse
+Bayesian priors. Primarily, the dependency structure formed by introducing the global τ and
+the local λ
+i
+parameters leads to sparser solutions that can borrow information from other reac-
+tions. The regularized horseshoe, as a continuous relaxation of the commonly used sparse
+Bayesian spike-and-slab prior [26, 27], allows for efficient Bayesian computation using modern
+gradient based MCMC samplers such as Hamiltonian Monte Carlo (HMC) [28] or Variational
+Inference [29]. This allows it to be implemented in probabilistic programming languages such
+as Stan [30], PyMC3 [31], or Pyro [32].
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 5 / 21
+
+
+--- Page 6 ---
+Observational model. A potentially large source of bias in SINDy and Reactive SINDy as
+presented in Eq (3) is the need to first estimate
+d
+^
+X
+dt
+from observations of the system. This pres-
+ents an issue as standard methods of estimating derivatives, such as finite difference methods,
+become much less accurate as the time between observations increases, resulting in heavily
+biased estimates of k. To correct for this, we modify the observational model as follows:
+Zðt
+j
+Þ ¼
+Z
+t
+j
+0
+S
+T
+c
+k
+1
+f
+1
+ðZ ðt ÞÞ
+k
+2
+f
+2
+ðZ ðt ÞÞ
+� � �
+k
+D
+f
+D
+ðZ ðt ÞÞ
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+dt
+^
+X ðt
+j
+Þ � Log-N orma l ðZðt
+j
+Þ; sÞ; j ¼ 0; . . . ; T :
+Rather than assuming that we observe derivatives of the process, as in the Eq (3), this formula-
+tion models that the underlying system follows a latent variable Z(t
+j
+), which is the solution of
+the ODE. We observe noisy measurements of the underlying system
+^
+X ðt
+j
+Þ at times t
+j
+. By
+directly modeling the observations, there is no need to pre-process the data by estimating
+derivatives.
+In this work, we also assume that the measured concentrations of each species are corrupted
+by log-normal error. This captures both that concentration measurements are strictly positive
+and that at higher concentrations, measurements are more variable. In addition, this formula-
+tion enables us to easily change the measurement error model to better capture the user’s
+beliefs, without modifying the regularized horseshoe prior for inferring the network. As an
+example, a Poisson error model, such as that explained in [33], can be applied under the
+assumption that measured values are positive and discrete, and that measurements at some
+time t
+j
+are distributed with mean and variance of Z(t
+j
+). The use of MCMC for sampling enables
+the observational model to be configured based on the experimental setup as long as the likeli-
+hood remains tractable.
+The use of MCMC for sampling enables the observational model to be configured based on
+the experimental setup as long as the likelihood remains tractable. For biochemical reaction
+networks, PTLasso [34] apply a similar latent observation model, but with the Laplace prior to
+the parameters of a biochemical reaction network, further using parallel tempering MCMC to
+obtain sparse Bayesian estimates on models of up to a dozen different reactions.
+The latent variable formulation also allows for the realistic scenario of observing only some
+of the species in the system. Suppose that in a system consisting of 5 species, we can only
+observe species n = {1, 2}. Then the observational model can be easily modified to
+Zðt
+j
+Þ ¼
+Z
+t
+j
+0
+S
+T
+c
+k
+1
+f
+1
+ðZ ðt ÞÞ
+k
+2
+f
+2
+ðZ ðt ÞÞ
+� � �
+k
+D
+f
+D
+ðZ ðt ÞÞ
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+dt
+^
+X
+n
+ðt
+j
+Þ � Log-N orma l ðZ
+n
+ðt
+j
+Þ; sÞ; j ¼ 0; . . . ; T ; n ¼ f1; 2g:
+ð5Þ
+This is possible because the latent trajectory Z does not directly depend on the observed values
+^
+X . In comparison, for Eq (3) used in Reactive SINDy and SINDy, the regression directly
+depends on the observed values, which thus requires complete observations of the system.
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 6 / 21
+
+
+--- Page 7 ---
+Statistical model and estimation. Combining the regularized horseshoe prior and the
+latent variable observational model, the complete hierarchical statistical model is specified by
+l
+i
+� Cau chy
+þ
+ð0; 1Þ;
+~
+l
+i
+¼
+ffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffi
+c
+2
+l
+2
+i
+c
+2
+þ ðtl
+i
+Þ
+2
+s
+;
+k
+i
+� Nor mal ð0; t
+~
+l
+i
+Þ; i ¼ 1; . . . ; D
+Zðt
+j
+Þ ¼
+Z
+t
+j
+0
+S
+T
+c
+k
+1
+f
+1
+ðZ ðt ÞÞ
+k
+2
+f
+2
+ðZ ðt ÞÞ
+� � �
+k
+D
+f
+D
+ðZ ðt ÞÞ
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+dt
+^
+X ðt
+j
+Þ � Log-N orma l ðZðt
+j
+Þ; sÞ:
+ð6Þ
+The algorithm for network identification is then as follows. First, we construct the complete stoi-
+chiometric matrix, S
+c
+, and the set of linear and nonlinear reaction rate functions f(X) implied by
+mass-action kinetics. In our examples, the library of reactions consists of a large set of zero, first,
+and second order reactions types between all species modeled, which is automatically defined by
+our implementation. We note here that our method of generating possible reactions is intended
+to be general to demonstrate the method. In practice, the set of possible reactions is something
+the modeler can and should modify according to the constraints of the problem.
+Provided with S
+c
+and f(X), the sparse Bayesian posterior distribution pðk j
+^
+X Þ is approxi-
+mated from the above statistical model using the No-U-Turns [35] sampler implemented in
+Stan [30].
+As the regularized horseshoe is continuous in all parameters, no rate parameter will be set
+exactly to zero. Thus to decide whether a reaction is to be removed from the system, we employ
+the pruning technique adopted from [36]. Specifically, we estimate
+P ðt
+~
+l
+i
+< dÞ > p
+0
+; i ¼ 1; . . . ; D
+using the posterior distribution. This can be roughly interpreted as pruning all reactions where
+the posterior probability that the scale of k
+i
+is less than δ is sufficiently large. This metric is sen-
+sible because rates which are shrunken towards 0 in the regularized horseshoe are scaled by
+τλ
+i
+. This leaves two tuning hyperparameters, δ and p
+0
+. These can be calibrated for a model by
+choosing the threshold such that, allowing more reactions does not improve the model’s fit to
+the data, while removing reactions degrades the fit. In our examples, we find that δ = 1e
+−3
+and
+p
+0
+= 0.90 work well for these models.
+The complete implementation and all replicating results can be found at https://github.
+com/rmjiang7/bayes_reactive _sindy.
+Results
+We demonstrate our method on two synthetic examples where data is first generated from a
+known system of reactions and our method is used to recover the underlying network from a
+relatively large set of possible reactions. In each example, results are compared to those of
+Reactive SINDy, to show the ability of our model to obtain a network, with uncertainty esti-
+mates, that replicates the observations in addition to demonstrating the superior performance
+in the case of sparse observations due to the modified observational model. In the second,
+larger problem, we demonstrate the ability of our method to discover multiple small reaction
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 7 / 21
+
+
+--- Page 8 ---
+systems that can capture the observations and discuss identifiability issues. Further descrip-
+tions and more precise model specifications can be found in the S1 Appendix.
+Lotka-Volterra
+The Lotka-Volterra predator-prey system is a simple but informative example of a non-linear
+system with oscillatory dynamics. Although not strictly a biochemical reaction system, we pro-
+vide it as an example for evaluating the model formulation and method. Briefly, the Lotka-Vol-
+terra system models the interaction dynamics of two species X ≔ {P, Y} where P is the
+predator and Y is the prey. This can be described using the following reactions:
+Y !
+k
+1
+2Y
+P þ Y !
+k
+2
+2P
+P !
+k
+3
+�;
+which corresponds to the following stoichiometric matrix and rate vectors under mass-action
+kinetics,
+S ¼
+0 1
+1 0
+0   1
+0
+B
+B
+B
+@
+1
+C
+C
+C
+A
+; f ðXÞ ¼
+k
+1
+½Y �
+k
+2
+½P �½Y �
+k
+3
+½P �
+0
+B
+B
+B
+@
+1
+C
+C
+C
+A
+:
+With k
+1
+= 1, k
+2
+= 0.01, k
+3
+= 0.3 and initial conditions X(t
+0
+) ≔ {50, 100}, this gives rise to stable
+oscillations.
+Data is generated by solving the above system of reactions and perturbing with Log-Nor-
+mal(0, 0.2) noise at fixed times to simulate a noisy measurement process. The reactions com-
+prising the complete stoichiometric matrix S
+c
+from which we will recover the underlying
+system is provided in Table 1 and adopted from [13]. In total, there are 16 possible reactions in
+Table 1. Library of ansatz reactions for the Lotka-Vol tera model.
+Reaction Index Allowed Reactions True Rate Constant
+0
+2X !
+k
+1
+0
+k
+1
+= 0
+1
+2Y !
+k
+2
+0
+k
+2
+= 0
+2
+X !
+k
+3
+2X
+k
+3
+= 1.0
+3
+X þ Y !
+k
+4
+2Y
+k
+4
+= 0.01
+4
+X !
+k
+5
+0
+k
+5
+= 0.3
+5
+X þ Y !
+k
+6
+2X
+k
+6
+= 0
+6
+X !
+k
+7
+0
+k
+7
+= 0
+7
+2Y !
+k
+8
+Y
+k
+8
+= 0
+8
+Y !
+k
+9
+2Y
+k
+9
+= 0
+9
+2X !
+k
+10
+X
+k
+10
+= 0
+10
+X þ Y !
+k
+11
+X
+k
+11
+= 0
+11
+X þ Y !
+k
+12
+Y
+k
+12
+= 0
+12
+2X !
+k
+13
+Y
+k
+13
+= 0
+13
+X !
+k
+14
+Y
+k
+14
+= 0
+14
+Y !
+k
+15
+X
+k
+15
+= 0
+15
+X !
+k
+16
+2Y
+k
+16
+= 0
+https://d oi.org/10.1371/j ournal.pc bi.1009830. t001
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 8 / 21
+
+
+--- Page 9 ---
+this system, three of which are non-zero in the original system. We generate data at three dif-
+ferent measurement frequencies dt = {0.2, 1, 2} between t = [0, 15] and estimate k separately
+for each using the same S
+c
+. Trajectories of the two species are shown in Fig 1. For estimation
+from the regularized horseshoe model, we set τ = 1e
+−8
+and estimate c along with the other
+parameters by placing the prior c * Inv- Gamma(4, 4). A total of 4000 samples are drawn
+using four MCMC chains. We note that while we use MCMC for accuracy and demonstration
+purposes, variational inference can also be used to obtain fast approximate solutions and is
+supported in our implementations. In our experiments, we found that the variational approxi-
+mations were generally reliable, though this largely depends on the problem.
+In Fig 2a, we show the posterior credible intervals for the recovered rate constants from each
+of the three measurement frequencies, which are heavily centered around the true values for all
+reactions. Fig 2b shows the point estimates obtained by using Reactive SINDy under equivalent
+experimental setups. Notably, both methods can recover the reaction system with frequent mea-
+surements but Reactive SINDy degrades considerably as measurements become more sparse.
+More specifically, the difference in the results demonstrates the bias introduced by estimat-
+ing derivatives. At observation intervals dt = 1.0 and dt = 2.0, too much information is lost
+Fig 1. Lotka-Volt erra observation data. Simulate d data used for network identification . Log-Norma l noise is added
+to the true trajectory, and measurem ent frequency is change d to show the uncertainty in posteriors.
+https://d oi.org/10.1371/j ournal.pc bi.1009830. g001
+Fig 2. Lotka-Vo lterra estimated reactions . (a) Estimate d parameters using Eq (6). Reactions correspond to the reactions specified
+in Table 1 (b) Estimated parameters using Reactiv e SINDy at different measurem ent frequencies as well as using noise-less
+measurem ents.
+https://doi. org/10.1371/j ournal.pcb i.1009830.g 002
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 9 / 21
+
+
+--- Page 10 ---
+from estimating derivatives coupled with measurement noise to obtain the correct system.
+Fig 3 shows the differences in inferred dynamics along with predictive uncertainty intervals
+from the networks recovered using our observational model, (a), and Reactive SINDy, (b).
+Our model remains in phase with the observations while the networks derived from using esti-
+mated derivatives demonstrate a systematic bias away from the true reaction system, even in
+the case of dt = 0.2 due to measurement noise.
+With the Bayesian treatment of the problem, we can also quantify uncertainty in the non-
+zero reaction rates. This informs us of the plausible range of reaction rates, given the observed
+data, and can be useful to detect which parameters the model is able to identify with evidence
+of correlated reactions. In Fig 4, the posterior distributions of the non-zero estimated parame-
+ters are shown, demonstrating that as we increase measurement frequency, uncertainty
+decreases. Furthermore, in this system there is mild correlation between the reaction rates,
+indicating that they vary together to replicate the oscillating behavior.
+Partially observed species. In the previous example, we assumed that the species were
+completely observed. However, under the latent variable formulation, this is not strictly
+required. In this section, we demonstrate inference of the network for the identifiable Lotka-
+Volterra example, when only the prey species, Y, is observed. In this case, the statistical obser-
+vational model can be changed to,
+Zðt
+j
+Þ ¼
+Z
+t
+j
+0
+S
+T
+c
+k
+1
+f
+1
+ðZ ðt ÞÞ
+k
+2
+f
+2
+ðZ ðt ÞÞ
+� � �
+k
+D
+f
+D
+ðZ ðt ÞÞ
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+dt
+^
+Y ðt
+j
+Þ � Log- Norm al ðZ
+2
+ðt
+j
+Þ; sÞ; j ¼ 0; . . . ; T ;
+ð7Þ
+where we apply the likelihood only to the observations of Y.
+Fig 5 shows the simulated trajectories and posterior distributions obtained by using our
+model under this scenario. Compared to the situation where both species are observed, the
+Fig 3. Reconstr ucted trajector ies. (a) Using posterior samples from Eq (6). Even at smaller observation frequencies, the
+observed data is accurately captured, though (as expected) with greater uncertai nty. (b) As Reactiv e SINDy estimat es derivatives,
+errors in the numerical methods lead to large deviations in the reconstruct ed trajectories as sampling frequency and noise
+increase. Althoug h a single trajectory at dt = 0.2 may capture the oscillating behavior , it is clearly biased away from the true
+observation s.
+https://doi. org/10.1371/j ournal.pcb i.1009830.g 003
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 10 / 21
+
+
+--- Page 11 ---
+uncertainty is significantly higher for the same reactions because the information gained from
+observing P is lost. However, the method is still able to retrieve the correct networks, as the
+oscillating regime for this problem is generally unique.
+Sums of observed species. Similar to above, the latent variable formulation we have pre-
+sented allows for modeling of the situation where a sum of species concentrations is observed,
+but not any of the individual species. In this case, for the Lokta-Volterra system, letting W = X
++ Y be the observed sum of X and Y, the statistical model can be stated as
+Zðt
+j
+Þ ¼
+Z
+t
+j
+0
+S
+T
+c
+k
+1
+f
+1
+ðZ ðt ÞÞ
+k
+2
+f
+2
+ðZ ðt ÞÞ
+� � �
+k
+D
+f
+D
+ðZ ðt ÞÞ
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+dt
+^
+W ðt
+j
+Þ � Log-N orma l ðZ
+1
+ðt
+j
+Þ þ Z
+2
+ðt
+j
+Þ; sÞ; j ¼ 0; . . . ; T ;
+ð8Þ
+Fig 4. Lotka-Volt erra: Posterior distributions of non-zero reactions using the proposed model. As expected,
+uncertaint y in the parame ters decreases as the measu rement frequency decreases, but all are concentrate d in relatively
+the same area. Only a single network is consistently identified given this data, indicating that identifiabil tiy is not a
+problem for this system.
+https://d oi.org/10.1371/j ournal.pc bi.1009830. g004
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 11 / 21
+
+
+--- Page 12 ---
+Fig 6 shows that our model under only additive observations can still recover the correct
+network under this highly identifiable model. Similar to the previous case, uncertainties in the
+rate constants are, as expected, larger.
+Prokaryotic auto-regulation
+To evaluate the method on a larger reaction system with more possible reactions, we explore a
+simple synthetic model of auto-regulation of a protein P by a gene g in a prokaryotic cell [37].
+Fig 5. Identified trajector ies and posterior from partial observa tions. The true network can still be captured using only observat ions of Y
+however the credible intervals are significant ly higher due to the loss of observa tions of P.
+https:// doi.org/10.1371 /journal.pcbi.1 009830.g005
+Fig 6. Identified trajector ies and posterior from additive . Similar to the case of observing only one Y, the true network can still be recovered in
+this example however credible intervals are significan tly larger.
+https:// doi.org/10.1371 /journal.pcbi.1 009830.g006
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 12 / 21
+
+
+--- Page 13 ---
+The model is described by the following reaction system:
+g þ P
+2
+!
+k
+1
+gP
+2
+ðRepr ess ionÞ
+gP
+2
+!
+k
+2
+g þ P
+2
+g !
+k
+3
+g þ r ðTran scr ipti onÞ
+r !
+k
+4
+r þ P ðTra nsla tio nÞ
+2P !
+k
+5
+P
+2
+ðDim eriz atio nÞ
+P
+2
+!
+k
+6
+2P
+r !
+k
+7
+� ðmRN A Deg rad atio nÞ
+P !
+k
+8
+� ðProt ein Deg rad at ionÞ;
+where gP
+2
+is the bound gene and r is the mRNA of protein P. Protein P represses its own tran-
+scription by binding to an available gene location. Denoting X ≔ {g, P
+2
+, gP
+2
+, r, P}, we generate
+data from the system with parameters k
+1
+= 0.5, k
+2
+= 1, k
+3
+= 0.15, k
+4
+= 1, k
+5
+= 0.5, k
+6
+= 0.5, k
+7
+=
+1.5, k
+8
+= 0.3 and initial conditions X(t
+0
+) ≔ {20, 20, 20, 20, 20, 20} at dt = 0.05 for times in the
+interval [0, 0.5]. Furthermore, Log-Normal(0, 0.07) noise is added to the observations. At
+these parameter values, g and P decay rapidly, thus a small dt is required to provide sufficient
+information to the model. True trajectories and observations are shown in Fig 7.
+Using our library of ansatz reactions, we construct a complete stoichiometric matrix S
+c
+of
+260 possible reactions. The exact reactions included can be explored in the code repository.
+For estimation from the regularized horseshoe model in this problem, we set τ = 1e
+−6
+and esti-
+mate c along with the other parameters by setting c * Inv- Gamma(5, 25). We run several
+MCMC chains to obtain results however only report the best two networks obtained for each
+experiment.
+Including known reactions. To replicate the more common situation where the biologist
+has prior domain knowledge about the system under study, we explored the scenario where
+the first 4 reactions and rate parameters, k
+1
+, k
+2
+, k
+3
+, and k
+4
+, are known with confidence and the
+aim is to retrieve a system of reactions which replicates the observations, given these four
+known reactions. Below, we present the results of this setting to demonstrate a realistic situa-
+tion where partial knowledge about system. The same experiment when no reactions are
+known is presented in the S1 Appendix with similar results though converging to different
+sparse networks.
+Fig 7. Prokaryotic auto-regulatio n observat ion data. Simulated data used for the prokaryotic auto-reg ulation model.
+Log-normal observation al noise is added to the true trajectory.
+https://d oi.org/10.1371/j ournal.pc bi.1009830. g007
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 13 / 21
+
+
+--- Page 14 ---
+Table 2 lists the two selected networks obtained from MCMC chains with the rate constants
+set to the posterior median. Notably, each chain converges to different reaction pathways, nei-
+ther of which are the true generating network. We note that, though we only present two net-
+works here, our method was capable of producing several different reaction pathways with
+roughly the same number of reactions also capable of capturing the data.
+As Fig 8 demonstrates, although the reaction networks are different from the ground truth,
+the dynamics produced from each inferred reaction system appear plausible, especially given
+the noise present in data. Fig 9 shows the posterior distributions of the non-zero reactions for
+both networks provided by our Bayesian approach. The marginals for each reaction rate in
+both cases are relatively tight, indicating that the reactions are well identified within in each
+discovered mode.
+Reactive SINDy is also capable of inferring a network, however it is considerably less sparse
+and with larger reaction rates than those from our method. Under a threshold of 1e
+−2
+, selected
+such that thresholding larger reactions changes the dynamics, the best estimated network was
+comprised of 24 total reactions. The full network is detailed in the S1 Appendix. As Fig 8
+Table 2. Selected recovered networ ks for prokaryotic auto-regulat ion system. The first 4 reactions are assumed to
+be known and the remaining reactions are to be inferred by the method.
+True Network Network 1 Network 2
+g þ P
+2
+!
+0:5
+gP
+2
+g þ P
+2
+!
+0:5
+gP
+2
+g þ P
+2
+!
+0:5
+gP
+2
+gP
+2
+!
+1
+g þ P
+2
+gP
+2
+!
+1
+g þ P
+2
+gP
+2
+!
+1
+g þ P
+2
+g !
+0:15
+g þ r g !
+0:15
+g þ r g !
+0:15
+g þ r
+r !
+1
+r þ P r !
+1
+r þ P r !
+1
+r þ P
+2P !
+0:5
+P
+2
+2r !
+0:05
+P 2P !
+0:5
+P
+2
+P
+2
+!
+0:5
+2P 2P !
+0:26
+gP
+2
+2P
+2
+!
+0:06
+P
+r !
+1:5
+� P
+2
+þ gP
+2
+!
+0:04
+P gP
+2
+þ r !
+0:05
+P
+2
+þ gP
+2
+P !
+0:3
+� P
+2
+þ P !
+0:4
+2P
+2
+https://d oi.org/10.1371/j ournal.pc bi.1009830. t002
+Fig 8. Dynamics from the identified networks. The dynamics from both recovered networks are different from the
+truth and each other, but still manag e to produce plausible dynamics when compa red to the noisy data. This points to
+an unidentifi ability in the system, caused by noise in the data and structura l identifiab ility issues.
+https://d oi.org/10.1371/j ournal.pc bi.1009830. g008
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 14 / 21
+
+
+--- Page 15 ---
+demonstrates, though, the replicated trajectory is still consistent with the observations. In this
+example, the scale of the observed concentrations and the small observation frequency provide
+well estimated derivatives, resulting in minimal bias for the reactive SINDy method. Under
+these circumstances, it may be preferable to utilize Reactive SINDy as it can be run signifi-
+cantly faster than our method while still providing reasonable results as shown here.
+That multiple networks are obtained by different chains in this problem is largely due to the
+facts that our complete stoichiometric matrix constructed from the above process does not
+restrict many reactions. In this, an iterative procedure can be applied, where the recovered net-
+works can be examined by the user for plausibility and implausible reactions can be excluded
+in future runs to converge to a different reaction system. Realistically, we expect that the com-
+plete stoichiometric matrix will often be constructed in a more careful manner so as to elimi-
+nate many of the implausible reactions before the method is used. We discuss the
+identifiability issue in the next section. Interestingly, the inferred networks converge largely to
+2nd-order reactions to describe the system. While from a combinatorial perspective, this is not
+surprising considering that the ansatz library contains significantly more 2nd-order reactions
+than 1st-order, a possibility is to add a bias to the system for 1st-order reactions via a prior
+weight on certain reactions.
+Discussion
+Observational model
+The latent variable formulation for the observational model provides robustness when obser-
+vations are noisy or observations are not made for all of the species. In these situations, it is
+valid and desirable to use this model as it takes into account the true measurement process as
+demonstrated in the Lotka-Volterra example. However, this comes at a substantial computa-
+tional cost. In some situations, when all of the species are observed and the measurements are
+not too noisy, simply using the Bayesian Regularized Horseshoe along with estimated deriva-
+tives as an extension to Reactive SINDy is sufficient and significantly faster to identify models.
+Fig 9. Posterior distribut ions over non-zero reaction rates. Pair plots of the two distinct reaction networks inferred by the model. Reacti on
+rates within each network exhibit are relatively well determine d. This indicates a distinct multi-modali ty or unidentifi ability in the problem .
+https:// doi.org/10.1371 /journal.pcbi.1 009830.g009
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 15 / 21
+
+
+--- Page 16 ---
+The model for this is:
+l
+i
+� Cau chy
+þ
+ð0; 1Þ;
+~
+l
+i
+¼
+ffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffiffi
+c
+2
+l
+2
+i
+c
+2
+þ ðtl
+i
+Þ
+2
+s
+;
+k
+i
+� No rma l ð0; t
+~
+l
+i
+Þ; i ¼ 1; . . . ; D:
+d
+^
+X
+dt
+ðt
+j
+Þ � No rma l S
+T
+c
+k
+1
+f
+1
+ðX ðt
+j
+ÞÞ
+k
+2
+f
+2
+ðX ðt
+j
+ÞÞ
+� � �
+k
+D
+f
+D
+ðX ðt
+j
+ÞÞ
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+; 1
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+; j ¼ 0; . . . ; T ;
+ð9Þ
+where
+d
+^
+X
+dt
+is estimated numerically as previously discussed. This avoids the need to use an ODE
+solver and can provide Bayesian sparsity estimates similar to PTLasso [34]. We suggest that
+this method be used initially as it can often result in reasonable networks significantly faster.
+Identifiability
+A major problem in the identification of reaction systems is the possibility of multiple struc-
+tural networks which can produce nearly identical results, especially when data is limited and
+noisy. As multiple definitions of the unidentifiability problem can be found in the literature, in
+our work, we are referring to the case where different dynamic networks with different param-
+eterizations and equations can yield indistinguishable outputs and thus cannot be identified
+from the data given. While the sparsity priors used in this paper aim to resolve this situation
+by biasing estimates toward systems with fewer reactions, this remains an issue as multiple
+structural pathways may still exist with a very similar number of reactions. Immediately, this
+issue can be somewhat relaxed in a few ways.
+First, constraining the allowed reactions will naturally bias the solutions away from certain
+pathways. However, this requires significant domain knowledge of the species or the system
+under observation. The work of Tuza et al. [18] presents one possible way to restrict the reac-
+tion basis to make the problem more identifiable while also using the LASSO with estimated
+derivatives. Another possibility would be to first pre-process the dictionary of functions to
+eliminate the unidentifiable graphs aided by the concept of linearly conjugate reaction systems
+such as demonstrated in [38]. Further exploration in this direction is needed as their algorithm
+focuses on expanding a known reaction system into it’s equivalents while we do not know the
+reaction graph at all. This can potentially automatically eliminate the structural unidentifiabil-
+ities in the problem before inferring the system. An alternative use of the method o [38] would
+be to retrieve the set of unidentifiable graphs from the reaction systems inferred from our
+method. This would simultaneously serve as an indication of the difficulty of the inference
+problem as well as potentially allow the user to prune reactions based on the whole set of
+unidentifiable graphs. An interesting extension in this direction would be to use recent
+advances in Machine Learning (ML) to search the literature and generate a reasonable set of
+reactions given the species involved in the system [39, 40].
+Alternatively, without introducing any domain knowledge, multiple MCMC chains can be
+used to explore all of the different networks. As each chain is trivially parallelizable, massive
+computational power can help explore the space more efficiently. Starting a large number of
+chains at different initial points will allow the chains to converge to different modalities and
+present it to the user as is in the case of the Prokaryotic Auto-regulation model above. A user
+can prune implausible reaction networks and re-run the model to converge to better solutions.
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 16 / 21
+
+
+--- Page 17 ---
+The use of ML techniques such as cross-validation on a hold-out test set to automatically rank
+networks based on predictive accuracy [41] could be useful but limitations in the amount of
+data may pose a problem. Another direction that may be useful to aid in resolving unidentifi-
+abilities is to use simulations of the retrieved networks to understand where they may deviate.
+If they are not structurally unidentifiable and identical everywhere, this may help to design fur-
+ther experiments and measurement methods to identify competing networks using new data.
+As explored in Reactive SINDy, the incorporation of more data such as trajectories from
+multiple initial conditions can also aid in improving the identifiabiltiy of the process. Intui-
+tively, this can be relevant in the case where certain dynamics are only present at certain con-
+centration levels. In this case, a straightforward modification to the observational model where
+L independent trajectories are observed could be stated as follows,
+Zðt
+j
+Þ ¼
+Z
+t
+j
+0
+S
+T
+c
+k
+1
+f
+1
+ðZ ðt ÞÞ
+k
+2
+f
+2
+ðZ ðt ÞÞ
+� � �
+k
+D
+f
+D
+ðZ ðt ÞÞ
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+dt
+^
+X
+l
+ðt
+j
+Þ � Log- Norm alðZðt
+j
+Þ; sÞ; j ¼ 0; . . . ; T l ¼ 1; . . . ; L;
+where
+^
+X
+l
+ðt
+j
+Þ refers to the observed species concentrations at time t
+j
+for the l-th trajectory.
+Future directions & limitations
+Scaling. As the number of species grows, the number of possible reactions grows combi-
+natorially. This poses a significant issue computationally, as it results in a large search space for
+reactions and possibly further identifiability issues as demonstrated above. The scaling issue
+limits the practical applicability of the method to systems with a small number of active spe-
+cies, which we roughly estimate to be <20 based on our experiments and the amount of time
+that they take. While a larger set is technically possible, the computational burden may be too
+great to obtain results in a reasonable amount of time. One possibility is to run the method on
+smaller subsets of reactions to prune reactions in a sequential procedure. However, this may
+lead to bias issues as combining the estimates from different subsets is a non-trivial problem,
+especially if dealing with partial posterior distributions. Practically, biological domain knowl-
+edge can substantially help here in limiting the allowed reactions in the system or specifying
+known reactions as in Example 2.
+Computationally, the latent variable approach with Bayesian Inference is significantly more
+expensive than the approach used by reactive SINDy. A large part of this is the need to com-
+pute the sensitivities of the ODE system to obtain efficient sampling. In our experiments, the
+auto regulatory network with 260 reactions took approximately 4 hours of time on a M1 Apple
+ARM processor using our approach while roughly 1.5 hours to perform a large grid search
+using reactive SINDy. We find that this difficulty generally scales as a function of the number
+of data points in addition to the number of possible reactions. A possibility on this end is to
+utilize Variational Inference to speed up the inference component as presented in [36]. Fur-
+thermore, there are a few different methods for computing the sensitivities of ODE systems as
+well as a variety of different ODE solvers [22] that may potentially offer speedups for these
+types of problems. For our experiments we employ the rk45 solver and a forward sensitivity
+solver as implemented by Stan.
+Hyper-parameter selection of τ. Selection of τ determines the level of sparsity of these
+networks and, in our experience, is a pivotal hyperparameter to tune when using the horseshoe
+prior. Generally, we find that smaller values of τ will force the near-zero reaction rates to
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 17 / 21
+
+
+--- Page 18 ---
+smaller values however, this typically leads to a significant decrease in computational efficiency
+when estimating the networks. For this reason, through our experiments and set τ to a small
+enough value such that the above pruning procedure removes a large enough set of reactions
+while maintaining the dynamics.
+Further work exploring how to properly tune and select τ in a more interpretable way for
+reaction network inference problems is needed. A common strategy employed in other models
+is to place the prior τ * Cauchy
++
+(0, τ
+0
+) to allow the data to adjust τ [42], however this needs to
+be further explored in the context of the horseshoe for systems of differential equations. For
+linear regression models, Piironen et al. [24] propose a way to parameterize τ
+0
+as,
+t
+0
+¼
+m
+0
+s
+ðD   m
+0
+Þ
+ffiffiffiffiffiffiffiffi
+NM
+p ;
+where m
+0
+can be derived as a guess for the effective non-zero coefficients and σ is the measure-
+ment noise, however our models deviate from linear regression and thus the same interpreta-
+tions do not hold.
+A common concern with Bayesian methods is whether the prior can be overcome with suf-
+ficient data. While in our experience, the utilized horseshoe priors are weakly informative, and
+indeed can be overcome with sufficient data to obtain the true network, however more rigor-
+ous study needs to be done for this. The particular case study demonstrated by Golchi et al.
+[43] offers good insight into the strength and importance of priors in the context of ODEs
+though further investigation needs to be done with respect our model and for network
+inference.
+Stochastic models. Many biochemical reaction systems exhibit intrinsic stochasticity. In
+these situations, Eq (1) no longer sufficiently captures the dynamics of X(t) and the evolution
+of the system is better described using a stochastic process. While mass-action kinetics can still
+be applied, they now specify reaction propensities. To accommodate this, Eq (5) can be modi-
+fied from the observational ODE model,
+Zðt
+j
+Þ � PðZ ðt
+j
+ÞjZðt
+j  1
+Þ; S
+T
+c
+; k Þ
+^
+X ðt
+j
+Þ � PðX jZðt
+j
+ÞÞ; j ¼ 0; . . . ; T :
+where the trajectory Z comes from the stochastic process as specified by [44] while the regular-
+ized horseshoe and S
+c
+remain as previously defined. However, the significant challenge here is
+that the posterior distribution becomes intractable due to the intractable likelihood term
+P ðZðt
+j
+ÞjZðt
+j  1
+; S
+T
+c
+; kÞÞ, which corresponds to the solution of the chemical master equation [45].
+This prevents the application of standard efficient Bayesian inference methods, which are
+heavily reliant on tractable likelihoods.
+While there is a growing class of likelihood-free Bayesian inference methods [46] that can
+be applied to stochastic biochemical reaction networks, they are known to scale incredibly
+poorly to high dimensional parameter spaces. This makes it quite challenging to utilize with
+our method of network inference, which introduces a new parameter for each ansatz reaction.
+A possibility is to instead use stochastic approximations to the model, such as the Chemical
+Langevin Equation or the Linear Noise Approximation, to capture some intrinsic stochasticity,
+but also provide much more tractable likelihoods [44, 47, 48].
+Conclusion
+In this work, we have presented a method to recover a parsimonious system of interpretable
+mass-action reactions directly from observations of species concentrations over time.
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 18 / 21
+
+
+--- Page 19 ---
+Improving on the formulation presented by Reactive SINDy, we have modified the method via
+the Bayesian regularized horseshoe prior and by adapting the model as to not require deriva-
+tive estimates. Our experiments show that, when identifiable, our modifications are able to
+recover the underlying system with uncertainty estimates from the Bayesian formulation even
+in sparse data scenarios. Alternatively, when unidentifiable, we present multiple sparse reac-
+tion networks which can reasonably explain the results and upon which a biologists can
+iterate.
+Supporting information
+S1 Appendix. Implementation specifics and additional experimental details and results.
+(PDF)
+Author Contributions
+Conceptualization: Richard Jiang, Fredrik Wrede.
+Formal analysis: Richard Jiang.
+Funding acquisition: Andreas Hellander, Linda Petzold.
+Investigation: Richard Jiang.
+Methodology: Richard Jiang.
+Project administration: Andreas Hellander, Linda Petzold.
+Software: Richard Jiang.
+Supervision: Andreas Hellander, Linda Petzold.
+Validation: Richard Jiang, Prashant Singh, Fredrik Wrede, Andreas Hellander, Linda Petzold.
+Visualization: Richard Jiang.
+Writing – original draft: Richard Jiang.
+Writing – review & editing: Richard Jiang, Prashant Singh, Fredrik Wrede, Andreas Hellan-
+der, Linda Petzold.
+References
+1. Abramov itch R, Tavor E, Jacob-H irsch J, Zeira E, Amariglio N, Pappo O, et al. A pivotal role of cyclic
+AMP-respon sive element binding protein in tumor progres sion. Cancer research . 2004; 64(4):1338 –
+1346. https://d oi.org/10.115 8/0008-5472 .CAN- 03-2089 PMID: 14973073
+2. Perez OD, Krutzik PO, Nolan GP. Flow cytometr ic analysis of kinase signaling cascad es. In: Flow
+Cytometr y Protocols . Springer; 2004. p. 67–94.
+3. Wheeler DA, Srinivasan M, Egholm M, Shen Y, Chen L, McGuire A, et al. The complete genome of an
+individual by massively parallel DNA sequencin g. nature . 2008; 452(7189) :872–876. https://doi.or g/10.
+1038/nat ure06884 PMID: 18421352
+4. Chen S, Mar JC. Evaluating methods of inferring gene regulatory networks highlights their lack of perfor-
+mance for single cell gene expression data. BMC bioinform atics. 2018; 19(1):1–21 . https://doi.or g/10.
+1186/s12 859-018-2 217-z PMID: 299143 50
+5. Margolin AA, Nemenm an I, Basso K, Wiggins C, Stolovitzk y G, Dalla Favera R, et al. ARACNE : an algo-
+rithm for the reconstructi on of gene regulatory networks in a mammalian cellular context. In: BMC bioin-
+formatics. vol. 7. Springer; 2006. p. 1–15.
+6. Leday GG, De Gunst MC, Kpogb ezan GB, Van der Vaart AW, Van Wieringen WN, Van De Wiel MA.
+Gene network reconstru ction using global-local shrinkage priors. The annals of applied statist ics. 2017;
+11(1):41. https://doi.or g/10.121 4/16-AOA S990 PMID: 28408966
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 19 / 21
+
+
+--- Page 20 ---
+7. Huynh-Thu VA, Irrthum A, Wehenkel L, Geurts P. Inferring regulatory networks from expression data
+using tree-bas ed methods. PloS one. 2010; 5(9):1–10. https://doi.or g/10.1371/jou rnal.pone.00 12776
+PMID: 209271 93
+8. Mangan NM, Brunton SL, Proctor JL, Kutz JN. Inferring biologica l networks by sparse identificat ion of
+nonlinear dynamics . IEEE Transaction s on Molecular , Biological and Multi-Sca le Commun ications.
+2016; 2(1):52–63 . https:/ /doi.org/10.11 09/TMBM C.2016.263 3265
+9. Willis MJ, von Stosch M. Inferen ce of chemical reaction networks using mixed integer linear program-
+ming. Computers & Chemic al Engine ering. 2016; 90:31–43. https:// doi.org/10.10 16/j.compc hemeng.
+2016.04. 019
+10. Morrissey ER, Jua ´ rez MA, Denby KJ, Burrough s NJ. On reverse engineerin g of gene interacti on net-
+works using time course data with repeated measuremen ts. Bioinformatic s. 2010; 26(18):230 5–2312.
+https://doi.or g/10.109 3/bioinformat ics/btq421 PMID: 20639410
+11. Pan W, Yuan Y, Gonc ¸ alves J, Stan GB. Reconstruc tion of arbitrary biochemical reaction networks: A
+compress ive sensing approach. In: 2012 IEEE 51st IEEE Conferen ce on Decisio n and Control (CDC).
+IEEE; 2012. p. 2334–2 339.
+12. Geurts P, et al. dynGE NIE3: dynamic al GENIE3 for the inferenc e of gene networks from time series
+expression data. Scientifi c reports . 2018; 8(1):1–12. https://doi.or g/10.103 8/s41598 -018-2171 5-0
+PMID: 294674 01
+13. Hoffmann M, Fro ¨ hner C, Noe ´ F. Reactive SINDy: Discover ing governing reactions from concentra tion
+data. The Journal of chemical physics. 2019; 150(2):025 101. https://doi.or g/10.1063/1 .5066099 PMID:
+30646700
+14. Voit EO, Martens HA, Omholt SW. 150 years of the mass action law. PLoS Comput Biol. 2015; 11(1):
+e1004012. https:// doi.org/10.13 71/journal.p cbi.10040 12 PMID: 25569257
+15. Hoerl AE, Kennard RW. Ridge regression : Biased estimation for nonorthogon al problem s. Techno-
+metrics. 1970; 12(1):55–6 7. https://doi.or g/10.108 0/00401706.19 70.1048 8634
+16. Tibshirani R. Regression shrinkage and selection via the lasso. Journal of the Royal Statistical Society:
+Series B (Methodo logical). 1996; 58(1):267– 288.
+17. Zou H, Hastie T. Regular ization and variable selection via the elastic net. Journal of the royal statistic al
+society: series B (statistical methodol ogy). 2005; 67(2):301 –320. https://doi.or g/10.111 1/j.1467-986 8.
+2005.00503 .x
+18. Tuza ZA, Stan GB. An automatic sparse model estimation method guided by constraints that encode
+system properties. In: 2019 18th European Control Conferen ce (ECC). IEEE; 2019. p. 2171–2176.
+19. Brunton SL, Proctor JL, Kutz JN. Discover ing governing equation s from data by sparse identification of
+nonlinear dynamical systems. Procee dings of the nationa l academy of sciences . 2016; 113(15):39 32–
+3937. https://d oi.org/10.107 3/pnas.15 17384113 PMID: 27035946
+20. Baydin AG, Pearlmut ter BA, Radul AA, Siskind JM. Automatic differentiation in machine learning: a sur-
+vey. Journal of machine learning research . 2018; 18.
+21. Carpente r B, Hoffman MD, Brubake r M, Lee D, Li P, Betancourt M. The Stan math library: Reverse-
+mode automatic differentiation in C++. arXiv preprint arXiv:1509 07164. 2015.
+22. Chen RT, Rubanova Y, Bettencou rt J, Duvenaud D. Neural ordinary differential equations. arXiv pre-
+print arXiv:180607 366. 2018.
+23. Eberhard P, Bischof C. Automatic differe ntiation of numerica l integration algorithms . Mathematic s of
+Computat ion. 1999; 68(226):71 7–731. https:// doi.org/10.10 90/S0025-5 718-99-01 027-3
+24. Piironen J, Vehtari A, et al. Sparsity informati on and regularizatio n in the horsesho e and other shrinkage
+priors. Electronic Journal of Statistics . 2017; 11(2):5018 –5051. https:// doi.org/10.12 14/17-EJS13 37SI
+25. Carvalho CM, Polson NG, Scott JG. The horsesho e estimator for sparse signals. Biometr ika. 2010; 97
+(2):465–48 0. https://do i.org/10.1093 /biomet/asq0 17
+26. Ishwaran H, Rao JS, et al. Spike and slab variable selection: frequentis t and Bayesian strategies.
+Annals of statist ics. 2005; 33(2):730– 773. https://doi.or g/10.121 4/0090536040 000011 47
+27. Mitchell TJ, Beaucham p JJ. Bayesian variable selection in linear regression . Journal of the american
+statistical associ ation. 1988; 83(404):10 23–1032 . https://doi.or g/10.2307/ 2290132
+28. Neal RM, et al. MCMC using Hamiltonian dynamics. Handbook of markov chain monte carlo. 2011; 2
+(11):2.
+29. Ranganath R, Gerrish S, Blei D. Black box variationa l inferenc e. In: Artifici al intellige nce and statistics.
+PMLR; 2014. p. 814–822.
+30. Carpente r B, Gelman A, Hoffman MD, Lee D, Goodrich B, Betancourt M, et al. Stan: A probabilistic pro-
+gramming language. Journal of statistical software. 2017; 76(1). https:/ /doi.org/10.18 637/jss.v 076.i01
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 20 / 21
+
+
+--- Page 21 ---
+31. Salvatier J, Wiecki TV, Fonnesbe ck C. Probabilist ic programm ing in Python using PyMC3 . PeerJ Com-
+puter Science. 2016; 2:e55. https://doi.or g/10.7717/ peerj-cs.55
+32. Bingham E, Chen JP, Jankowiak M, Obermey er F, Pradhan N, Karalets os T, et al. Pyro: Deep universal
+probabilistic programming. The Journal of Machine Learning Research. 2019; 20(1):973– 978.
+33. Breda J, Zavolan M, van Nimwege n E. Bayesian inference of the gene express ion states of single cells
+from scRNA-se q data. bioRxiv. 2019.
+34. Gupta S, Lee RE, Faeder JR. Parallel Tempering with Lasso for model reductio n in systems biology.
+PLoS computation al biology. 2020; 16(3):e100 7669. https:// doi.org/10.13 71/journal.p cbi.10076 69
+PMID: 321505 37
+35. Hoffman MD, Gelman A. The No-U-Turn sampler: adaptivel y setting path lengths in Hamiltonian Monte
+Carlo. J Mach Learn Res. 2014; 15(1):1593 –1623.
+36. Ghosh S, Doshi-Ve lez F. Model selection in Bayesian neural networks via horsesho e priors. arXiv pre-
+print arXiv:170510 388. 2017.
+37. Wilkinson DJ. Stochastic modellin g for systems biology. CRC press; 2018.
+38. A
+´
+cs B, Szederke ´ nyi G, Tuza Z, Tuza ZA. Computing all possible graph structures describing linearly
+conjuga te realizations of kinetic systems. Computer Physics Commun ications. 2016; 204:11– 20.
+https://doi.or g/10.101 6/j.cpc.2016 .02.020
+39. Ros R, Bjarnason E, Runeson P. A machine learning approach for semi-auto mated search and selec-
+tion in literature studies. In: Procee dings of the 21st International Conferen ce on Evaluation and
+Assessme nt in Software Engineeri ng; 2017. p. 118–12 7.
+40. Radford A, Wu J, Child R, Luan D, Amodei D, Sutskever I, et al. Langua ge models are unsuper vised
+multitask learners . OpenAI blog. 2019; 1(8):9.
+41. Vehtari A, Gelman A, Gabry J. Practical Bayesian model evaluation using leave-one-o ut cross-valida -
+tion and WAIC. Statistics and computing. 2017; 27(5):1413 –1432. https://doi.or g/10.100 7/s11222-016-
+9709-3
+42. Polson NG, Scott JG. Shrink globally , act locally: Sparse Bayesian regularizatio n and prediction. Bayes-
+ian statistics. 2010; 9(501-538 ):105.
+43. Golchi S. Informative priors and Bayesian computation . In: 2016 IEEE internationa l conferen ce on data
+science and advanced analytics (DSAA ). IEEE; 2016. p. 782–789.
+44. Gillespie DT. The chemic al Langevi n equation. The Journal of Chemic al Physics. 2000; 113(1):297 –
+306. https://do i.org/10.1063 /1.48181 1
+45. Owen J, Wilkinson DJ, Gillespie CS. Likelihood free inferenc e for Markov processes: a comparison .
+Statistical application s in genetics and molecular biology. 2015; 14(2):189– 209. https://doi.or g/10.1515 /
+sagmb-20 14-0072 PMID: 2572009 2
+46. Cranmer K, Brehmer J, Louppe G. The frontier of simulation -based inferenc e. Proceedings of the
+National Academy of Sciences. 2020; 117(48):30 055–30062. https://do i.org/10.1073 /pnas.
+1912789117 PMID: 32471948
+47. Elf J, Ehrenber g M. Fast evaluatio n of fluctuation s in biochemical networks with the linear noise approxi-
+mation. Genome research . 2003; 13(11):247 5–2484 . https://doi.or g/10.1101/ gr.1196503 PMID:
+14597656
+48. Golightly A, Wilkinson DJ. Bayesian inferenc e for stocha stic kinetic models using a diffusion approxim a-
+tion. Biometr ics. 2005; 61(3):781– 788. https://doi.or g/10.111 1/j.1541-042 0.2005.0 0345.x PMID:
+16135029
+PLOS COMP UTATIONAL  BIOLOGY
+Identificati on of dynamic biochemical reaction networks using sparse Bayesian methods
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1009830 January 31, 2022 21 / 21

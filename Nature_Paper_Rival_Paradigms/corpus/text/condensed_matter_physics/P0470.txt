@@ -1,0 +1,1423 @@
+--- Page 1 ---
+ARTICLE OPEN
+An ef ﬁcient and accurate framework for calculating lattice
+thermal conductivity of solids: AFLOW —AAPL Automatic
+Anharmonic Phonon Library
+Jose J. Plata 1, Pinku Nath 1, Demet Usanmaz 1, Jesús Carrete 2, Cormac Toher 1, Maarten de Jong 3,4, Mark Asta 3, Marco Fornari 5,
+Marco Buongiorno Nardelli 6 and Stefano Curtarolo 7
+One of the most accurate approaches for calculating lattice thermal conductivity, κ‘, is solving the Boltzmann transport equation
+starting from third-order anharmonic force constants. In addition to the underlying approximations of ab-initio parameterization,
+two main challenges are associated with this path: high computational costs and lack of automation in the frameworks using this
+methodology, which affect the discovery rate of novel materials with ad-hoc properties. Here, the Automatic Anharmonic Phonon
+Library (AAPL) is presented. It ef ﬁciently computes interatomic force constants by making effective use of crystal symmetry analysis,
+it solves the Boltzmann transport equation to obtain κ
+‘, and allows a fully integrated operation with minimum user intervention, a
+rational addition to the current high-throughput accelerated materials development framework AFLOW. An “experiment vs. theory ”
+study of the approach is shown, comparing accuracy and speed with respect to other available packages, and for materials
+characterized by strong electron localization and correlation. Combining AAPL with the pseudo-hybrid functional ACBN0 is possible
+to improve accuracy without increasing computational requirements.
+npj Computational Materials  (2017) 3:45 ; doi:10.1038/s41524-017-0046-7
+INTRODUCTION
+Lattice thermal conductivity, κ
+‘, is the key materials ’ property for
+many technologies and applications, such as thermoelectric
+materials,1–3 heat sink materials, 4 rewritable density scanning-
+probe phase-change memories, 5 and thermal medical devices. 6
+Fast and robust predictions of this quantity remain a challenge: 7
+semi-empirical models 8–10 are computationally inexpensive but
+require some experimental data. Similarly, classical molecular
+dynamics combined with Green –Kubo relations 11–13 is reasonably
+quick but requires the knowledge of speci ﬁc force ﬁelds. On the
+contrary, frameworks based on the quasiharmonic Debye model,
+such as GIBBS 14 or the Automatic-Gibbs-Library (AGL), 15,16 are
+extremely ef ﬁcient as pre-screening techniques but they lack
+quantitative accuracy.
+The quasiharmonic approximation (QHA), alone has also been
+used in different models to predict κ‘.7,17 Although QHA-based
+models overall improve accuracy of κ‘, they are far from the
+results obtained from calculating the anharmonic force constants
+and solving the associated Boltzmann transport equation (BTE).
+8,18
+To the best of our knowledge, solving the BTE is the optimal
+method for systematically and accurately calculating thermal
+conductivity.
+19–21 This approach has been successfully applied to
+many systems during the last decade. It has been recently
+implemented in packages including Phono3py, 22 PhonTS,23
+ALAMODE,24 and ShengBTE, 25 which compute κ‘ by calculating
+the anharmonic force constants and solving the BTE. Nevertheless,
+there is a lack of a robust framework able to calculate κ‘ with
+minimum intervention from the user, and therefore targeted to
+high-throughput automated and accelerated materials discovery.
+Many challenges need to be tackled. I. The third-order
+interatomic force constants (IFCs) up to a certain distance cut-off
+are computationally expensive to obtain from ﬁrst principles.
+Overall they represent the major concern for the method. Effective
+use of crystalline symmetry of the system must be employed to
+map, through appropriate tensorial transformations, dependent
+IFCs and therefore reduce the number of calculations. The task is
+performed by the internal AFLOW point-factor-space group
+calculator.
+26 Recently, it has also been proposed to obtain the
+IFCs by inverting the results of many entangled calculations with
+the use of compressive sensing. 27 Further studies need to be
+carried out to address the scaling of the algorithm with respect to
+cut-offs and accuracy. II. For a rational software for accelerated
+materials development, all the geometric optimizations, symmetry
+analyses, supercell creation, pre-processing and post-processing,
+and automatic error corrections to get the IFCs, in addition to the
+appropriate integration for the BTE must be performed by a single
+code. Here, we present Automatic Anharmonic Phonon Library
+(AAPL), which computes the IFCs and solves the BTE to predict κ
+‘
+as part of the AFLOW high-throughput framework, 28–39 auto-
+matizing the entire process. The software is being ﬁnalized for an
+ofﬁcial open-source release during 2017, within the GNU GPL
+license. III. The accuracy of the method mostly depends on the
+Received: 17 November 2016 Revised: 1 September 2017 Accepted: 7 September 2017
+1Department of Mechanical Engineering and Materials Science, Duke University, Durham, NC 27708, USA; 2Institute of Materials Chemistry, TU Wien, A-1060 Vienna, Austria;
+3Department of Materials Science and Engineering, University of California, Berkeley, 210 Hearst Memorial Mining Building, Berkeley, USA; 4SpaceX, 1 Rocket Road, Hawthorne,
+CA 90250, USA; 5Department of Physics and Science of Advanced Materials Program, Central Michigan University, Mount Pleasant, MI 48859, USA; 6Department of Physics and
+Department of Chemistry, University of North Texas, Denton, TX, USA and 7Materials Science, Electrical Engineering, Physics and Chemistry, Duke University, Durham, NC 27708,
+USA
+Correspondence: Stefano Curtarolo (stefano@duke.edu)
+www.nature.com/npjcompumats
+Published in partnership with the Shanghai Institute of Ceramics of the Chinese Academy of Sciences
+
+
+--- Page 2 ---
+accuracy of the computed forces, and therefore it will inherit the
+same limitations as the ab-initio method used. For materials
+characterized by strong electron localization and correlation,
+accurate hybrid functionals for Density Functional Theory para-
+meterizations might not even be feasible, as they would drastically
+increase computational costs, with respect to more basic LDA or
+GGA functionals. In that case, new strategies should be developed
+to contain computational demands. Here, an example is given:
+combining AAPL with the pseudo-hybrid functional Agapito
+Curtarolo Buongiorno Nardelli ab-initio DFT functional (ACBN0)
+improves the accuracy without increasing computational require-
+ments.
+40–46
+RESULTS AND DISCUSSION
+The Automatic Anharmonic Phonon Library
+The Boltzmann transport equation . The Boltzmann equation for
+phonons, originally formulated by Peierls in 1929, is an important
+approach for studying phonon transport.
+8 Its solution has posed a
+challenge for the last several decades. Callaway 9 and Allen 47
+proposed models based on parameters that are ﬁtted to
+experimental data. In 2003, Deinzer et al. used density functional
+perturbation theory (DFPT) to study the phonon linewidths of Si
+and Ge.48 Since then, many authors have used the solution of the
+BTE to calculate the lattice thermal conductivity of solids. 19–21 The
+most used approach is the iterative solution of the BTE proposed
+by Omini et al. and successfully applied in the prediction of the κ‘
+tensor for different materials: 49–51
+καβ
+‘ ¼ 1
+NΩkBT2
+X
+λ
+f0 f0 þ 1ðÞ /C22hω λðÞ 2vα
+λ Fβ
+λ ; (1)
+where superscripts α and β are two of the Cartesian direction
+indices and the subscript λ comprises both phonon branch index i
+and a wave vector q. The variables ω λ and vλ are the angular
+frequency and group velocity of the phonon mode λ, respectively,
+while f0(ω λ) is the phonon distribution function according to
+Bose–Einstein statistics. All these quantities are obtained through
+the calculation of the IFCs by using a ﬁnite-difference supercell
+approach: forces vs. small displacement of inequivalent atoms. In
+this approach, a reference unit cell of volume Ω is used to create
+the supercell up to the cut-off distance. For the various
+summations, the Brillouin zone, BZ, is discretized into a Γ-
+centered orthogonal regular grid of N ≡ N
+1 × N2 × N3 q-points,
+where subscripts 1, 2, and 3 indicate the lattice vector indices.
+The mean-free displacement Fλ follows the de ﬁnition of the
+Bose–Einstein phonon distribution, fλ, in the presence of a
+temperature gradient ∇T. For small perturbations, ∇T /C24 0, fλ can
+be expanded as fλ /C24 f0 ω λðÞ þ gλ, where gλ is the ﬁrst-order non-
+equilibrium contribution linear in ∇T:
+gλ /C17/C0 Fλ /C1∇T df0
+dT :
+Finally, the BTE can be expressed as a linear system of equations
+for Fλ,a s 20,49–53
+Fλ ¼ τ0
+λðvλ þ ΔλÞ
+Δλ ¼ 1
+N
+Pþ
+λ′λ′′
+Γþ
+λλ′λ′′ ξλλ′′Fλ′′ /C0 ξλλ′Fλ′ðÞ
+/C18
+þP/C0
+λ′λ′′
+1
+2 Γ/C0
+λλ′λ′′ ξλλ′′Fλ′′ þ ξλλ′Fλ′ðÞ
+þP
+λ′
+Γλλ′ξλλ′Fλ′
+/C19
+;
+(2)
+with ξλλ′ = ω λ/ω λ′. The frequently used relaxation time approxima-
+tion (RTA), corresponds to neglecting the Δλ correction. For the full
+solution, Fλ can be self-consistently solved starting from the RTA
+guess, until convergence of κ‘, Eq. (1). The other quantities present
+in these formulas, the relaxation time τ0
+λ, and the three-phonon
+scattering rates Γ±
+λλ′λ′′, will be illustrated in the next section.
+Vibrational modes and group velocities . The vibrational modes are
+obtained by diagonalizing the dynamical matrix D(q)8,54–56
+DðqÞeλ ¼ ω 2
+λeλ; (3)
+Dαβ
+ij qðÞ ¼
+X
+l
+Φ i; jðÞ αβﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+MiðÞ MjðÞ
+p exp /C0 iq /C1Rl /C0 R0ðÞ½/C138 ; (4)
+where M(j) is the mass of j atom, eλ is the eigenvector for λ, Rl is
+the position of lattice point l and Φði; jÞαβ are the second-order
+force constants. D(q) is a Hermitian 3 na ×3 na matrix, where the
+factor “3” comes from the dimensionality of the problem, and na
+represents the number of atoms in the unit cell.
+The non-analytical contributions to the dynamical matrix are
+included by using the mixed-space formulation of Wang et al. 57
+eDαβ
+ij ðqÞ¼ 4πe2
+Ω
+½q /C1ZðiÞ/C138α ½q /C1ZðjÞ/C138β
+q /C1ϵ1 /C1q exp ½/C0 iq /C1ðRl /C0 R0Þ/C138: (5)
+This contribution requires the calculation of the Born effective
+charge tensors, Z, and the high-frequency static dielectric tensor,
+ϵ1, i.e. the contribution to the dielectric permittivity tensor from
+the electronic polarization. 58 The mixed-space approach has been
+successfully applied in the calculation of phonon and thermal
+properties for a wide range of polar materials.
+59 Materials with
+high Z and low ϵ1 are the cases in which the non-analytical
+contributions are crucial for appropriate description of the phonon
+spectra as they cause the LO –TO splitting of the spectrum
+(between longitudinal and transverse optical phonon frequen-
+cies).58
+The group velocities, vλ, follow the Hellmann –Feynman
+theorem:
+vλ ¼ 1
+2ω λ
+eλ
+∂DðqÞ
+∂q
+/C12/C12/C12/C12
+/C12/C12/C12/C12eλ
+/C28/C29
+: (6)
+Scattering time . The total scattering time is a sum of terms
+representing different phenomena:
+1
+τ0
+λ
+¼ 1
+τanh
+λ
+þ 1
+τiso
+λ
+þ 1
+τbnd
+λ
+: (7)
+τiso
+λ indicates the isotopic or elastic scattering time and it is due to
+the isotopic disorder 60,61
+1
+τiso
+λ
+¼ 1
+N
+P
+λ′
+Γλλ′
+¼ 1
+N
+P
+λ′
+πω 2
+λ
+2
+P
+i
+giðÞ e/C3
+λðiÞeλ′ðiÞ
+/C12/C12 /C12/C122
+δω λ /C0 ω λ′ðÞ ;
+(8)
+where gðiÞ¼ P
+s fsðiÞ 1 /C0 MðiÞs=MðiÞs/C2/C3 2
+is the Pearson deviation
+coefﬁcient of masses M(i)s of isotopes s for the i atom, fs is the
+relative fraction of isotope s, and MðiÞs is the average mass of the
+element.62
+τbnd
+λ is the time associated with scattering at the grain
+boundaries63,64
+1
+τbnd
+λ
+¼ vλjj
+L ; (9)
+where L is the average grain size. The effect of the boundaries on
+κ‘ can also be calculated by restricting the summation to the
+modes with a mean free path, Λ = Fλ · vλ/|vλ|, shorter than L:25
+καβ
+‘; Λ<LðÞ ¼ 1
+NΩkBT2
+XΛλ<L
+λ
+f0 f0 þ 1ðÞ /C22hω λðÞ 2vα
+λ Fβ
+λ : (10)
+AFLOW-AAPL Automatic Anharmonic Phonon Library
+JJ Plata et al.
+2
+npj Computational Materials (2017)  45 Published in partnership with the Shanghai Institute of Ceramics of the Chinese Academy of Sciences
+1234567890
+
+
+--- Page 3 ---
+τanh
+λ is the three-phonon scattering time. It is the largest
+contribution to τ0
+λ for single crystals at medium-temperature
+ranges and it is the most computationally expensive quantity to
+obtain:
+1
+τanh
+λ
+¼ 1
+N
+Xþ
+λ′λ′′
+Γþ
+λλ′λ′′ þ
+X/C0
+λ′λ′′
+1
+2 Γ/C0
+λλ′λ′′
+ !
+: (11)
+Conservation of the quasi-momentum requires that q″ = q ± q′ +
+Q in the summation ∑±, for some reciprocal lattice vector Q such
+that q″ is in the same image of the Brillouin zone as q and q′. The
+three-phonon scattering rates, Γ±
+λλ′λ′′, are computed as
+Γþ
+λλ′λ′′ /C17/C22hπ
+4
+f ′
+0 /C0 f ′′
+0
+ω λω λ′ω λ′′
+Vþ
+λλ′λ′′
+/C12/C12 /C12/C122
+δω λ þ ω λ′ /C0 ω λ′′ðÞ ; (12)
+and
+Γ/C0
+λλ′λ′′ /C17/C22hπ
+4
+f ′
+0 þ f ′′
+0 þ 1
+ω λω λ′ω λ′′
+V/C0
+λλ′λ′′
+/C12/C12 /C12/C122
+δω λ /C0 ω λ′ /C0 ω λ′′ðÞ : (13)
+The scattering matrix elements, V ±
+λλ′λ′′, are given by 52,53
+V ±
+λλ′λ′′ ¼
+X
+i2uc
+j;kfg 2 sc
+αβγ
+Φ i; j; kðÞ αβγ
+eα
+λ iðÞ eβ
+p′; ± q′ jðÞ eγ
+p′;/C0 q′ kðÞﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+MiðÞ MjðÞ MkðÞ
+p ; (14)
+where Φ(i, j, k)αβγ are the anharmonic force constants (introduced
+below) and eβ
+p′; ± q′ðjÞ is the element of the eigenvector of branch p′
+at point ±q′ that corresponds to j atom in the β-direction. Note the
+indices { i ∈ uc (unit cell)} while { j, k ∈ sc (supercell)}. The
+conservation of energy, enforced by the Dirac distribution, can
+cause numerical instability during the calculations. Thus, we follow
+Li et al.
+25 and substitute δ with a normalized Gaussian distribution
+g: δð/C1 /C1 /C1Þ !gð/C1 /C1 /C1Þin Eqs. ( 12) and ( 13) with
+g ω λ /C0 ± ω λ′ þ ω λ′′ðÞðÞ /C17 1ﬃﬃﬃﬃ
+2π
+p
+σ e
+ω λ/C0 ± ω λ′þω λ′′ðÞðÞ 2
+2σ2 ;
+σ /C17 ζσ ± ω λ′þω λ′′ðÞ
+¼ ζﬃﬃﬃﬃ
+12
+p
+ﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+P
+ν
+P
+α
+vα
+λ′ /C0 vα
+λ′′
+/C0/C1 Qαν
+Nν
+/C20/C21 2
+s
+;
+(15)
+where Qα
+ν is the component in the Cartesian direction, α, of the
+reciprocal-space lattice vector Qν and Nν is the number of points of
+the q-points grid in the reciprocal-space direction ν. In principle,
+the parameter ζ could be taken equal to one. However, it can be
+adjusted to lower values to increase the speed of the calculations,
+without much effect on the overall accuracy of the integrations.
+Interatomic force constants . The nth-order IFCs, Φði; j; ¼ Þαβ/C1/C1/C1are
+tensorial quantities representing derivatives of the potential
+energy ( V) with respect to the atomic displacements from
+equilibrium:
+V ¼ V
+0 þ 1
+2!
+P
+ij;αβ
+Φ i; jðÞ αβ riðÞ α rjðÞ β
+þ 1
+3!
+P
+ijk;αβγ
+Φ i; j; kðÞ αβγ riðÞ α rjðÞ β rkðÞ γþ/C1/C1/C1
+(16)
+Labels i, j, k, … span atoms of the cell and indices α, β, γ, … are the
+Cartesian directions of the displacement. Second-order harmonic
+IFC, Φ(i, j)αβ, calculations were already implemented in the original
+harmonic Automatic-Phonon-Library (APL), 28 which obtains dis-
+persion curves using three different approaches: direct force
+constant,65–67 linear response and projector-augmented wave
+(PAW) potentials, 68 and the frozen phonon methods. 69,70
+Third-order IFCs, Φ(i, j, k)αβγ contain information about the
+anharmonicity of the lattice and they tend to rule phonon
+scattering in single crystals in the medium-temperature
+ranges.
+71,72 Given the choice of a supercell size, the ﬁnite
+difference method to calculate the third-order IFCs leads to:
+Φ i; j; kðÞ αβγ /C17 ∂3 V
+∂riðÞ α ∂rjðÞ β ∂rkðÞ γ
+’ 1
+2h
+∂2 V
+∂rjðÞ β ∂rkðÞ γ hiðÞ αðÞ /C0 ∂2 V
+∂hjðÞ β ∂rkðÞ γ /C0 hiðÞ αðÞ
+hi
+’ 1
+4h2 /C0 ψ hiðÞ α ; hjðÞ β ; k
+/C16/C17
+γ
+þψ /C0 hiðÞ α ; hjðÞ β ; k
+/C16/C17
+γ
+/C20
+þψ hiðÞ α ; /C0 hjðÞ β ; k
+/C16/C17
+γ
+/C0 ψ /C0 hiðÞ α ; /C0 hjðÞ β ; k
+/C16/C17
+γ
+/C21
+(17)
+where {±h(i)α}, {±h(j)β} represent displacements of magnitude h of
+the i, j atoms in the Cartesian directions ± α,± β and ψ (±h(i)α,± h(j)β,
+k)γ are the γ components of the forces felt by the k atom in the
+distorted con ﬁgurations caused by the i and j atoms.
+The third-order IFCs ’ calculation is computationally intensive:
+each Φ(i,j,k)αβγ requires four supercell calculations (Eq. ( 17)).
+Effective use of crystal symmetry can help the process. 73 AAPL
+uses point, factor, and space group symmetry operations
+computed by the AFLOW symmetry engine
+26 to identify
+equivalence between single, pairs, and triplets of atoms (positions)
+and test equivalence between other ﬁeld quantities, such as
+differential Φ or ﬁnite difference forces ψ (covariantly transform-
+ing). To avoid confusion, here indices as superscripts αβγ/C1/C1/C1fg or
+subscripts αβγ/C1/C1/C1fg are used to identify the character of the
+symmetry transformation to be applied. 74
+The reduction of third-order IFC calculations is performed
+through the following steps:
+1. Inequivalent atoms, pairs, and triplets are identi ﬁed using
+space group symmetries. The user chooses the neighbor-shell
+cut-off and only pairs/triplets completely contained are
+considered.
+2. The IFC tensors belonging to inequivalent triplets are
+analyzed. The symmetry operations mapping the representa-
+tive inequivalent to the equivalent Φ are saved: Φ(i, j, k)
+αβγ →
+Φ′(i′, j′, k′)α′β′γ′.
+3. Each inequivalent tensor Φ(i, j, k)αβγ contains 3 × 3 × 3 = 27
+coefﬁcients. Every static ab-initio calculation produces the
+vectorial force ﬁeld for all the k atoms of the supercell (where
+each k, combined with the inequivalent pair ( i, j), possibly
+generates ( i, j, k) inequivalent triplets) starting from a
+combination of deformed positions for the i and j atoms
+belonging to inequivalent pairs. This requires the evaluation
+of 3 × 3 = 9 con ﬁgurations. Following Eq. ( 17) four forces ψ (±h
+(i)α,± h(j)β, k)γ are required for every entry Φ(i, j, k)αβγ.T o
+conclude, a total of 36 static calculations are necessary to
+parameterize Φði; j; 8k 2 scÞ.
+4. A large look-up table of all the necessary ﬁnite difference
+forces ψ (h(i)α, h(j)β, k) is prepared at the beginning of the
+process. Every ψ can be constituent of many inequivalent Φ(i,
+j, k)αβγ, and, within each Φ, be a term in several internal
+coefﬁcients. To exploit redundancy, the force ﬁeld generated
+by every static ab-initio calculation is mapped through
+symmetry operations to recover as many possible other
+ψ hðiÞ
+α ; hðjÞβ ; 8k 2 sc
+/C16/C17
+γ
+! ψ hði′Þα′; hðj′Þβ′; 8k′ 2 sc
+/C16/C17
+γ′
+. Cal-
+culated and symmetry reproduced ψ are then removed from
+the table, and the algorithm moves to the next one to
+characterize. The process is repeated until all the ψ are found.
+The process guarantees that only the minimum amount of
+calculations are performed, compatible with the model of Eq.
+(17).
+5. During the process, many equivalent entries of the tensors
+Φ(i, j, k)αβγ are generated by the static ab-initio calculations.
+Because of unavoidable numerical noise, often equivalent
+entries have slightly different values, and the ﬁnal value needs
+AFLOW-AAPL Automatic Anharmonic Phonon Library
+JJ Plata et al.
+3
+Published in partnership with the Shanghai Institute of Ceramics of the Chinese Academy of Sciences npj Computational Materials (2017)  45 
+
+
+--- Page 4 ---
+to be symmetrized somehow. This is performed during the re-
+symmetrization necessary to address the “sum rules ”
+conservation.
+Sum rules and re-symmetrization . Invariance with respect to any
+global rigid displacement translates into “sum rules ” for anhar-
+monic IFCs:X
+k
+Φ i; j; kðÞ αβγ ¼ 0; 8 permutations of i; j; k: (18)
+Due to ﬁnite size effects, the calculated IFCs are not perfectly
+symmetric and do not strictly satisfy Eq. ( 18), causing numerical
+instabilities. To tackle the issue, different strategies have been
+proposed such as Lagrange multipliers 25 and orthogonalization
+procedures.75 We implement an iterative algorithm which corrects
+Φ(i, j, k) and ful ﬁlls the constraints.
+Given a set of Φ(i, j, k) the error x of each sum rule at step N is
+deﬁned as
+xi ; jðÞ N
+αβγ /C17
+X
+k
+Φ i; j; kðÞ N
+αβγ (19)
+Each iteration is composed of correction and re-symmetrization of
+equivalent IFCs. Correction, Φði; j; kÞN
+αβγ ! Φði; j; kÞNþ 1
+αβγ is given by:
+Φ i; j; kðÞ Nþ 1
+αβγ ¼ 1 /C0 μðÞ Φ i; j; kðÞ N
+αβγ þ μ
+neq
+´ Peq
+α′β′γ′
+i′j′k′
+Φ i′; j′; k′ðÞ N
+α′β′γ′/C0
+xi ′;j′ðÞ N
+α′β′γ′ Φ i′;j′;k′ðÞ N
+α′β′γ′jjP
+k′′
+Φ i′;j′;k′′ðÞ N
+α′β′γ′jj
+0
+@
+1
+A;
+(20)
+where the term xN ΦN
+/C12/C12/C12
+/C12/C12/C12=P ΦN
+/C12/C12/C12
+/C12/C12/C12corrects Φ based on the total
+error times the absolute contribution of Φ in the “sum rule ”. The
+sum over the combination of indices { i′, j′, k′, α′, β′, γ′} giving IFCs
+equivalent to Φ(i, j, k)αβγ (there are neq) is meant to symmetrize the
+error across all the entries. The mixing fraction in the iterative
+process, μ, can be adjusted by the user to optimize convergence
+rate and robustness. Overall, with increasing number of neighbor
+shells, the user can effectively reduce this systematic error and
+achieve effective convergence of κ
+‘.
+Calculation workﬂows. The calculations parameters and methods
+are described in the Methods section.
+ Anharmonic scattering time τanh
+λ :
+/C0 /C0 /C0 /C0 /C0 /C0 /C0 !
+AFLOW/C0 AAPL
+finite forces
+ψ /C0 /C0 /C0 /C0 /C0 /C0 /C0!
+Eq: ð17Þ
+force constants
+ΦN /C0 /C0 /C0 /C0 /C0 /C0 /C0 !
+Eq: ð20Þ
+symmetrization
+Φ !
+/C0 /C0 /C0 !
+Eq: ð14Þ
+scatt: matrix
+V ± /C0 /C0 /C0 /C0 /C0 /C0 /C0 !
+Eqns: ð12/C0 13Þ
+scatt: rates
+Γ± /C0 /C0 /C0 /C0 /C0 /C0 /C0 !
+Eq: ð11Þ
+anh: scatt: time
+τanh
+λ :
+(21)
+ Elastic scattering time τiso
+λ (isotopic disorder) and grain
+boundaries scattering time τbnd
+λ (polycrystalline materials):
+/C0 /C0 /C0 /C0 /C0 /C0!
+AFLOW/C0 APL
+ab initio
+ψ /C0 /C0 /C0 /C0 /C0!
+Eq: ð16Þ
+force const:
+Φ /C0 /C0 /C0 /C0 /C0 /C0 /C0 !
+Eq: ð4Þ
+dynamical mat:
+DðqÞ!
+/C0 /C0 /C0!
+Eq: ð3Þ
+phonons
+ω λ /C0 /C0 /C0 /C0 /C0 /C0 /C0 /C0 /C0 /C0 /C0 /C0 !
+Eq: ð8Þ
+elastic scatt: time; rate
+τiso
+λ ; Γλλ′:
+/C0 /C0 /C0 /C0 /C0 /C0 /C0 /C0!
+Eq: ð6Þ
+group velocities
+vλ /C0 /C0 /C0 /C0 /C0 /C0 /C0 /C0 /C0 /C0 /C0 /C0 !
+Eq: ð9Þ
+grain bound: scatt: time
+τbnd
+λ :
+8
+>>
+<
+>>
+:
+(22)
+ Conductivity κ
+αβ
+‘ :
+τanh
+λ ; τiso
+λ ; τbnd
+λ
+/C8/C9
+/C0 /C0 /C0 /C0 /C0 /C0 /C0 !
+Eq: ð7Þ
+total scatt: time
+τ0
+λ !/C0 /C0 /C0 /C0 /C0 /C0 /C0 !
+Eq: ð2Þ
+mean free disp :
+Fλ /C0 /C0 /C0 /C0 /C0 !
+Eq: ð1Þ
+conductivity
+καβ
+‘ :
+(23)
+Analysis of results . Different statistical parameters are used to
+measure the qualitative and quantitative agreements of AAPL with
+respect to experimental values. The Pearson correlation coef ﬁcient
+r[{X}, { Y}] is a measure of the linear correlation between two
+variables, { X} and { Y}:
+r ¼
+P
+i
+Xi /C0 X
+/C0/C1
+Yi /C0 Y
+/C0/C1
+ﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃP
+i
+Xi /C0 X
+/C0/C1 2
+r ﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃP
+i
+Yi /C0 Y
+/C0/C1 2
+r ; (24)
+where X and Y are the averages of { X} and { Y}.
+The Spearman rank correlation coef ﬁcient ρ[{X}, {Y}] is a measure
+of the monotonicity of the relationship between two variables.
+The values of the two variables { X} and { Y} are sorted in ascending
+order, and are assigned rank values { x} and { y} which are equal to
+their position in the sorted list. The correlation coef ﬁcient is then
+given by
+ρ ¼
+P
+i
+xi /C0 xðÞ yi /C0 yðÞ
+ﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃP
+i
+xi /C0 xðÞ 2
+r ﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃP
+i
+yi /C0 yðÞ 2
+r : (25)
+ρ is useful for determining how well the values of one variable can
+predict the ranking of the other variable.
+The root-mean-square relative deviation (RMSrD), of the
+calculated κ vs. the experiment is also investigated. The RMSrD
+will measure the quantitative difference between AAPL and
+experimental results:
+RMSrD ¼
+ﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃﬃ
+P
+i
+Xi /C0 Yi
+Xi
+/C16/C17 2
+NfX;Yg /C0 1
+vuu
+u
+t ; (26)
+Lower values of RMSrD indicate better agreement.
+Performance
+Scaling. The calculation of the anharmonic IFCs is the most
+computationally expensive step in the method. First, we test the
+number of required calculations for some structural prototypes,
+such as diamond (spacegroup: Fd
+3m, #227; Pearson symbol: cF8;
+Strukturbericht designation: A4; AFLOW Prototype: A_cF8_227_a 26
+(http://aﬂow.org/CrystalDatabase/A_cF8_227_a.html.)), rocksalt
+(Fm3m, #225, cF8, B1, AB_cF8_225_a_b 26 (http://aﬂow.org/
+CrystalDatabase/AB_cF8_225_a_b.html.)), ﬂuorite (Fm 3m, #225,
+cF12, C1, AB2_cF12_225_a_c 26 (http://aﬂow.org/CrystalDatabase/
+AB2_cF12_225_a_c.html.)), wurtzite, (P6 3mc, #186, hP4, B4,
+AB_hP4_186_b_b26 (http://aﬂow.org/CrystalDatabase/
+AB_hP4_186_b_b.html.)), ZrO2 (P4/nmc, #137, tP6) and corundum
+(R3c, #167, hR10, D5 1, A2B3_hR10_167_c_e 26 (http://aﬂow.org/
+CrystalDatabase/A2B3_hR10_167_c_e.html.)) for which there are
+abundant available experimental data. The number of calculations
+and how they scale are compared with respect to the chosen cut-
+off for the IFCs (see Fig. 1) for different available software
+(Phono3py and ShengBTE software packages). The number of
+required static calculations increases with the cell ’s complexity,
+the total number of atoms, and the number of inequivalent
+positions in the primitive cell. AAPL reduces the number of
+required calculations compared to the other two codes for the six
+tested prototypes, indicating that the AAPL algorithm is ef ﬁcient
+at handling symmetry equivalence. For example, in silicon and
+using the minimum shell cut-off, AAPL only needs 21 calculations,
+while ShengBTE requires 76. The advantage is preserved while
+increasing the range of the interactions. For example, Phono3py
+requires 616 static calculations for CaF
+2 with seventh-neighbor
+shells, whereas AAPL needs less than one-third of this amount
+(176). Figure 1 summarizes the scaling results.
+AFLOW-AAPL Automatic Anharmonic Phonon Library
+JJ Plata et al.
+4
+npj Computational Materials (2017)  45 Published in partnership with the Shanghai Institute of Ceramics of the Chinese Academy of Sciences
+
+
+--- Page 5 ---
+Validation with experiments . A data set of 30 compounds is used
+to validate our framework. The list of materials includes
+semiconductors and insulators that belong to different structural
+prototypes, such as diamond (A_cF8_227_a
+26), rocksalt (AB_c-
+F8_225_a_b26), and ﬂuorite (AB2_cF12_225_a_c 26). To maximize
+the heterogeneity of the data set, materials are selected contain-
+ing as many different elements as possible from the s-blocks, p-
+blocks, and d-blocks of the periodic table. The comparison of
+calculated vs. experimental values of κ
+‘ is summarized in Table 1
+and Fig. 2.
+Different statistical quantities are used to measure qualitative
+and quantitative agreements between the AAPL and experimental
+results (Table 2). AAPL results strongly correlate with experimental
+ﬁndings, with relatively small RMSrD from experiment demon-
+strating the reliability and robustness of the framework. The
+algorithm should not be blamed for systematic errors in the ab-
+initio characterization of the compounds (such as the ones
+containing Pb).
+AAPL is also compared with approximate phenomenological
+frameworks, such as AFLOW-AGL
+15 and AFLOW-QHA-APL. 7,86
+Qualitatively, all the three frameworks have high linear correlation
+with experiments (Pearson, r); AAPL and QHA-APL are also very
+effective in rank ordering the compounds (Spearman, ρ).
+Quantitatively, AAPL has the lowest RMSrD value, followed by
+QHA-APL and AGL. Accuracy strongly correlates with computa-
+tional costs (AAPL /C29 QHA-APL > AGL), so that the users can
+choose which technique best ful ﬁlls their screening needs.
+Single-crystal and nanocrystalline silicon . Silicon is the perfect
+benchmark for testing the reliability of AAPL: extensive availability
+of experimental data for well-characterized samples
+87,78 and
+limited computational cost due to the diamond crystal structure
+with two atoms in the primitive cell and fcc lattice. Figure 3a
+depicts the calculated lattice thermal conductivity at different
+temperatures for single-crystal and polycrystalline samples com-
+pared to single-crystal experimental values from ref. 78. The
+calculations published by Carbogno et al. using the Green –Kubo
+formalism are also included.
+88 Boundary effects can be included in
+two ways: i. by calculating the complete καβ
+‘ ðLÞ (workﬂow (23)) for
+average grain sizes having different τbnd
+λ ðLÞ (workﬂow (22)) or ii. by
+neglecting τbnd from the total scattering time τ0
+λ (Eq. ( 7)) and
+restricting the summation to the modes with a mean free path
+shorter than L (Λ<L, Eq. ( 10)): καβ
+‘;ðΛ<LÞ. Both approaches are
+implemented in AAPL. Comparison with experimental values for
+different polycrystalline Si samples (average grain size L = 64, 76,
+80, 155, 550 and 20,000 nm) at 300 K are presented in Fig. 3b. Both
+approximations of grain boundary scattering effects show the
+same trend and are very close to the experimental results,
+corroborating the validity of our approaches.
+Non-cubic systems . The lattice thermal conductivity is addressed
+for three well-characterized systems.
+i. Tetragonal zirconia ( t-ZrO
+2) is used for energy and
+biomedical applications because of its combination of
+strength, fracture toughness, and ionic conductivity, as well
+as a low thermal conductivity coating material for protecting
+metals from excessive heat. Some properties strictly depend
+on the stabilization of the tetragonal phase as the
+monoclinic polymorph ( m-ZrO
+2) is the stable phase at room
+Fig. 1 Scaling benchmark. Number of required static calculations for a Si, b NaCl, c CaF2, d ZnO, e ZrO2 and f Al2O3 for the computation of the
+3rd order IFCs, applying different cut-offs ( nth-neighbor) using AAPL (green), Phono3py (red), and ShengBTE (blue)
+AFLOW-AAPL Automatic Anharmonic Phonon Library
+JJ Plata et al.
+5
+Published in partnership with the Shanghai Institute of Ceramics of the Chinese Academy of Sciences npj Computational Materials (2017)  45 
+
+
+--- Page 6 ---
+temperature.98 Stabilization is performed by alloying the
+system with aliovalent ions, such as yttrium. 98 Carbogno
+et al. recently calculated κ‘ for t-ZrO2 with a combination of
+ab-initio molecular dynamics and Green –Kubo formalism. 88
+Figure 3c shows a comparison: AAPL values (PBE and LDA
+functionals) for t-ZrO2 and m-ZrO2, Carbogno et al. for t-
+ZrO2, and the experimental values for m-ZrO2 and yttrium-
+stabilized t-ZrO2 (YSZ) t-ZrO2 (YSZ).89,90 Methods using
+molecular dynamics with ions responding “classically” to
+ab-initio forces tend to overestimate the thermal conduc-
+tivity below the Debye temperature. Classical dynamics
+follows the Dulong –Petit limit for the speci ﬁc heat —
+Boltzmann distribution of phonon energies —and the
+quantum of transferred heat is unavoidably overestimated
+(κ
+‘ increases with CV
+2). On the contrary, force-constants
+methods have phonons energies following the
+Bose–Einstein distribution by construction (Eq. ( 1)). They
+might neglect higher-order phonons ’ renormalization
+effects, thus producing underestimated κ‘.99 Above the
+Debye temperature (~590 K for ZrO 2
+100,101), the phonons
+mean free path reduces and the statistical distributions
+become classic. In that regime, the two methods will
+approach the correct experimental values from different
+directions.
+ii. Wurtzite zinc oxide (ZnO) is another well-characterized
+system. Olorunyolemi et al.
+91 and Barrado et al. 92 reported
+κ‘ of polycrystalline ZnO with an average particle size of 20
+and 1000 nm, respectively. AAPL, performed with average
+grain size of 500 nm, is in very good agreement with the
+experimental results capturing the effects of the grain
+boundaries’ scattering (Fig. 3d).
+iii. Rhombohedral aluminum oxide, α-Al
+2O3, which contains 30
+atoms in its conventional unit cell, is chosen to test the
+framework’s robustness. To the best of our knowledge, this
+is the largest unit cell ever characterized for lattice thermal
+conductivity with ab-initio means (FeSb3, containing 16
+atoms was studied in ref. 102). AAPL results are again in
+excellent agreement with experimental values
+93 for a wide
+range of temperatures (Fig. 3d).
+Extension to ACBN0 pseudo-hybrid functional . The accuracy of the
+results ultimately relies on the quality of the computed IFCs with
+ab-initio. The use of hybrid functionals 103 or advanced electronic
+structure methods, such as GW104 to compute the IFCs is
+limited105,106 because of their computational costs. It was also
+reported that hybrid functionals can predict false lattice instability
+in some cases. 107 Recently, the ACBN0 functional was introduced
+in order to facilitate the accurate characterization of electronic
+properties of correlated materials.
+40 ACBN0 is a pseudo-hybrid
+Hubbard density functional that introduces a new self-consistent
+ab-initio approach to compute U without the need for empirical
+Table 1. Calculated and experimental lattice thermal conductivity
+of diamond (Strukturbericht: A4; AFLOW standardized prototype
+name A_cF8_227_a 26), rocksalt (B1, AB_cF8_225_a_b 26), and ﬂuorite
+(C1, AB2_cF12_225_a_c 26) structure semiconductors and insulators at
+300 K
+Formula Pearson S.G.# Struk. a κAAPL
+λ κExp
+λ
+C cF8 227 A4 2270 2200 76,77
+Si cF8 227 A4 144 146 78
+Ge cF8 227 A4 46.17 58 79
+AgCl cF8 225 B1 0.67 1 80
+BaO cF8 225 B1 2.99 2.3 80
+CaO cF8 225 B1 20.41 27 80
+KBr cF8 225 B1 2.38 3.4 80
+KCl cF8 225 B1 3.77 7.1 80
+KI cF8 225 B1 1.46 2.6 80
+LiF cF8 225 B1 10.73 17.6 80
+LiH cF8 225 B1 28.4 15 80
+MgO cF8 225 B1 54.06 60 80
+NaBr cF8 225 B1 2.74 2.8 80
+NaCl cF8 225 B1 6.53 7.1 80
+NaF cF8 225 B1 21.11 16.5 80
+NaI cF8 225 B1 1.46 1.8 80
+PbS cF8 225 B1 1.35 2.9 80
+PbSe cF8 225 B1 1.21 2.0 80
+PbTe cF8 225 B1 1.73 2.5 80
+RbBr cF8 225 B1 1.68 3.8 80
+RbI cF8 225 B1 1.64 2.3 80
+SrO cF8 225 B1 9.12 12 80
+CdF2 cF12 225 C1 3.01 4.30 81
+SrCl2 cF12 225 C1 1.80 2.3 82
+Mg2Si cF12 225 C1 15.67 18.8 b83
+Mg2Ge cF12 225 C1 11.49 15.7 b83
+Mg2Sn cF12 225 C1 9.91 11.1 b83
+Mg2Pb cF12 225 C1 9.20 18 b83
+CaF2 cF12 225 C1 7.04 9.76 81
+CeO2 cF12 225 C1 11.35 10.8 84
+ThO2 cF12 225 C1 14.42 14 85
+Units: κ‘ in W/(m K)
+a Strukurbericht
+b κ‘ at 200 K
+Fig. 2 Comparison with experiments of different AFLOW techni-
+ques. Calculated lattice thermal conductivities at 300 K vs. experi-
+mental. Blue circles are used for AAPL results, empty orange
+triangles for the quick AFLOW —AGL prediction of refs. 15,29, and
+empty green squares for AFLOW —QHA-APL results of ref. 7. The red
+line represents equality (calculation = experiments)
+Table 2. Root mean square relative deviation (RMSrD), and Pearson
+and Spearman correlations for the material data set
+AGL QHA-APL AAPL
+r 0.997 0.999 0.999
+ρ 0.706 0.976 0.933
+RMSrD 86.20% 58.16% 27.57%
+AFLOW-AAPL Automatic Anharmonic Phonon Library
+JJ Plata et al.
+6
+npj Computational Materials (2017)  45 Published in partnership with the Shanghai Institute of Ceramics of the Chinese Academy of Sciences
+
+
+--- Page 7 ---
+parameters. ACBN0 can improve not only the description of the
+electronic structure, but also the prediction of the structural and
+the vibrational parameters of solids.
+45 One of the reasons for this is
+the better prediction of the Born charges, Z, and the dielectric
+tensor, ϵ1, compared to LDA or GGA functionals. 45 If the ACBN0
+functional improves the vibrational parameters of solids, it can be
+assumed that the calculations of other temperature-dependent
+properties, such as κ
+‘, may be improved too. As a testbed, calcium
+ﬂuoride, CaF 2, is chosen, because of the ample available
+experimental data. 81,95–97 CaF2 has been extensively used in
+optical devices due to its low refractive index, wide band gap, low
+dispersion, and large broadband radiation transmittance. 108–110
+A package implementing a minimalist AFLOW-Python approach
+to high-throughput ab-initio calculations for the generation of
+tight-binding hamiltonians and the calculation with the ACBN0
+functional (AFLOW π)111 is used to obtain the ACBN0 electronic
+structure of CaF 2.A Ueff of 13.43 is obtained for F –p orbitals. This
+value is then used inside AAPL for the rest of the calculations.
+AAPL + ACBN0 almost perfectly predicts the experimental κ‘ in
+contrast with AAPL + PBE which greatly underestimates κ‘ over
+Fig. 3 Comparison with experiments for selected materials systems. a Calculated lattice thermal conductivity for single-crystal (blue) and
+nanocrystalline silicon with different grain sizes. Blue circles represent measurements for single-crystal Si from ref. 78. b Cumulative lattice
+thermal conductivity, κ‘;ðΛ<LÞ, (green) of Si as a function of the average grain size, L, at 300 K. Lattice thermal conductivity (orange) including
+the scattering of phonons due to grain boundaries (see Eq. ( 9)) is also presented. Blue circles represent experimental data from ref. 87. c Lattice
+thermal conductivity of t-ZrO2 (blue lines) and m-ZrO2 (green lines) using AAPL and Green –Kubo formalism88 (orange). Blue circles and green
+squares represent experimental data from refs. 89, 90. d Calculated lattice thermal conductivity for ZnO (green) and α-Al2O3. Blue circles and
+green squares represent experimental data from refs. 91–93. e Lattice thermal conductivity of CaF 2 within the ACBN0 method (green) and PBE
+functional (orange). Blue circles represent experimental data from ref. 94. f Phonon dispersion of CaF 2 within the ACBN0 method (green). The
+PBE phonon dispersion (orange) is also shown for comparison. Blue triangles and open squares represent neutron scattering data from refs.
+95,96, respectively. Purple diamonds represent Raman and infrared data from ref. 97
+AFLOW-AAPL Automatic Anharmonic Phonon Library
+JJ Plata et al.
+7
+Published in partnership with the Shanghai Institute of Ceramics of the Chinese Academy of Sciences npj Computational Materials (2017)  45 
+
+
+--- Page 8 ---
+the entire temperature range (Fig. 3e). Phonon band structures
+have also been calculated with the harmonic library (APL) to
+explain the difference (Fig. 3f). ACBN0 reproduces the phonon
+dispersion better than the PBE functional. PBE, as a GGA
+functional, overestimates bond length and hence it tends to
+underestimate vibrational frequencies.
+112 On the contrary, ACBN0
+describes the bond length more accurately, obtaining frequencies
+higher than PBE and closer to the experimental values. 95 Major
+differences between ACBN0 and PBE results come from the optical
+bands, so the two main properties that are involved in the
+splitting of the optical band due to the non-analytical contribu-
+tions to the dynamical matrix are compared. While the Born
+charges are similar for ACBN0 and PBE (2.33 e and 2.34 e,
+respectively), there are signi ﬁcant differences in the high-
+frequency dielectric constant ϵ
+1 (2.083 and 2.305, respectively).
+The value obtained using ACBN0 is closer to the experimental ϵ1
+(2.045)97 than that obtained using PBE.
+CONCLUSIONS
+In this article, we have presented the AAPL, which was developed
+to compute the third-order IFCs and solve the BTE within the high-
+throughput AFLOW framework. The software automatically pre-
+dicts the lattice thermal conductivity of single-crystals and
+polycrystalline materials by using a single input ﬁle and no further
+user intervention. The symmetry analysis has been optimized to
+further reduce the number of static calculations compared to
+other packages. The robustness and accuracy of the code have
+been tested with a set of 30 materials that belong to different
+space groups. APL has been combined with the ACBN0 pseudo-
+hybrid functional to predict the lattice thermal conductivity of
+CaF
+2. Our results demonstrate that using ACBN0 can improve not
+only the electronic structure description of the material compared
+to the GGA functional, but also phonon-dependent properties,
+such as the thermal conductivity.
+METHODS
+Geometry optimization
+All structures are fully relaxed using the automated framework AFLOW 28–39
+and the VASP package. 113 Optimizations are performed following the
+AFLOW standards.34 The PAW potentials114 are used and the exchange and
+correlation functionals parameterized by the generalized gradient
+approximation proposed by Perdew –Burke–Ernzerhof (PBE).
+115 All calcula-
+tions use a high-energy cut-off, which is 40% larger than the maximum
+recommended cut-off among all component potentials, and a k-point
+mesh of 8000 k-points per reciprocal atom. Primitive cells are fully relaxed
+(lattice parameters and ionic positions) until the energy difference
+between two consecutive ionic steps is smaller than 10 −4 eV and forces
+in each atom are below 10 −3 eV/Å.
+Phonon calculations
+Phonon calculations are performed using the Automatic Phonon Library,
+APL, as implemented in AFLOW, and by using VASP to obtain the second-
+order IFCs via the ﬁnite-displacement approach.
+86 The magnitude of the
+displacement is 0.015 Å. Electronic self-consistent ﬁeld iterations for static
+calculations are stopped when the difference of energy between the last
+two steps is less than 10
+−5 meV. The threshold ensures a good
+convergence for the wavefunction and suf ﬁciently accurate values for
+forces and harmonic constants. Non-analytic contributions to the
+dynamical matrix are also included using the formulation developed by
+Wang et al.
+57 Frequencies and other related phonon properties are
+calculated on a 21 × 21 × 21 q-point mesh in the Brillouin zone, which is a
+tradeoff between the computational cost, convergence of the phonon
+density of states, pDOS, and the derived thermodynamic properties.
+Integrations within the Brillouin zone are obtained by using the linear
+interpolation tetrahedron method available in AFLOW.
+Lattice thermal conductivity
+Anharmonic force constants are extracted from a 4 × 4 × 4 supercell using
+a cut-off that includes all 4th-neighbor shells. Thermal conductivity is
+evaluated on a 21 × 21 × 21 q-point mesh using ζ= 0.1 for the Gaussian
+smoothing, Eq. ( 15). The dense mesh ensures the convergence of the
+values obtained for κ‘.25 The IFC calculations are iterated self-consistently
+until all sum rules are lesser than 10 −7 eV/Å3.
+Acronyms in the framework
+The following acronysms are used in the article. AAPL: Automatic-
+Anharmonic-Phonon-Library; AGL: AFLOW-Gibbs-Library; 15 APL: Auto-
+matic-Phonon-Library;28,35,16 QHA: quasi-harmonic approximation;7 ACBN0:
+Agapito Curtarolo Buongiorno Nardelli ab-initio DFT functional; 40 AFLOWπ:
+A minimalist AFLOW-Python approach to high-throughput ab-initio
+calculations for the generation of tight-binding hamiltonians and the
+calculation with the ACBN0 functional.
+111
+Data availability
+All the data and codes are freely available to the public as part of the
+AFLOW online repository and can be accessed through www.aﬂow.org.
+ACKNOWLEDGEMENTS
+The authors thank Drs. Natalio Mingo, David Hicks, Mike Mehl, Ohad Levy, Christian
+Carbogno, Matthias Schef ﬂer, and Corey Oses for various technical discussions. We
+acknowledge support by the DOE (DE-AC02-05CH11231), speci ﬁcally the Basic Energy
+Sciences program under Grant # EDCBEE. C.T., M.F., M.B.N., and S.C. acknowledge
+partial support by DOD-ONR (N00014-13-1-0635, N00014-11-1-0136, and N00014-15-
+1-2863). The AFLOW consortium acknowledges Duke University –Center for Materials
+Genomics—for computational support. S.C. acknowledges the Alexander von
+Humboldt Foundation for ﬁnancial support (Fritz-Haber-Institut der Max-Planck-
+Gesellschaft, 14195 Berlin-Dahlem, Germany).
+AUTHOR CONTRIBUTIONS
+J.J.P. developed and implemented the AAPL framework within AFLOW, with advice
+and assistance from J.C., C.T., P.N., M.d.J., M.A., and S.C. D.U., P.N. and J.J.P. ran the ab-
+initio calculations to obtain the lattice thermal conductivity. M.F. and M.B.N.
+performed the ACBN0 calculations to obtain the self-consistent U values for CaF
+2. All
+authors contributed to the analysis of the results and the writing of the paper.
+ADDITIONAL INFORMATION
+Competing interests: The authors declare no competing ﬁnancial interests.
+Publisher's note: Springer Nature remains neutral with regard to jurisdictional claims
+in published maps and institutional af ﬁliations.
+REFERENCES
+1. Zebarjadi, M., Esfarjani, K., Dresselhaus, M. S., Ren, Z. F. & Chen, G. Perspectives
+on thermoelectrics: from fundamentals to device applications. Energy Environ.
+Sci. 5, 5147 –5162 (2012).
+2. Carrete, J., Li, W., Mingo, N., Wang, S. & Curtarolo, S. Finding unprecedentedly
+low-thermal-conductivity half-heusler semiconductors via high-throughput
+materials modeling. Phys. Rev. X 4, 011019 (2014).
+3. Carrete, J., Mingo, N., Wang, S. & Curtarolo, S. Nanograined half-Heusler semi-
+conductors as advanced thermoelectrics: an ab initio high-throughput statistical
+study. Adv. Funct. Mater. 24, 7427 –7432 (2014).
+4. Yeh, L. -T. & Chu, R. C. Thermal Management of Microloectronic Equipment : Heat
+Transfer Theory , Analysis Methods , & Design Practices (ASME Press, New York,
+2002).
+5. Wright, C. D. et al. The design of rewritable ultrahigh density scanning-probe
+phase-change memories. IEEE Trans. Nanotechnol. 10, 900 –912 (2011).
+6. Cahill, D. G. et al. Nanoscale thermal transport. II. 2003 –2012. Appl. Phys. Rev. 1,
+011305 (2014).
+7. Nath, P. et al. High throughput combinatorial method for fast and robust pre-
+diction of lattice thermal conductivity. Scr. Mater. 129,8 8 –93 (2017).
+8. Ziman, J. M. Electrons & Phonons : The Theory of Transport Phenomena in Solids
+(Clarendon Press, New York, 1960).
+9. Callaway, J. Model for lattice thermal conductivity at low temperatures. Phys.
+Rev. 113, 1046 –1051 (1959).
+AFLOW-AAPL Automatic Anharmonic Phonon Library
+JJ Plata et al.
+8
+npj Computational Materials (2017)  45 Published in partnership with the Shanghai Institute of Ceramics of the Chinese Academy of Sciences
+
+
+--- Page 9 ---
+10. Allen, P. B. Zero-point & isotope shifts: relation to thermal shifts. Philos. Mag. B
+70, 527 –534 (1994).
+11. Green, M. S. Markoff random processes & the statistical mechanics of time-
+dependent phenomena. ii. Irreversible processes in ﬂuids. J. Chem. Phys. 22,
+398–413 (1954).
+12. Kubo, R. Statistical-mechanical theory of irreversible processes. i. General theory
+& simple applications to magnetic and conduction problems. J. Phys. Soc. Jpn.
+12, 570 –586 (1957).
+13. Curtarolo, S. & Ceder, G. Dynamics of an inhomogeneously coarse grained
+multiscale system. Phys. Rev. Lett. 88, 255504 (2002).
+14. Blanco, M. A., Francisco, E. & Luaña, V. GIBBS: isothermal-isobaric thermo-
+dynamics of solids from energy curves using a quasi-harmonic Debye model.
+Comput. Phys. Commun. 158,5 7 –72 (2004).
+15. Toher, C. et al. High-throughput computational screening of thermal con-
+ductivity, Debye temperature, & Grüneisen parameter using a quasiharmonic
+Debye model. Phys. Rev. B 90, 174107 (2014).
+16. Toher, C. et al. Combining the AFLOW GIBBS & elastic libraries to ef ﬁciently &
+robustly screen thermomechanical properties of solids. Phys. Rev. Mater. 1,
+015401 (2017).
+17. Bjerg, L., Iversen, B. B. & Madsen, G. K. H. Modeling the thermal conductivities of
+the zinc antimonides ZnSb & Zn
+4Sb3. Phys. Rev. B 89, 024304 (2014).
+18. Mingo, N., Stewart, D. A., Broido, D. A., Lindsay, L. & Li, W. Ab initio thermal
+transport. In Length-Scale Dependent Phonon Interactions (eds Shindé, S. L. &
+Srivastava, G. P.) 137 –173 (Springer, New York, 2014).
+19. Broido, D. A., Malorny, M., Birner, G., Mingo, N. & Stewart, D. A. Intrinsic lattice
+thermal conductivity of semiconductors from ﬁrst principles. Appl. Phys. Lett. 91,
+231922 (2007).
+20. Ward, A. & Broido, D. A. Intrinsic phonon relaxation times from ﬁrst-
+principles studies of the thermal conductivities of Si & Ge. Phys. Rev. B 81,
+085205 (2010).
+21. Tang, X. & Dong, J. Lattice thermal conductivity of MgO at conditions of Earth ’s
+interior. Proc. Natl. Acad. Sci. USA 107, 4539 –4543 (2010).
+22. Togo, A., Chaput, L. & Tanaka, I. Distributions of phonon lifetimes in Brillouin
+zones. Phys. Rev. B 91, 094306 (2015).
+23. Chernatynskiy, A. & Phillpot, S. R. Phonon transport simulator (PhonTS). Comput.
+Phys. Commun. 192, 196 –204 (2015).
+24. Tadano, T., Gohda, Y. & Tsuneyuki, S. Anharmonic force constants extracted from
+ﬁrst-principles molecular dynamics: applications to heat transfer simulations.
+J. Phys.: Condens. Matter 26, 225402 (2014).
+25. Li, W., Carrete, J., Katcho, N. A. & Mingo, N. ShengBTE: a solver of the Boltzmann
+transport equation for phonons. Comput. Phys. Commun. 185, 1747 –1758
+(2014).
+26. Mehl, M. J. et al. The AFLOW library of crystallographic prototypes: Part 1.
+Comput. Mater. Sci. 136,S 1 –S828 (2017).
+27. Zhou, F., Nielson, W., Xia, Y. & Ozoli ņš, V. Lattice anharmonicity & thermal
+conductivity from compressive sensing of ﬁrst-principles calculations. Phys. Rev.
+Lett. 113, 185501 (2014).
+28. Curtarolo, S. et al. AFLOW: an automatic framework for high-throughput
+materials discovery. Comput. Mater. Sci. 58, 218 –226 (2012).
+29. Curtarolo, S. et al. AFLOWLIB.ORG: a distributed materials properties repository
+from high-throughput ab initio calculations. Comput. Mater. Sci. 58, 227 –235
+(2012).
+30. Setyawan, W. & Curtarolo, S. High-throughput electronic band structure calcu-
+lations: challenges & tools. Comput. Mater. Sci. 49, 299 –312 (2010).
+31. Yang, K., Oses, C. & Curtarolo, S. Modeling off-stoichiometry materials with a
+high-throughput ab-initio approach. Chem. Mater. 28, 6484 –6492 (2016).
+32. Rose, F. et al. AFLUX: the LUX materials search API for the AFLOW data repo-
+sitories. Comput. Mater. Sci. 137, 362 –370 (2017).
+33. Taylor, R. H. et al. A RESTful API for exchanging materials data in the AFLOWLIB.
+org consortium. Comput. Mater. Sci. 93, 178 –192 (2014).
+34. Calderon, C. E. et al. The AFLOW standard for high-throughput materials science
+calculations. Comput. Mater. Sci. 108, 233 –238 (2015). Part A.
+35. Levy, O., Jahnátek, M., Chepulskii, R. V., Hart, G. L. W. & Curtarolo, S. Ordered
+structures in Rhenium binary alloys from ﬁrst-principles calculations. J. Am.
+Chem. Soc. 133, 158 –163 (2011).
+36. Levy, O., Hart, G. L. W. & Curtarolo, S. Structure maps for hcp metals from ﬁrst-
+principles calculations. Phys. Rev. B 81, 174106 (2010).
+37. Levy, O., Chepulskii, R. V., Hart, G. L. W. & Curtarolo, S. The new face of Rhodium
+alloys: revealing ordered structures from ﬁrst principles. J. Am. Chem. Soc. 132,
+833–837 (2010).
+38. Levy, O., Hart, G. L. W. & Curtarolo, S. Uncovering compounds by synergy of
+cluster expansion and high-throughput methods. J. Am. Chem. Soc. 132,
+4830–4833 (2010).
+39. Hart, G. L. W., Curtarolo, S., Massalski, T. B. & Levy, O. Comprehensive search for
+new phases & compounds in binary alloy systems based on Platinum-group
+metals, using a computational ﬁrst-principles approach. Phys. Rev. X 3, 041035
+(2013).
+40. Agapito, L. A., Curtarolo, S. & Buongiorno Nardelli, M. Reformulation of DFT + U
+as a pseudohybrid Hubbard density functional for accelerated materials dis-
+covery. Phys. Rev. X 5, 011006 (2015).
+41. D ’Amico, P. et al. Accurate ab initio tight-binding hamiltonians: effective tools
+for electronic transport & optical spectroscopy from ﬁrst principles. Phys. Rev. B
+94, 165166 (2016).
+42. Agapito, L. A. et al. Accurate tight-binding hamiltonians for 2D and layered
+materials. Phys. Rev. B 93, 125137 (2016).
+43. Agapito, L. A., Ismail-Beigi, S., Curtarolo, S., Fornari, M. & Buongiorno Nardelli, M.
+Accurate tight-binding hamiltonian matrices from ab initio calculations: minimal
+basis sets. Phys. Rev. B 93, 035104 (2016).
+44. Tang, Y. et al. Convergence of multi-valley bands as the electronic origin of high
+thermoelectric performance in CoSb 3 skutterudites. Nat. Mater. 14, 1223 –1228
+(2015).
+45. Gopal, P. et al. Improved predictions of the physical properties of Zn- & Cd-
+based wide band-gap semiconductors: a validation of the ACBN0 functional.
+Phys. Rev. B 91, 245202 (2015).
+46. Agapito, L. A., Ferretti, A., Calzolari, A., Curtarolo, S. & Buongiorno Nardelli, M.
+Effective & accurate representation of extended Bloch states on ﬁnite Hilbert
+spaces. Phys. Rev. B 88, 165127 (2013).
+47. Allen, P. B. Improved Callaway model for lattice thermal conductivity. Phys. Rev.
+B 88, 144302 (2013).
+48. Deinzer, G., Birner, G. & Strauch, D. Ab initio calculation of the linewidth of
+various phonon modes in germanium & silicon. Phys. Rev. B 67, 144304 (2003).
+49. Omini, M. & Sparavigna, A. An iterative approach to the phonon Boltzmann
+equation in the theory of thermal conductivity. Physica B 212, 101 –112 (1995).
+50. Omini, M. & Sparavigna, A. Beyond the isotropic-model approximation in the
+theory of thermal conductivity. Phys. Rev. B 53, 9064 –9073 (1996).
+51. Omini, M. & Sparavigna, A. Heat transport in dielectric solids with diamond
+structure. Nuovo Cimento 19, 1537 –1563 (1997).
+52. Ward, A., Broido, D. A., Stewart, D. A. & Deinzer, G. Ab initio theory of the lattice
+thermal conductivity in diamond. Phys. Rev. B 80, 125203 (2009).
+53. Lindsay, L. & Broido, D. A. Three-phonon phase space & lattice thermal con-
+ductivity in semiconductors. J. Phys.: Condens. Matter 20, 165209 (2008).
+54. Wallace, D. C. Thermodynamics of Crystals (Wiley, New York, 1972).
+55. Dove, M. T. Introduction to Lattice Dynamics (Cambridge University Press, New
+York, 1993).
+56. Srivastava, G. P. The Physics of Phonons (CRC Press, Taylor & Francis, New York,
+1990).
+57. Wang, Y. et al. A mixed-space approach to ﬁrst-principles calculations of phonon
+frequencies for polar materials. J. Phys.: Condens. Matter 22, 202201 (2010).
+58. Baroni, S., de Gironcoli, S., Corso, A. D. & Giannozzi, P. Phonons & related crystal
+properties from density-functional perturbation theory. Rev. Mod. Phys. 73,
+515–562 (2001).
+59. Wang, Y., Shang, S. L., Fang, H., Liu, Z.-K. & Chen, L. Q. First-principles calculations
+of lattice dynamics and thermal properties of polar solids. npj Comput. Mater. 2,
+16006 (2016).
+60. Tamura, S. Isotope scattering of dispersive phonons in Ge. Phys. Rev. B 27,
+858
+–866 (1983).
+61. Kundu, A., Mingo, N., Broido, D. A. & Stewart, D. A. Role of light & heavy
+embedded nanoparticles on the thermal conductivity of SiGe alloys. Phys. Rev. B
+84, 125426 (2011).
+62. Berglund, M. & Wieser, M. E. Isotopic compositions of the elements 2009 (IUPAC
+technical report). Pure Appl. Chem. 83, 397 –410 (2011).
+63. Wang, Z. & Mingo, N. Absence of Casimir regime in two-dimensional nanor-
+ibbon phonon conduction. Appl. Phys. Lett. 99, 101903 (2011).
+64. Yang, X., Carrete, J. & Wang, Z. Role of force-constant difference in phonon
+scattering by nano-precipitates in PbTe. J. Appl. Phys. 118, 085701 (2015).
+65. Maradudin, A. A., Montroll, E. W., Weiss, G. H. & Ipatova, I. P. Theory of Lattice
+Dynamics in the Harmonic Approximation (Academic Press, New York, 1971).
+66. Madelung, O. Introduction to Solid -state Theory 3rd edn (Springer-Verlag, Berlin,
+1996).
+67. Kresse, G., Furthmüller, J. & Hafner, J. Ab-initio force constant approach to
+phonon dispersion relations of diamond & graphite. Europhys. Lett. 32, 729–734
+(1995).
+68. Gajdo š, M., Hummer, K., Kresse, G., Furthmüller, J. & Bechstedt, F. Linear optical
+properties in the projector-augmented wave methodology. Phys. Rev. B 73,
+045112 (2006).
+69. Stokes, H. T. Using symmetry in frozen phonon calculations. Ferroelectrics 164,
+183–188 (1995).
+70. Boyer, L. L., Stokes, H. T. & Mehl, M. J. Self-consistent potential induced
+breathing model calculations for longitudinal modes in MgO. Ferroelectrics 164,
+177–181 (1995).
+AFLOW-AAPL Automatic Anharmonic Phonon Library
+JJ Plata et al.
+9
+Published in partnership with the Shanghai Institute of Ceramics of the Chinese Academy of Sciences npj Computational Materials (2017)  45 
+
+
+--- Page 10 ---
+71. Feng, T. & Ruan, X. Quantum mechanical prediction of four-phonon
+scattering rates & reduced thermal conductivity of solids. Phys. Rev. B 93,
+045202 (2016).
+72. Lindsay, L. First principles peierls-boltzmann phonon thermal transport: a topical
+review. Nanosc. Microsc. Therm. 20,6 7 –84 (2016).
+73. Esfarjani, K. & Stokes, H. T. Method to extract anharmonic force constants from
+ﬁrst principles calculations. Phys. Rev. B 77, 144112 (2008).
+74. Lovelock, D. & Rund, H. Tensors, Differential Forms , & Variational Principles
+(Dover Publications, New York, 1975).
+75. Giannozzi, P. et al. QUANTUM ESPRESSO: a modular & open-source software
+project for quantum simulations of materials. J. Phys.: Condens. Matter 21,
+395502 (2009).
+76. Anthony, T. R. et al. Thermal diffusivity of isotopically enriched 12C diamond.
+Phys. Rev. B 42, 1104 –1111 (1990).
+77. Wei, L., Kuo, P. K., Thomas, R. L., Anthony, T. R. & Banholzer, W. F. Thermal
+conductivity of isotopically modi ﬁed single crystal diamond. Phys. Rev. Lett. 70,
+3764–3767 (1993).
+78. Touloukian, Y. S., Powell, R. W., Ho, C. Y. & Klemens, P. G. Thermophysical Prop-
+erties of Matter - the TPRC Data Series (IFI/Plenum, New York, 1970 –1979).
+79. Carruthers, J. A., Geballe, T. H., Rosenberg, H. M. & Ziman, J. M. The thermal
+conductivity of germanium & silicon between 2 & 300 degrees K. Proc. R. Soc. A
+238, 502 –514 (1957).
+80. Morelli, D. T. & Slack, G. A. High lattice thermal conductivity solids. In High
+Thermal Conductivity Materials (eds Shindé, S. L. & Goela, J. S.) (Springer,
+New York, 2006).
+81. Popov, P. A., Fedorov, P. P. & Osiko, V. V. Thermal conductivity of single
+crystals with a ﬂuorite structure: cadmium ﬂuoride. Phys. Solid State 52, 504–508
+(2010).
+82. Moore, J. P., Weaver, F. J., Graves, R. S. & McElroy, D. L. The thermal conductivities
+of SrCl2 and SrF2 from 85 to 400 K. In Thermal Conductivity 18 (eds Ashworth, T.
+& Smith, D. R.) 115 –124 (Springer, New York, 1985).
+83. Martin, J. J. & Shanks, H. R. Thermal conductivity of magnesium plumbide.
+J. Appl. Phys. 45, 2428 –2431 (1974).
+84. Jha, A. R. Rare Earth Materials : Properties and Applications (CRC Press, Boca Raton,
+2014).
+85. Mann, M. et al. Hydrothermal growth & thermal property characterization of
+ThO2 single crystals. Cryst. Growth Des. 10, 2146 –2151 (2010).
+86. Nath, P. et al. High-throughput prediction of ﬁnite-temperature
+properties using the quasi-harmonic approximation. Comput. Mater. Sci. 125,
+82–91 (2016).
+87. Wang, Z., Alaniz, J. E., Jang, W., Garay, J. E. & Dames, C. Thermal conductivity of
+nanocrystalline silicon: importance of grain size & frequency-dependent mean
+free paths. Nano Lett. 11, 2206 –2213 (2011).
+88. Carbogno, C., Ramprasad, R. & Schef ﬂer, M. Ab initio Green-Kubo approach for
+the thermal conductivity of solids. Phys. Rev. Lett. 118, 175901 (2017).
+89. Raghavan, S., Wang, H., Dinwiddie, R. B., Porter, W. D. & Mayo, M. J. The effect of
+grain size, porosity & yttria content on the thermal conductivity of nanocrys-
+talline zirconia. Scr. Mater. 39, 1119 –1125 (1998).
+90. Bisson, J. -F., Fournier, D., Poulain, M., Lavigne, O. & Mévrel, R. Thermal con-
+ductivity of yttria –zirconia single crystals, determined with spatially resolved
+infrared thermography. J. Am. Ceram. Soc. 83, 1993 –1998 (2000).
+91. Olorunyolemi, T. et al. Thermal conductivity of zinc oxide: from green to sintered
+state. J. Am. Ceram. Soc. 85, 1249 –1253 (2002).
+92. Barrado, C. M., Leite, E. R., Bueno, P. R., Longo, E. & Varela, J. A. Thermal con-
+ductivity features of ZnO-based varistors using the laser-pulse method. Mater.
+Sci. Eng. A 371, 377 –381 (2004).
+93. Slack, G. A. Thermal conductivity of MgO, Al
+2O3, MgAl2O4,&F e 3O4 crystals from
+3° to 300°K. Phys. Rev. 126, 427 –441 (1962).
+94. Slack, G. A. Thermal conductivity of CaF 2, MnF2, CoF 2, & ZnF 2 crystals. Phys. Rev.
+122, 1451 –1464 (1961).
+95. Schmalzl, K., Strauch, D. & Schober, H. Lattice-dynamical & ground-state prop-
+erties of CaF 2 studied by inelastic neutron scattering & density-functional
+methods. Phys. Rev. B 68, 144301 (2003).
+96. Elcombe, M. M. & Pryor, A. W. The lattice dynamics of calcium ﬂuoride. J. Phys.:
+Condens Matter 3, 492 –499 (1970).
+97. Kaiser, W., Spitzer, W. G., Kaiser, R. H. & Howarth, L. E. Infrared properties of CaF 2,
+SrF2, and BaF 2. Phys. Rev. 127, 1950 –1954 (1962).
+98. Chevalier, J., Gremillard, L., Virkar, A. V. & Clarke, D. R. The tetragonal-monoclinic
+transformation in zirconia: lessons learned & future trends. J. Am. Ceram. Soc. 92,
+1901–1920 (2009).
+99. Carbogno, C. & Curtarolo, S. private comunications.
+100. Degueldre, C., Tissot, P., Lartigue, H. & Pouchon, M. Speci ﬁc heat capacity &
+Debye temperature of zirconia & its solid solution. Thermochim. Acta 403,
+267–273 (2003).
+101. Zhang, Y. & Zhang, J. First principles study of structural and thermodynamic
+properties of zirconia. Mater. Today: Proceedings 1,4 4 –54 (2014).
+102. Fu, Y., Singh, D. J., Li, W. & Zhang, L. Intrinsic ultralow lattice thermal conductivity
+of the un ﬁlled skutterudite FeSb 3. Phys. Rev. B 94, 075122 (2016).
+103. Heyd, J., Scuseria, G. E. & Ernzerhof, M. Hybrid functionals based on a screened
+Coulomb potential. J. Chem. Phys. 118, 8207 –8215 (2003).
+104. Shishkin, M., Marsman, M. & Kresse, G. Accurate quasiparticle spectra from self-
+consistent GW calculations with vertex corrections. Phys. Rev. Lett. 99, 246403
+(2007).
+105. Lazzeri, M., Attaccalite, C., Wirtz, L. & Mauri, F. Impact of the electron-electron
+correlation on phonon dispersion: failure of LDA & GGA DFT functionals in
+graphene and graphite. Phys. Rev. B 78, 081406 (2008).
+106. Hummer, K., Harl, J. & Kresse, G. Heyd-Scuseria-Ernzerhof hybrid functional for
+calculating the lattice dynamics of semiconductors. Phys. Rev. B 80, 115205
+(2009).
+107. Gao, W. et al. On the applicability of hybrid functionals for predicting
+fundamental properties of metals. Solid State Commun. 234–235,1 0 –13
+(2016).
+108. Cazorla, C. & Errandonea, D. Superionicity & polymorphism in calcium ﬂuoride at
+high pressure. Phys. Rev. Lett. 113, 235902 (2014).
+109. Sang, L., Liao, M., Koide, Y. & Sumiya, M. High-performance metal-
+semiconductor-metal InGaN photodetectors using CaF
+2 as the insulator. Appl.
+Phys. Lett. 98, 103502 (2011).
+110. Lyberis, A. et al. Effect of Yb 3+ concentration on optical properties of Yb:CaF 2
+transparent ceramics. Opt. Mater. 34, 965 –968 (2012).
+111. Supka, A. R. et al. AFLOW π: A minimalist approach to high-throughput ab initio
+calculations including the generation of tight-binding hamiltonians. Comput.
+Mater. Sci. 136,7 6 –84 (2017).
+112. Sholl, D. S. & Steckel, J. A. Density Functional Theory : A Practical Introduction
+(Wiley, New Jersey, 2009).
+113. Kresse, G. & Hafner, J. Ab initio molecular dynamics for liquid metals. Phys. Rev. B
+47, 558 –561 (1993).
+114. Blöchl, P. E. Projector augmented-wave method. Phys. Rev. B 50, 17953 –17979
+(1994).
+115. Perdew, J. P., Burke, K. & Ernzerhof, M. Generalized gradient approximation
+made simple. Phys. Rev. Lett. 77, 3865 –3868 (1996).
+Open Access This article is licensed under a Creative Commons
+Attribution 4.0 International License, which permits use, sharing,
+adaptation, distribution and reproduction in any medium or format, as long as you give
+appropriate credit to the original author(s) and the source, provide a link to the Creative
+Commons license, and indicate if changes were made. The images or other third party
+material in this article are included in the article ’s Creative Commons license, unless
+indicated otherwise in a credit line to the material. If material is not included in the
+article’s Creative Commons license and your intended use is not permitted by statutory
+regulation or exceeds the permitted use, you will need to obtain permission directly
+from the copyright holder. To view a copy of this license, visit http://creativecommons.
+org/licenses/by/4.0/.
+© The Author(s) 2017
+AFLOW-AAPL Automatic Anharmonic Phonon Library
+JJ Plata et al.
+10
+npj Computational Materials (2017)  45 Published in partnership with the Shanghai Institute of Ceramics of the Chinese Academy of Sciences

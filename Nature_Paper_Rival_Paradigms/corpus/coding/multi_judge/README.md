@@ -62,3 +62,15 @@ The script rebuilds:
 
 - `score_aggregates_long.csv`
 - `classification_aggregates.csv`
+
+`score_aggregates_long.csv` contains raw dimension aggregates plus derived analytic rows. For the
+substantive causal-abstraction and statistical-inductivist scales, the derived rows are
+`scale_mean`, `scale_max`, `scale_count_high_ge3`, `scale_any_high_ge3`,
+`scale_count_extreme_eq4`, and `scale_any_extreme_eq4`. These features are computed from each
+judge-round's dimension scores before pooling, so binary rows aggregate as the share of included
+judging units for which the flag was true.
+
+For the paradigm-marker instrument, `cp_` move dimensions are occasion-gated. Aggregates for raw
+`cp_` dimensions and derived `cp_marker_*` high-threshold rows use only dimensions with
+`occasion = 1`; gated-out dimensions remain NA rather than becoming zeros. The ungated `si_`
+derived rows are computed over all three `si_` dimensions.

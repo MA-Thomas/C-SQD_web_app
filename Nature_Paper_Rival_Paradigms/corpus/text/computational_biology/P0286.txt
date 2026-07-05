@@ -1,0 +1,1194 @@
+--- Page 1 ---
+RESEA RCH ARTICL E
+RNA folding using quantum computers
+Dillion M. Fox
+ID
+1☯
+, Christopher M. MacDermaid
+ID
+1☯
+, Andrea M. A. Schreij
+ID
+1
+,
+Magdalena Zwierzyna
+ID
+2
+, Ross C. Walker
+1,3
+*
+1 Medicinal Sciences and Technolo gy, GlaxoS mithKline, Collegevil le, Pennsylvan ia, United States of
+America, 2 Vaccines Research and Developm ent, GlaxoSm ithKline, Siena, Italy, 3 Department of Chem istry
+and Biochemi stry, University of California San Diego, La Jolla, Californi a, United States of America
+☯ These authors contribu ted equally to this work.
+* ross@ rosswalker.c o.uk
+Abstract
+The 3-dimensional fold of an RNA molecule is largely determined by patterns of intramolec-
+ular hydrogen bonds between bases. Predicting the base pairing network from the
+sequence, also referred to as RNA secondary structure prediction or RNA folding, is a non-
+deterministic polynomial-time (NP)-complete computatio nal problem. The structure of the
+molecule is strongly predictive of its functions and biochemical properties, and therefore the
+ability to accurately predict the structure is a crucial tool for biochemists. Many methods
+have been proposed to efficiently sample possible secondary structure patterns. Classic
+approaches employ dynamic programming , and recent studies have explored approaches
+inspired by evolutionary and machine learning algorithms. This work demonstrates leverag-
+ing quantum computing hardware to predict the secondary structure of RNA. A Hamiltonian
+written in the form of a Binary Quadratic Model (BQM) is derived to drive the system toward
+maximizing the number of consecutive base pairs while jointly maximizing the average
+length of the stems. A Quantum Annealer (QA) is compared to a Replica Exchange Monte
+Carlo (REMC) algorithm programmed with the same objective function, with the QA being
+shown to be highly competitive at rapidly identifying low energy solutions. The method pro-
+posed in this study was compared to three algorithms from literature and, despite its simplic-
+ity, was found to be competitive on a test set containing known structures with pseudoknots.
+Author summary
+The recent FDA approval of mRNA-based vaccines has increased public interest in syn-
+thetically designed RNA molecules. RNA molecules fold into complex secondary struc-
+tures which determine their molecular properties and in part their efficacy. Determining
+the folded structure of an RNA molecule is a computationally challenging task with expo-
+nential scaling that is intractable to solve exactly, and therefore approximate methods are
+used. Quantum computing technology offers a new approach to finding approximate
+solutions to problems with exponential scaling. We formulate a simplistic, yet effective,
+model of RNA folding that can easily be mapped to quantum computers and we show
+that currently available quantum computing hardware is competitive with classical
+methods.
+PLOS COMP UTATIONAL  BIOLOGY
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 1 / 17
+a1111111111
+a1111111111
+a1111111111
+a1111111111
+a1111111111
+OPEN ACCESS
+Citation: Fox DM, MacDermaid CM, Schreij AMA,
+Zwierzyna M, Walker RC (2022) RNA folding using
+quantum computers. PLoS Comput Biol 18(4):
+e1010032. https://d oi.org/10.1371/j ournal.
+pcbi.1010032
+Editor: Shi-Jie Chen, Univers ity of Missouri,
+UNITED STATES
+Received: July 1, 2021
+Accepted: March 18, 2022
+Published: April 11, 2022
+Copyright: © 2022 Fox et al. This is an open access
+article distributed under the terms of the Creative
+Commons Attributi on License, which permits
+unrestricted use, distribution , and reproduction in
+any medium, provide d the original author and
+source are credited .
+Data Availabilit y Statement: All relevant data are
+within the manuscript and its Support ing
+Information files. The code is available in the
+following public GitHub repository: https://githu b.
+com/dillionf ox/quantum _rna_folding .
+Funding: The author(s) received no specific
+funding for this work.
+Competing interests : The authors have declared
+that no competing interests exist.
+
+
+--- Page 2 ---
+Introduction
+RNA molecules fold into complex secondary structures, which determine their molecular
+properties such as thermal stability and compactness. In addition, RNA folding has an impact
+on RNA function in protein translation, transcriptional regulation, and other vital cellular pro-
+cesses [1–3]. Secondary structure is also key to the function of synthetic RNAs which are used
+in a variety of applications ranging from protein design and genome editing to mRNA vaccine
+development (for example, [4–6]).
+Methods for RNA structure determination are therefore of great interest and importance
+for basic research, applied biotechnology, and rational drug discovery. Experimental
+approaches developed for this purpose are extremely time consuming and expensive, and
+therefore their use is limited in practice. Computational methods are an attractive alternative
+as they aim to predict the folded structure of an RNA molecule based solely on sequence infor-
+mation, which can be readily obtained from high-throughput sequencing experiments. There
+are varied approaches to computational RNA structure prediction, ranging from physics-
+based methods that assign thermodynamic scores to a pre-defined set of structural features [7–
+9], to deep learning models trained on large RNA databases [10–13].
+Like proteins, secondary structure of RNA molecules is largely determined by the sequence.
+Unlike proteins, where the folding is a global process largely driven by hydrophobic forces, sin-
+gle-stranded RNA molecules undergo a hierarchical folding process that is dominated by the
+formation of hydrogen bonds between nucleotides. Compared to protein folding, the forma-
+tion of RNA tertiary structure is relatively slow. The RNA folding process involves the forma-
+tion of strong restrictive local geometries which usually results in well-defined, thermally
+stable structures with little flexibility compared to protein structures [14].
+The standard RNA hydrogen bonding pairs, (GC and AU) are known as the Watson-Crick
+base-pairs. Another common type of interaction that can form, known as the Wobble interac-
+tion, is between G and U. A variety of local structures, such as internal loops, hairpin loops,
+stacks, bulged loops, and multi-loops, can be formed by Hoogsteen- or CH-edges and Sugar-
+edges. Such edges can accommodate types of interactions other than Watson-Crick type edges,
+including the formation of base triplets (base-pairs between three bases) that can modulate the
+stability of helices all the way to quaternary structures. A set of consecutive base pairs is often
+referred to as a stem or a helix, but the particular definitions are not consistent across litera-
+ture. RNA structures also undergo formation of long-range interactions such as pseudoknots,
+which occur when base pairs cross without overlapping (see Fig A in S1 Text).
+RNA structure prediction is a computationally expensive task, particularly when the solu-
+tion space includes pseudoknots. Folding algorithms that do not account for pseudoknots tend
+to scale polynomially, with the most efficient method having sub-cubic scaling [15]. There also
+exist approximate methods that have been shown to have linear scaling [16]. A widely used
+minimum free energy (MFE) approach to RNA secondary structure with pseudoknots is an
+NP-complete computational problem [17]. For an RNA strand with N possible stems, the total
+size of the combinatorial space is 2
+N
+. Many of the possible combinations of stems are invalid,
+and one of the challenges of the algorithm is to efficiently exclude these invalid regions and
+focus on the relevant parts of the search space. For example, the SARS-CoV2 spike glycopro-
+tein segment of the Pfizer-BioNTech COVID-19 vaccine [18] contains approximately 486,000
+possible stems, so the total combinatorial space contains 2
+486,000
+(~ 10
+146,440
+) possible solu-
+tions. For reference, the number of atoms in the universe is approximately 10
+80
+, inferred from
+the cosmological parameters presented in the Planck Collaboration [19]. Although many of
+the possible combinatorial solutions likely contain overlapping stems, the majority of the
+potential stems cannot be excluded from the set a priori. Therefore, the total number of
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 2 / 17
+
+
+--- Page 3 ---
+evaluations required to exhaustively sample the solution space grows exponentially with the
+number of stems. Since the solution space cannot be exhaustively sampled for many biologi-
+cally relevant RNA sequences, either an alternative approach is required to identify an approxi-
+mate solution, or pseudoknots must be disregarded. Classic approaches to sampling RNA
+secondary structure configurations utilize dynamic programming [9,20,21], while more recent
+methods have employed simulated annealing and Monte Carlo methods [22–24]. In this
+study, we investigate the viability of utilizing quantum computers (QCs) to efficiently identify
+high-quality solutions to RNA secondary structure prediction.
+To date state-of-the-art quantum devices are able to outperform classical computers in a
+narrow range of tasks [25,26], however, there have not yet been any concrete demonstrations
+of quantum advantage for commercial applications primarily due to the fact that QCs are lim-
+ited in size and capabilities [27]. It is speculated that the pharmaceutical, chemical, and life sci-
+ences industries will be the first fields to benefit from quantum computing technology [28,29].
+While applications utilizing quantum mechanical calculations, such as quantum chemistry,
+have clear maps to QCs (see, for example, [30–33]) at present these problems require too
+many qubits for current hardware to solve industrially relevant problems [29,34]. To date
+there are primarily two models of QCs: gate model and quantum annealing. Gate model quan-
+tum devices have a broad application range and are the most commonly used for quantum
+chemistry and quantum machine learning calculations. An alternative design, pioneered by
+the company D-Wave, is the QA. Compared to the multitude of applications of gate model
+QCs, QAs have a much narrower range and only focus on optimizing solutions to problems by
+minimizing a problem Hamiltonian. To date, QAs containing thousands of qubits have been
+built, and these devices are capable of solving sufficiently large discrete combinatorial optimi-
+zation problems to permit testing against real world industrial use-cases. Rather than being
+programmed by sequences of quantum operators, QAs are designed to anneal quadratic Ham-
+iltonians in the form of Eq (1).
+H ¼
+X
+i
+h
+i
+q
+i
+þ
+X
+j
+X
+k<j
+J
+jk
+q
+j
+q
+k
+ð1Þ
+Here, q
+i
+, q
+j
+, and q
+k
+represent the values of the qubits which can either be {0, 1} or {-1, 1} for
+binary or spin representations, respectively, h
+i
+are the one-body terms, and J
+jk
+are the two-
+body interactions. For the Ising model of a ferromagnet, h represents the magnetic dipole
+moments of the atomic spins and J represents the energy of the interactions between the spins.
+The D-Wave QA used in this study is an analog device containing approximately 5,000
+qubits. The device is programmed by setting values of local magnetic fields and coupling
+strengths, and the annealing process works by adiabatically lowering the strength of a trans-
+verse magnetic field. This design is similar to simulated annealing of an Ising Hamiltonian,
+with the key difference being that the annealing process avoids getting trapped in local minima
+via quantum tunneling instead of thermal fluctuations, and the probability of hopping out of a
+local minimum is determined by the width of the barrier rather than the height [35]. QAs
+therefore provide a compelling strategy for solving combinatorial optimization problems that
+can be broken down into one- and two-body interactions, and these types of problems could
+offer quantum advantage for practical use-cases in the near term [36]. For example, a recent
+study explored the potential for leveraging QAs and gate model devices for codon optimiza-
+tion, a crucial process in reagent generation and mRNA vaccine development [37].
+In this study we show that the RNA secondary structure prediction problem can be mathe-
+matically formulated as a BQM and thus be addressed using quantum computing technology.
+This representation requires translating the objective function utilized in classical approaches
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 3 / 17
+
+
+--- Page 4 ---
+to a polynomial Hamiltonian where the eigenstates represent combinations of secondary
+structure elements, and the eigenvalues represent the scores. Implementing this approach on
+the D-Wave Advantage 1.1 hybrid solver provides performance competitive with a parallel
+replica exchange Monte Carlo (REMC) algorithm utilizing 64 cores programmed with the
+same objective function.
+Results
+RNA secondary structure prediction was implemented as a BQM on a D-Wave QA with a
+Hamiltonian designed to optimize the number of non-overlapping, consecutive, intramolecu-
+lar base pairs (H
+B
+) with penalties imposed for pseudoknots (δ
+p
+) and additional constraints to
+prevent bases from forming more than one base pair (δ
+c
+) (see Methods for derivations and
+mathematical details).
+H ¼ c
+B
+H
+B
+d
+p
+þ c
+L
+H
+L
+þ d
+c
+ð2Þ
+In this simplified equation, H
+L
+is an energetic term that rewards longer stems and c
+B
+and c
+L
+are tunable constants. The list of all possible stems is pre-computed classically using the meth-
+ods described in [24]. It is important to note that the list of all possible stems is not just the list
+of maximal stems, rather, it is an exhaustive list of all possible sub-stems. Fig 1A shows an
+example matrix formulation for sequence: GGAAGCAAACAUCCCUG U, and Fig 1B pro-
+vides a visualization of the base pairing patterns identified in Fig 1A. The classical data was
+encoded onto the quantum device by mapping each possible stem to a qubit (Fig 1C). The
+qubits which return “1” upon measurement represent the stems contributing to the secondary
+structure. The final secondary structure pattern is determined by recording the values of the
+qubits and saving all stems represented by qubits that returned “1”.
+Fig 1. (a) Matrix representati on of potential base pairs. Stems are highlight ed in shades of gray and outlined in black
+or blue. The colors serve only to help distinguish the stems. (b) Structural representati ons of stems. Grey lines indicate
+covalent bonds, red lines indicate base pairing, and dashed purple lines represent base pairs in a pseudoknot
+configurati on. The color of the boxes map to the stems identified in (a). (c) Each possible stem is assigned to a qubit on
+the quantum device. If the qubit returns “1”, then the associated stem is included in the RNA secondary structure.
+Otherwise , the stem is excluded.
+https://d oi.org/10.1371/j ournal.pc bi.1010032. g001
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 4 / 17
+
+
+--- Page 5 ---
+Directly programming the Quantum Processing Unit (QPU) with the BQM yields noisy
+data. Fig B in S1 Text shows the distribution of scores for systems requiring up to 45 physical
+qubits while Table D in S1 Text provides a tabulated version of the results. There are a multi-
+tude of factors that contribute to the noise, such as thermal fluctuations, and in general the
+noise is exacerbated by increasing the number of qubits. However, D-Wave offers a hybrid
+solver which uses a classical device to break down the problem into smaller pieces that are han-
+dled by the QPU. The following sections compare the performance of the hybrid solver against
+a REMC algorithm programmed with the same objective function and exact enumeration of
+the solution space where possible.
+Exact enumeration (< = 45 stems)
+Problems with sufficiently small solution spaces can be solved exactly. An MPI-enabled solver was
+written (see Methods) to exhaustively solve systems using massively parallel resources. Using this
+method, systems containing up to 45 qubits (2
+45
+(~10
+13
+) possible solutions) can be solved in
+under 24 hours using 7,900 CPU cores. Comparing the lowest energy solution to the experimen-
+tally determined solution (referred to as the known solution) is used to assess the suitability of the
+objective function. The structure predicted by the algorithm is compared to the known solution
+by computing the sensitivity and the specificity. The sensitivity reflects the fraction of experimen-
+tally determined base pairs that were correctly identified. A high sensitivity score (maximum
+score is 1) means the algorithm predicted every experimentally determined base pair and a low
+sensitivity score (minimum score is 0) means the algorithm did not predict many of the experi-
+mentally determined base pairs. The specificity reflects the fraction of predicted base pairs that
+map to the experimentally determined structure in the correct order. A specificity score of 1 indi-
+cates that the algorithm only predicted base pairs that match the known structure, and a low score
+indicates that the algorithm predicted many base pairs that do not map to the known structure.
+A test set was derived by scraping PseudoBase for examples of RNA sequences with experi-
+mentally confirmed structures containing pseudoknots [38–40]. Redundant sequences,
+defined as sequences with higher than 95% similarity, were removed from the set. The number
+of possible stems was computed for the remaining sequences in the database, and it was found
+that most sequences yielded too many possible stems for exact enumeration. To reduce the
+total number of possible stems down to a set small enough for exact enumeration, the length
+of the smallest possible stem was increased to 4. This restriction excludes stems of lengths 2
+and 3 from the sets, thereby reducing the size of the combinatorial solution space. Imposing
+this constraint resulted in a test set containing 27 sequences. Fig 2A shows an example pseudo-
+knotted structure from the test set. Fig 2B shows the sensitivity of the objective function was
+calculated to be 0.97 and the specificity was found to be 0.93, indicating that 97% of the experi-
+mentally determined base pairs were recapitulated by the algorithm, and 93% of the base pairs
+predicted by the algorithm correctly map to the experimentally determined structures. The full
+list of results can be found in Table A in S1 Text.
+The same analysis was performed using the REMC and QC methods. The average results
+are shown in Fig 2B, and the full list of results are shown in Table A in S1 Text. Each system
+was run 1 time through each algorithm, and in every case the result obtained matched the
+result from exact enumeration. Therefore, both methods are able to rapidly identify the mini-
+mum energy solution with high probability for systems containing fewer than 45 stems.
+Simulated annealing vs. quantum computing (>45 stems)
+Scaling the system size beyond 45 stems requires tremendous computational resources for
+exact enumeration therefore these systems are only evaluated against approximate methods.
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 5 / 17
+
+
+--- Page 6 ---
+Systems containing 45–881 stems were evaluated using both the REMC and QC methods. Simi-
+lar to the previous section, the test sequences derive from PseudoBase. However, the minimum
+stem length was set to 3 and the minimum loop length was set to 2, allowing for significantly
+larger problem sizes. Each sequence was run through both algorithms 10 times to estimate the
+variance of the results. The sensitivity and specificity in these cases are less indicative of the fit-
+ness of the objective function since it is unlikely that the true minimum energy solution will be
+found each time. Fig 3A compares the scores of the REMC and QC methods. Points that fall on
+the dashed line indicate that the same exact score was found for both methods. Points that fall
+below the line indicate that the QC method found a lower energy solution, and similarly points
+above the line indicate the REMC method found a better solution. On average, the methods
+produce results of similar quality. Fig 3B shows the ensemble average sensitivity and specificity
+for each method. The REMC method reported slightly higher sensitivity and specificity than the
+QC method. The full list of results can be found in Table B in S1 Text.
+Comparison to existing methods
+The results presented in the previous sections were compared to three algorithms found in the
+literature. Two of the methods, SPOT-RNA [11] and ProbKnot [41], are capable of predicting
+pseudoknots while the other method, ViennaRNA [42], is not. The algorithms were tested on
+the same datasets as the previous sections. Fig 4 shows a summary of the overall sensitivity and
+specificity for each method applied to each dataset, listed in descending order. The method
+presented in this study had the best overall performance on both datasets. All methods per-
+formed worse on the dataset containing larger systems (> = 45 stems) compared to the dataset
+containing smaller systems (<45 stems).
+ViennaRNA yielded the poorest agreement with both datasets. Given that the method is
+not advertised to predict pseudoknots, this was the expected outcome. SPOT-RNA, a recently
+Fig 2. (a) Example RNA sequence from simian retrovirus type-1 (SRV-1) with structur e containing pseudokno t
+correctly predicted by algorithm (PDB code: 1E95). The phosph ate backbone is colored white for unpair ed bases. (b)
+Exact Enumerati on (EE) was used to compute the sensitivity and specificity of the proposed Hamiltonian (Eq 13) for
+systems containi ng 45 stems or fewer. Replica Exchange Monte Carlo (REMC) and quantum computing (QC)
+methods were tested on the same sequences and were found to exactly recapitulate the lowest energy solutions found
+by exact enumeration .
+https://d oi.org/10.1371/j ournal.pc bi.1010032. g002
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 6 / 17
+
+
+--- Page 7 ---
+proposed method using an ensemble of deep neural networks, performed almost as well as the
+QC on the dataset containing sequences with more than 45 stems and had overall the most
+consistent performance between the two datasets. A tabulated comparison of the three algo-
+rithms can be found in Table C in S1 Text.
+Discussion
+Quantum computers have the potential to drive an exponential leap in computational power
+and, thus, the ability to provide faster and more accurate solutions to certain types of problems
+—particularly those involving an intractably large space of possible solutions. In silico RNA
+folding is an important task that falls into this category given a huge number of secondary
+structures that can be found for a given RNA sequence. The purpose of this study was to pres-
+ent a model that enables RNA structure prediction using existing quantum hardware.
+Fig 3. Replica Exchange Monte Carlo (REM C) and Quantum Computing algorithm s were tested on systems
+containin g more than 45 stems, which exceeds the practical limit of what can be solved with exact enumeration .
+The eigenvalu es of the lowest energy systems are compared in (a). The dashed line represents y = x.
+https://d oi.org/10.1371/j ournal.pc bi.1010032. g003
+Fig 4. Compariso n of methods on the datasets described in previous sections. Exact Enumerati on (EE) is not
+computed for systems containing more than 45 stems.
+https://d oi.org/10.1371/j ournal.pc bi.1010032. g004
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 7 / 17
+
+
+--- Page 8 ---
+QAs were chosen to demonstrate the viability of the method due to the relative maturity of
+the technology, but BQM’s are readily implementable on all types of QCs. A recent study com-
+pared the performance and accuracy of QAs and gate models for a BQM describing a biologi-
+cal system and showed that the gate model platforms lack the qubits and physical connectivity
+required to test realistically large systems [37]. However, there are proposals to build gate
+model error corrected devices with up to 1,000,000 qubits by 2025 [43]. Such a device would
+be capable of encoding the 10
+146,440
+possible solutions to the RNA structure of the SARS-CoV2
+spike glycoprotein. Existing solutions based on conventional hardware have employed several
+strategies to deal with the dauntingly large space of possible solutions. For example, some
+methods only consider base pairs formed by nucleotides not further than N positions apart,
+whilst others disregard pseudoknots. Although these strategies make the problem more feasi-
+ble, long-range structures and pseudoknots are known to have important molecular functions.
+Therefore, the ability to find better approximations to massive combinatorial problems like
+this could have a tremendous impact on vaccine design and drug discovery. The objective
+function used in this study is designed to jointly maximize the number of base pairs and the
+average length of the stems. There are cases where the sampling methods identify patterns of
+base pairs that score higher in our metric than what is observed in nature, indicating that the
+scoring function does not perfectly recapitulate the physics driving RNA folding. However,
+despite the simplicity of the scoring function, it was shown that the algorithm correctly identi-
+fied the natural base pairs with 97% sensitivity and 93% specificity in smaller cases where exact
+enumeration was possible. There were 4 cases where either the sensitivity or the specificity was
+below 0.75. In one of the cases, the algorithm preferred a configuration containing four stems
+of length five instead of two stems, one of length five and one of length six. In the other 3 cases
+the algorithm found solutions containing more base pairs with at least 70% specificity.
+In larger cases where exact enumeration is impossible, both the quantum and the REMC
+methods yielded results of similar quality using similar amounts of execution time. Without
+knowing details about the classical hardware used by D-Wave’s hybrid algorithm, it is difficult
+to make concrete performance comparisons between the QA and REMC approaches. In gen-
+eral, larger systems tended to have poorer agreement with experimentally determined struc-
+tures. Overall, the method presented in this study outperformed the three comparator
+methods in terms of sensitivity and specificity. However, the datasets used in this study only
+included structures containing pseudoknots, but there are many classes of RNAs and many
+other types of secondary structure that need to be tested for a more thorough understanding of
+where the method is applicable.
+The model and the objective function used in this study were designed to be simple and inter-
+pretable, but there is significant room for improvement. The model is restricted to Watson-Crick
+pairs (A-U, G-C) and wobble pairs (G-U) which accounts for the majority of observed base pairs,
+but it is known that other non-Watson-Cri ck pairs can also form, such as G-G, G-A, A-A, etc.
+(see [44] for a thorough discussion about non-Watson-Crick base pairs). Furthermore, it has been
+shown that bases can pair with more than one other base (see [45] for examples and discussion).
+Expanding the model to include more types of base-pairs and the possibility of pairing more than
+two bases incurs an exponential cost to the size of the combinatorial space.
+The objective function was found to recapitulate many base pairing patterns in the test set,
+but there are many ways it could be improved. For example, the force field could consider the
+number of hydrogen bonds formed by each type of interaction which could potentially reduce
+the number of degenerate low-lying states. Furthermore, base pairs involved in pseudoknots
+are penalized by scaling back their energetic contribution to the Hamiltonian. The energy con-
+tribution for such base pairs is expected to be smaller because the formation of the knot
+requires the backbone to bend which puts stress on the hydrogen bonded base pairs. For
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 8 / 17
+
+
+--- Page 9 ---
+simplicity, this effect was accounted for as a constant, but a systematic structural study could
+be performed to derive a more realistic model.
+It should be noted that the purpose of this work was not to develop a higher fidelity RNA fold-
+ing potential but rather to show how one could develop a classical folding potential that can be eas-
+ily mapped to quantum hardware. If one sticks to a discrete polynomial formalism more complex
+potentials can be mapped to existing and future QCs with ease. Hence in conclusion QCs are very
+promising for RNA folding. They can rapidly find minimum energy solutions for large combinato-
+rial search spaces and have the flexibility to employ more complex potentials which should deliver
+higher specificity and sensitivity with limited impact on computational time. As the capabilities of
+QCs improve, in terms of qubit count, connectivity and signal to noise ratios it will become feasible
+to fold very large RNA sequences that would be intractable using classical methods.
+Methods
+RNA secondary structure prediction algorithm
+For a given RNA sequence containing N bases, an NxN matrix in constructed where rows and col-
+umns represent the bases. The upper diagonal elements of the matrix are populated with 1’s for
+combinations of bases that form base pairs (A-U, G-C, G-U) and 0’s for combinations that do not
+form base pairs. For a reasonably strong interaction to persist in an RNA structure, a minimum of
+3 consecutive base pairs are required. The simplest way to identify consecutive base pairs, called
+stems, stems, or helices is to scan the matrix for repeated 1’s in a diagonal perpendicular to the diag-
+onal of the matrix. Fig 1A shows the matrix construction and corresponding base pairing patterns
+for an example sequence, GGAAGCAAACAUCCCUGU, with the base pairs represented by dots
+to simplify the graphic. Consecutive base pairs (with three or more bonds in a row) are highlighted
+in varying shades of gray, and representations of RNA folds subjected to these bonding patterns are
+displayed in Fig 1B. The stem finding algorithm, inspired by [24], executes in quadratic time.
+Implementation of objective function
+The goal of the optimization algorithm is to identify the combination of non-overlapping
+stems that jointly maximizes the number of consecutive base pairs along with the average
+length of the chosen set of stems. There are three parts to the global objective function; the first
+term reflects the number of base pairs with an adjustable penalty accounting for pseudoknots,
+the second term adds a penalty for adding short stems, and finally a constraint which adds an
+infinite penalty to combinations of overlapping stems.
+Scoring consecutive base pairs
+The base pair scoring function is inspired by the fitness function from Kai et al [24] which
+takes into consideration the number of consecutive base pairs and the number of pseudoknots.
+While there are many approaches to scoring base pairing networks, this approach was chosen
+due to its simplicity. Each possible stem is parameterized by the index of the first base, i, the
+index of the last base, j, and the length of the stem, k. This is compactly written as m
+n
+= (i
+n
+, j
+n
+,
+k
+n
+) for stem n. For a set of stems M = {m
+0
+, m
+1
+, . . ., m
+N
+}, the number of consecutive base pairs,
+b, is computed by summing over the lengths of the chosen subset of stems divided by the total
+number of possible stems:
+bðM Þ ¼
+X
+N
+i¼1
+k
+i
+ð3Þ
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 9 / 17
+
+
+--- Page 10 ---
+To prioritize base pairing configurations with longer stems, the Hamiltonian incorporates
+Eq (3) squared.
+bðM Þ
+2
+¼
+X
+N
+i¼1
+k
+i
+ !
+2
+¼
+X
+N
+i
+X
+N
+j
+k
+i
+k
+j
+ð4Þ
+Eq (4) can be formulated as the Hamiltonian of a quantum system by taking the inner prod-
+uct with the vector of qubits comprising the quantum state, q = (q
+0
+, q
+1
+, . . ., q
+N
+), where q
+i
+2
+{0,1}, and c
+B
+is a tunable constant (set to 1.0 for all calculations reported in this manuscript):
+H
+B
+¼ c
+B
+X
+N
+i
+X
+N
+j
+k
+i
+k
+j
+q
+i
+q
+j
+ð5Þ
+This representation maps each possible stem to a labeled qubit, and the values of the binary
+values of the qubits determine which stems from the set contribute to the overall sum.
+The matrix represented in the double sum needs to be restricted to a sum over the upper tri-
+angular elements, consistent with Eq (1). By decomposing the sum into the trace and a term
+that sums the contributions of the off-diagonal elements, the sum can be restricted to the
+upper triangular elements. The trace requires a single summation over k
+i
+2
+. Since qubits map to
+binary values, they are idempotent with themselves and therefore q
+i
+2
+= q
+i
+.
+Tr
+X
+N
+i
+X
+N
+j
+k
+i
+k
+j
+q
+i
+q
+j
+" #
+�
+X
+N
+i
+k
+2
+i
+q
+i
+ð6Þ
+Since the matrix is symmetric, all off-diagonal terms are accounted for in an upper triangu-
+lar form by multiplying by 2. Thus,
+H
+B
+¼   c
+B
+X
+N
+i
+k
+2
+i
+q
+i
+  2c
+B
+X
+N
+j
+X
+N
+k<j
+k
+j
+k
+k
+q
+j
+q
+k
+ð7Þ
+Incorporating pseudoknot penalties
+A pseudoknot is defined as two non-overlapping stems, m
+a
+= (i
+a
+, j
+a
+, k
+a
+) and m
+b
+= (i
+b
+, j
+b
+, k
+b
+)
+where i
+a
+< i
+b
+< j
+a
+< j
+b
+or i
+b
+< i
+a
+< j
+b
+< j
+a
+. Pseudoknots require the molecule to fold back onto
+itself, and in some cases, this introduces tension on the backbone and strain on the base pairs
+involved in the structural element. Therefore, penalties are often utilized to reduce the ener-
+getic contribution of base pairs involved these types of structures. Pseudoknots are detected by
+a delta function,
+d
+ij
+¼
+c
+P
+if pse udok not bet wee n ste ms i and j
+1 if no pseu dok nots
+; 0 � c
+P
+� 1 ð8Þ
+(
+Where c
+P
+is a tunable parameter set by the user. This penalty is designed to reduce the con-
+tribution of base pairs from pseudoknots. When c
+P
+is set to 1, base pairs from pseudoknots are
+not penalized. Conversely, when c
+P
+is set below 0, pseudoknots will not exist in the global min-
+imum and can be avoided altogether. If c
+P
+is set to zero, the global minimum could be degener-
+ate with structures containing pseudoknots and the same structures with the pseudoknots
+removed. Incorporating this factor into the Hamiltonian yields Eq (9).
+H
+B
+¼   c
+B
+X
+N
+i
+k
+2
+i
+q
+i
+  c
+B
+X
+N
+j
+X
+N
+k<j
+k
+j
+k
+k
+q
+j
+q
+k
+d
+jk
+ð9Þ
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 10 / 17
+
+
+--- Page 11 ---
+The delta-function is omitted from the single summation since a stem cannot be in a pseu-
+doknot with itself, and therefore the function will always evaluate as 1.
+Maximize average length of stem
+One of the distinguishing features of the objective function introduced in [24] is an energetic pref-
+erence for longer stems. Longer stems are assigned lower energetic values in Eq (9), but this term
+does not distinguish between multiple short stems and one long stem. For example, two stems of
+length three would yield a score of (3+3)
+2
+= 36, whereas a single stem of length six would yield a
+score of 6
+2
+= 36. A single stem of length 6 would be preferred in most cases to two separate stems
+of lengths three because a penalty is incurred for interrupting the contiguous pi-pi interactions
+between bases. Since there are exceptions (see Results), this feature is incorporated into the Hamil-
+tonian as a tunable parameter c
+L
+(set to 10.0 for all calculations reported in this manuscript).
+The average stem length can be maximized by minimizing the difference between the
+length of each possible stem in the set, k
+i
+, with the length of the largest stem in the set of all pos-
+sible stems, μ.
+D
+L
+¼
+X
+N
+i
+ðk
+i
+  mÞ
+2
+ð10Þ
+Eq 10 is rewritten as a Hamiltonian by expanding the product and projecting with the vec-
+tor representing the qubits, q.
+H
+L
+¼ c
+L
+X
+N
+i
+ðk
+2
+i
+  2k
+i
+m þ m
+2
+Þq
+i
+ð11Þ
+Hamiltonian with constraints
+Bases are only able to form bonds with exactly one other base, so combinations of stems that
+require more than one bond for any given base must be excluded from the solution space. A
+delta-function is introduced to detect such combinations:
+d0
+ij
+¼
+1 if ste ms i and j ove rlap
+0 if ste ms i and j do not over lap
+ð12Þ
+(
+The total Hamiltonian is thus constructed by adding the Hamiltonian defined in Eq (9)
+with the constraint defined in Eq (12):
+H ¼
+X
+N
+i
+ðc
+L
+ðk
+2
+i
+  2k
+i
+m þ m
+2
+Þ   c
+B
+k
+2
+i
+Þq
+i
+ 
+X
+N
+j
+X
+N
+k<j
+½c
+B
+k
+j
+k
+k
+d
+jk
+þ d
+0
+jk
+�q
+j
+q
+k
+ð13Þ
+Algorithm implementations
+The current approach to performing calculations on quantum devices requires the interaction
+terms to be precomputed on classical devices and read into the quantum devices via specialized
+APIs. The interaction parameters from Eq (13) were precomputed in python 3.7 using stan-
+dard libraries and numpy arrays [46]. The numpy arrays were converted to dictionaries in
+accordance with the expected input for the D-Wave libraries. The execution of the BQM was
+carried out using libraries described in the following sections. Each calculation was run 10
+times. The pseudoknot penalty, c
+P
+, was set to 0.5 for all calculations.
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 11 / 17
+
+
+--- Page 12 ---
+D-wave advantage 1.1. The RNA secondary structure BQM was implemented on the
+D-Wave Advantage System 1.1 utilizing the Leap Hybrid Solver. This quantum annealing
+device contains more than 5,000 superconducting qubits. Each qubit is connected to 15 others
+described by a Pegasus P
+16
+graph [47]. The Advantage system was accessed through the
+D-Wave Leap web interface, which serves as an access point to QPU hardware as well as an
+integrated developer environment with built-in support for the full D-Wave API.
+The program was constructed and executed using python libraries provided by D-Wave
+systems. The BinaryQuadraticModel class in the dimod 0.9.10 python library was used to con-
+struct the model from the classically prepared data and convert it to a data structure compati-
+ble with the quantum device. The one- and two-body interaction terms were precomputed,
+stored in numpy arrays, and passed into the BinaryQuadraticMod el instance along with an off-
+set of 0.0 as a dimod.BINARY representation. The model was executed using the LeapHybrid-
+Sampler classes in the dwave.system python library. The solver was allotted 3 s of execution
+time. The eigenstate with the lowest associated eigenvalue was chosen to represent the result of
+the simulation.
+Replica exchange Monte Carlo. Replica exchange Monte Carlo (REMC) is a well-estab-
+lished and widely used method for identifying global minima on high complexity objective
+surfaces that contain many local minima [48–50]. Here, a very basic REMC search algorithm
+was implemented to explore the folding landscape with the following steps: 1. An initial state is
+created composed of up to 5 randomly selected stems from the set of all stems. 2. The objective
+function is evaluated for this initial state. 3. A Monte Carlo move is performed in which three
+changes to the state are possible, each with equal probability: a) a stem is added, b) a stem is
+removed, or c) a stem is swapped for another from the set of all stems. In each case, if the
+move improves the objective function, the state is accepted, otherwise the state is accepted sub-
+ject to the Metropolis-Hastings criteria [51] with a probability proportional to the Boltzmann
+distribution at a particular temperature. Subsequent Monte Carlo moves are then performed a
+fixed number of times, after which the final state of the system is returned. The Monte Carlo
+search when combined with simulated annealing and exponential cooling was found to be
+effective in identifying the global minimum of the objective for systems having fewer than 45
+stems. However, as the complexity of the objective surface grows with increasing numbers of
+stems and possible states, obtaining effective sampling of the landscape becomes challenging
+with simulated annealing, often requiring increasingly complex cooling schedules, continuous
+tuning of the initial sampling temperature, or drastically increasing the number of sampling
+steps [52].
+The MC method was modified to allow for the simultaneous evolution of N replicas, each at
+a fixed effective temperature. Replicas sample states with probabilities proportional to the
+Boltzmann distribution at that replica’s temperature. The stochastic nature of the algorithm
+and the initial random configuration of the system necessitates that the replicas be able to
+exchange states with those at neighboring temperatures. Without exchange, replicas at lower
+temperatures may become stuck in the numerous local minima of the objective function,
+while those at higher temperatures will never sample the desired higher probability states.
+Thus, by allowing swapping of states of neighboring temperatures, lower probability states are
+sampled in replicas at higher temperatures, which are then exchanged with replicas at lower
+temperatures to sample the desired higher probability states [48–50].
+In this implementation, exchanging states between replicas is performed according to the
+Metropolis-Hastings criteria [51], with a probability proportional to the difference in the
+objective’s value between the two states and their temperatures. Exchange attempts are per-
+formed every fixed number of steps, allowing for independent MC sampling to occur in each
+replica between exchange attempts, ensuring detailed balance. The replica temperature range,
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 12 / 17
+
+
+--- Page 13 ---
+as well as their spacing are selected such that exchanges between neighboring replicas occurs
+roughly twenty percent of the time. The final state of the system is chosen from the best scoring
+state from the collection of replicas following the final step.
+Using this REMC approach, hundreds of potential stems could be efficiently sampled using
+only 64 replicas, with values of β (1/kT, where k is the Boltzmann constant and T is the effec-
+tive temperature) in arbitrary units ranging from 1 to 30, 10
+6
+total steps, and exchange
+attempts every 10
+3
+steps. The total time to identify the global minimum for a system composed
+of 400 stems is roughly twelve seconds.
+The REMC method was implemented in pure Python and takes advantage of NumPy [46],
+and Python’s Random and Copy libraries. Replica parallelization, including synchronization
+and swapping of replica states was implemented using MPI for Python [53–55].
+Comparator methods
+Three additional, previously published methods were run using the same datasets and the
+same criteria for comparing to known structures as the method proposed in this study. RNAs-
+tructure ProbKnot 6.3 [41], SPOT-RNA [11], and ViennaRNA RNAfold 2.4.12 [42] were all
+run locally on an HPC cluster using command line defaults. The iterations parameter required
+by ProbKnot was set to 1000. The base pairs were extracted by mining the output PostScript
+(ps) file (ViennaRNA) or Connectivity Table (ct) file (ProbKnot and SPOT-RNA).
+Metrics for comparing stems
+The predicted secondary structure was compared to the experimentally determined structure
+by computing the sensitivity and specificity. The sensitivity, σ
+SN
+, is computed by comparing
+the number of correctly identified base pairs, C, to the number of predicted base pairs missing
+from the known structure, M, with the following formula:
+s
+SN
+¼
+C
+C þ M
+ð14Þ
+The specificity, σ
+SP
+, is computed by comparing C to the number of predicted base pairs that
+are not represented in the known structure, I.
+s
+SP
+¼
+C
+C þ I
+ð15Þ
+Supporting information
+S1 Text. Fig A. (a) 2-dimensional representation of pseudoknot structure. Dark grey lines rep-
+resent base pairing. Green and orange boxes highlight the paired bases. b) 1-dimensional dia-
+gram showing the base pairing patterns. Green and orange arcs map to the boxes from (a). Fig
+B. (left) Minimum QPU score vs hybrid score for systems containing <60 stems. Points that
+fall on the line y = x indicate that the best score from the QPU is equal to the best score from
+the hybrid solver. (right) Average QPU score vs hybrid score. Standard deviation in the QPU
+scores is represented by blue bars. Positive scores indicate no suitable solution was found.
+Table A. Sensitivity and specificity scores for each sequence in the small test set (sequences
+containing 45 or fewer stems) using exact enumeration, REMC, and QC methods. Each
+method was run one time. Names derive from Pseudobase. Bolded numbers at the bottom of
+each column represent the mean. There are several cases where the exact solution does not
+have a sensitivity or a specificity of 1.0 which calls to attention limitations in the scoring func-
+tion. These are cases where the lowest energy configuration found by the scoring function dif-
+fers from the configuration found in nature. Table B. Sensitivity and specificity scores for each
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 13 / 17
+
+
+--- Page 14 ---
+sequence in the large test set (sequences containing more than 45 stems) using REMC and QC
+methods. Each method was run ten times. Names derive from PseudoBase. Bolded numbers at
+the bottom of each column represent the mean. Table C. Sensitivity and specificity scores for
+each sequence in the large test set (sequences containing more than 45 stems) using three
+methods found in literature. Bolded numbers at the bottom of each column represent the
+mean. Table D in S1 Text. Direct programming QPU vs Hybrid solver.
+(DOCX)
+Acknowledgmen ts
+We would like to thank Kim Branson, Deborah Loughney, Laura Zupko, and Lee Tremblay of
+GSK for evaluation and suggested refinements.
+Author Contributions
+Conceptualization: Dillion M. Fox.
+Data curation: Dillion M. Fox, Andrea M. A. Schreij.
+Formal analysis: Dillion M. Fox, Christopher M. MacDermaid, Magdalena Zwierzyna.
+Investigation: Dillion M. Fox, Christopher M. MacDermaid, Magdalena Zwierzyna.
+Methodology: Dillion M. Fox, Christopher M. MacDermaid.
+Project administration: Dillion M. Fox, Andrea M. A. Schreij, Ross C. Walker.
+Supervision: Dillion M. Fox, Ross C. Walker.
+Validation: Dillion M. Fox, Magdalena Zwierzyna, Ross C. Walker.
+Visualization: Dillion M. Fox, Andrea M. A. Schreij.
+Writing – original draft: Dillion M. Fox, Christopher M. MacDermaid, Magdalena
+Zwierzyna.
+Writing – review & editing: Dillion M. Fox, Andrea M. A. Schreij, Magdalena Zwierzyna,
+Ross C. Walker.
+References
+1. Cooper GM. The Cell: A Molecular Approac h. 2nd edition. Sinauer Associates 2000; 2000.
+2. Amaral PP, Dinger ME, Mercer TR, Mattick JS. The eukaryotic genome as an RNA machine. Science.
+2008; 319: 1787–1789. https://doi.or g/10.112 6/science.115 5472 PMID: 18369136
+3. Serganov A, Patel DJ. Ribozyme s, riboswitches and beyond: Regulatio n of gene expression without
+proteins. Nature Reviews Genetic s. 2007; 8: 776–79 0. https://doi.or g/10.103 8/nrg2172 PMID:
+17846637
+4. Chemla Y, Peeri M, Heltberg ML, Eichler J, Jensen MH, Tuller T, et al. A possible universal role for
+mRNA secondary structure in bacteria l translation reveale d using a synthetic operon. Nature Commun i-
+cations. 2020; 11: 1–11. https://doi.or g/10.103 8/s41467-019- 13993-7 PMID: 319116 52
+5. Gorochow ski TE, Ignatova Z, Bovenberg RAL, Roubos JA. Trade-of fs between tRNA abunda nce and
+mRNA secondary structure support smoothing of translati on elongation rate. Nucleic Acids Research.
+2015; 43: 3022–3 032. https://doi.or g/10.109 3/nar/gkv19 9 PMID: 25765653
+6. Cambray G, Guimaraes JC, Arkin AP. Evaluati on of 244,000 synthetic sequences reveals design princi-
+ples to optimize translati on in escherichi a coli. Nature Biotechn ology. 2018; 36: 1005. https://doi.or g/10.
+1038/nbt .4238 PMID: 30247489
+7. Bellaousov S, Reuter JS, Seetin MG, Mathew s DH. RNAstru cture: Web servers for RNA secondary
+structure prediction and analysis. Nucleic acids resear ch. 2013; 41. https://doi.or g/10.1093/ nar/gkt290
+PMID: 236202 84
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 14 / 17
+
+
+--- Page 15 ---
+8. Andronesc u M, Condon A, Hoos HH, Mathew s DH, Murphy KP. Efficient parameter estimation for RNA
+secondar y structure prediction. Bioinform atics. 2007; 23: 19–28. https://doi.or g/10.1093/ bioinformatics /
+btm223 PMID: 17646296
+9. Zuker M, Stiegler P. Optimal computer folding of large RNA sequences using thermodyn amics and aux-
+iliary informati on. Nucleic Acids Research. 1981; 9: 133–148. https://doi.or g/10.109 3/nar/9.1.133
+PMID: 616313 3
+10. Senior AW, Evans R, Jumper J, Kirkpatrick J, Sifre L, Green T, et al. Improved protein structure predic-
+tion using potentials from deep learning. Nature. 2020; 577: 706–710. https://doi.or g/10.1038/ s41586-
+019-1923- 7 PMID: 3194207 2
+11. Singh J, Hanso n J, Paliwal K, Zhou Y. RNA secondar y structure prediction using an ensemble of two-
+dimension al deep neural networks and transfer learning. Nature Commun ications. 2019; 10. https://doi.
+org/10.1038/ s41467-019- 13395-9 PMID: 317763 42
+12. Zhang H, Zhang C, Li Z, Li C, Wei X, Zhang B, et al. A new method of RNA secondary structure predic-
+tion based on convolutio nal neural network and dynamic programm ing. Frontiers in Genetic s. 2019; 10:
+1–12. https://d oi.org/10.338 9/fgene.2 019.00001 PMID: 308049 75
+13. Lu W, Tang Y, Wu H, Huang H, Fu Q, Qiu J, et al. Predicting RNA secondar y structure via adaptive
+deep recurrent neural networks with energy-bas ed filter. BMC Bioinformat ics. 2019; 20: 1–10. https://
+doi.org/10.11 86/s12859-018 -2565-8 PMID: 306061 05
+14. Fallmann J, Will S, Engelhard t J, Gru ¨ ning B, Backofen R, Stadler PF. Recent advances in RNA folding.
+Journal of Biotechn ology. 2017; 261: 97–104. https:// doi.org/10.10 16/j.jbiot ec.2017.07 .007 PMID:
+28690134
+15. Bringmann K, Grandoni F, Saha B, Williams VV. Truly subcubic algorithm s for language edit distance
+and RNA folding via fast bounde d-difference min-plus product. SIAM Journal on Computing. 2019; 48:
+481–512. https:// doi.org/10.11 37/17M11 2720X
+16. Huang L, Zhang H, Deng D, Zhao K, Liu K, Hendrix DA, et al. LinearF old: Linear-time approxim ate RNA
+folding by 5’-to-3’ dynamic programming and beam search. Bioinformatic s. 2019; 35: i295–i304. https://
+doi.org/10.10 93/bioinformati cs/btz37 5 PMID: 3151067 2
+17. Lyngsø RB, Pedersen CNS. RNA pseudokno t prediction in energy-bas ed models. Journal of Comput a-
+tional Biology. 2000; 7: 409–427. https:// doi.org/10.10 89/1066 52700750050 862 PMID: 111084 71
+18. Messenger RNA encodin g the full-length SARS-Co V-2 spike glycoprote in. WHO MedNet; 2020.
+19. Alves J, Combes F, Ferrara A, Forveille T, Shore S. Planck 2015 results. Astronom y and Astroph ysics.
+2016; 594. https://doi.or g/10.1051/0 004-6361/20 1629543
+20. Hofacker IL. Vienna RNA secondar y structure server. Nucleic Acids Research. 2003; 31: 3429–3431.
+https://doi.or g/10.109 3/nar/gkg5 99 PMID: 12824340
+21. Mathews DH. Revolutions in RNA Secondary Structur e Prediction. Journal of Molecular Biology. 2006;
+359: 526–532 . https://doi.or g/10.1016/ j.jmb.2006. 01.067 PMID: 1650067 7
+22. Knudsen B, Hein J. Pfold: RNA secondar y structure prediction using stochastic context-fre e grammar s.
+Nucleic Acids Research. 2003; 31: 3423–3428. https://d oi.org/10.109 3/nar/gkg 614 PMID: 12824339
+23. Montaseri S, Zare-Mirak abad F, Moghada m-Charkar i N. RNA-RN A interacti on prediction using genetic
+algorithm. Algorithms for Molecular Biology. 2014; 9: 1–7. https://doi.or g/10.118 6/1748-7188 -9-1 PMID:
+24507724
+24. Kai Z, Yuting W, Yulin L, Jun L, Juanjua n H. An efficient simulated annealing algorithm for the RNA sec-
+ondary structure prediction with Pseudo knots. BMC Genomics. 2019; 20: 1–13. https://doi.or g/10.1186/
+s12864-018 -5379-1 PMID: 30606130
+25. Zhong H-S, Wang H, Deng Y-H, Chen M-C, Peng L-C, Luo Y-H, et al. Quantum computation al advan-
+tage using photons. Science. 2020; 1463: 1460–1463. https:// doi.org/10.11 26/science .abe8770 PMID:
+33273064
+26. Arute F, Arya K, Babbu sh R, Bacon D, Bardin JC, Barends R, et al. Quantum supremac y using a pro-
+grammabl e supercon ducting processor . Nature. 2019; 574: 505–510. https://doi.or g/10.103 8/s41586 -
+019-1666- 5 PMID: 3164573 4
+27. Bova F, Goldfarb A, Melko RG. Commerc ial applications of quantum computing. EPJ Quantum Tech-
+nology. 2021; 8: 1–13. https://d oi.org/10.114 0/epjqt/s40 507-021-0 0091-1 PMID: 335695 45
+28. Cheng HP, Deum ens E, Freericks JK, Li C, Sanders BA. Applica tion of Quantum Comp uting to Bio-
+chemical System s: A Look to the Future. Frontiers in Chemistry. 2020; 8: 1–13. https://doi. org/10.3389/
+fchem.2020. 00001 PMID: 32117862
+29. Elfving VE, Broer BW, Webber M, Gavartin J, Halls MD, Lorton KP, et al. How will quantum computers
+provide an industri ally relevant computat ional advantage in quantum chemist ry? arXiv. 2020; 1–20.
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 15 / 17
+
+
+--- Page 16 ---
+30. Wang H, Kais S, Aspuru -Guzik A, Hoffman n MR. Quantum algorithm for obtaining the energy spectrum
+of molecular systems. Physical Chemis try Chemical Physics . 2008; 10: 5388–53 93. https://doi.or g/10.
+1039/b8048 04e PMID: 18766235
+31. Aspuru-G uzik A, Dutoi AD, Love PJ, Head-Gordo n M. Chemistry : Simulated quantum computation of
+molecular energies. Science. 2005; 309: 1704–1 707. https://doi.or g/10.112 6/science.111 3479 PMID:
+16151006
+32. Cao Y, Romero J, Olson JP, Degroote M, Johnson PD, Kieferova ´ M, et al. Quantum Chem istry in the
+Age of Quantum Computing. Chemic al Reviews. 2019; 119: 10856–1 0915. https://doi.or g/10.102 1/acs.
+chemrev.8b0 0803 PMID: 31469277
+33. Kassal I, Jordan SP, Love PJ, Mohseni M, Aspuru-Guz ik A. Polynomi al-time quantum algorithm for the
+simulation of chemical dynamic s. Proceedings of the National Academy of Sciences of the United
+States of America. 2008; 105: 18681–18686 . https://doi.or g/10.1073/ pnas.080824 5105 PMID:
+19033207
+34. Ku ¨ hn M, Zanker S, Deglmann P, Marthale r M, Weiß H. Accuracy and Resource Estimations for Quan-
+tum Chemistry on a Near-Ter m Quantum Computer. Journal of Chemical Theory and Computation.
+2019; 15: 4764–4 780. https://doi.or g/10.102 1/acs.jctc.9 b00236 PMID: 314037 81
+35. Muthukrishn an S, Albash T, Lidar DA. Tunneling and speedup in quantum optimizat ion for permutati on-
+symmetri c problems . Physical Review X. 2016; 6: 1–23. https://doi.o rg/10.1103/P hysRevX .6.031010
+36. Djidjev H, Chapuis G, Hahn G, Rizk G. Efficient combinator ial optimization using quantum annealing.
+arXiv. 2018; 1–25.
+37. Fox DM, Branson KM, Walker RC. mRNA codon optimization on quantum computers. bioRxiv. 2021;
+2021.02. 19.431999. https://doi. org/10.1371/j ournal.pone .025910 1 PMID: 34714834
+38. Van Batenburg FHD, Gultyaev AP, Pleij CWA, Ng J, Oliehoek J. PseudoBas e: A database with RNA
+pseudokno ts. Nucleic Acids Research. 2000; 28: 201–20 4. https://doi.or g/10.109 3/nar/28.1.201 PMID:
+10592225
+39. Van Batenburg FHD, Gultyaev AP, Pleij CWA. Pseudo Base: Structural informati on on RNA pseudo-
+knots. Nucleic Acids Research. 2001; 29: 194–195. https://d oi.org/10.109 3/nar/29. 1.194 PMID:
+11125088
+40. Taufer M, Licon A, Araiza R, Mireles D, van Batenburg FHD, Gultyaev AP, et al. Pseudo Base++: An
+extension of Pseudo Base for easy searching, formatting and visualiza tion of pseudokno ts. Nucleic
+Acids Research. 2009; 37: 127–135. https://doi.or g/10.109 3/nar/gkn80 6 PMID: 18988624
+41. Bellaousov S, Mathews DH. ProbKnot: Fast prediction of RNA secondar y structure including pseudo-
+knots. Rna. 2010; 16: 1870–1 880. https://doi.or g/10.126 1/rna.212531 0 PMID: 206993 01
+42. Lorenz R, Bernhart SH, Ho ¨ ner zu Siederdis sen C, Tafer H, Flamm C, Stadler PF, et al. ViennaR NA
+Package 2.0. Algorithm s for Molecular Biology . 2011; 6: 1–14. https://doi.or g/10.1186/ 1748-7188- 6-1
+PMID: 212357 92
+43. Smith-Good son P. Quantum Compu ting With Particles Of Light: A $215 Million Gamble . Forbes. Apr
+2020.
+44. Leontis NB, Stombau gh J, Westhof E. The non-Wats on-Crick base pairs and their associ ated isosteri-
+city matrices. Nucleic Acids Research. 2002; 3497–3531. Available: http://ndbser ver.rutgers. edu/NDB
+https://doi.or g/10.109 3/nar/gkf4 81 PMID: 12177293
+45. Purshotam S, Mohit C, Sitansh S, Abhijit M. On the role of Hoogste en:Hoogsteen interacti ons in RNA:
+Ab initio investigatio ns of structures and energies. RNA. 2010; 16: 942–957. https://d oi.org/10.126 1/
+rna.1919010 PMID: 20354152
+46. Harris CR, Millman KJ, van der Walt SJ, Gommer s R, Virtanen P, Cournap eau D, et al. Array program-
+ming with {NumPy}. Nature. 2020; 585: 357–362. https://doi.or g/10.103 8/s41586 -020-2649 -2 PMID:
+32939066
+47. Dattani N, Szalay S, Chancellor N. Pegasus: The second connectivity graph for large-scale quantum
+annealing hardwar e. arXiv. 2019.
+48. Geyer CJ, Thompson EA. Annealing Markov Chain Monte Carlo with Applications to Ancestral Infer-
+ence. Journal of the American Statistical Association . 1995; 90: 909–920. https://doi.or g/10.108 0/
+01621459.1 995.10476590
+49. Koji H, Koji N. Exchange Monte Carlo Method and Application to Spin Glass Simulations . Journal of the
+Physical Society of Japan. 1996; 65: 1604–1608. https://doi.or g/10.1143/ JPSJ.65.16 04
+50. Swendsen RH, Wang J-S. Replica Monte Carlo Simulati on of Spin-Glas ses. Physical Review Letters.
+1986; 57: 2607–2 609. https://doi.or g/10.110 3/PhysRev Lett.57.26 07 PMID: 10033814
+51. Hastings WK. Monte Carlo sampling methods using Markov chains and their applicati ons. Biometr ika.
+1970; 57: 97–109 . https://doi.or g/10.109 3/biomet/57 .1.97
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 16 / 17
+
+
+--- Page 17 ---
+52. Kofke DA. On the acceptanc e probability of replica-ex change Monte Carlo trials. The Journal of Chemi-
+cal Physics . 2002; 117: 6911–6 914. https://doi.or g/10.106 3/1.1507776
+53. Dalcı ´ n L, Paz R, Storti M. MPI for Python. Journal of Parallel and Distributed Comput ing. 2005; 65:
+1108–1115. https:/ /doi.org/10.10 16/j.jpd c.2005.03.0 10
+54. Dalcin LD, Paz RR, Kler PA, Cosimo A. Parallel distribute d computing using Python. Advances in Water
+Resources . 2011; 34: 1124–1 139. https://doi.or g/10.101 6/j.advwatre s.2011.04 .013
+55. Dalcı ´ n L, Paz R, Storti M, D’Elı ´ a J. MPI for Python: Performanc e improvemen ts and MPI-2 extensions.
+Journal of Parallel and Distributed Comput ing. 2008; 68: 655–662 . https://doi.or g/10.1016/ j.jpdc.2007.
+09.005
+PLOS COMP UTATIONAL  BIOLOGY
+RNA folding using quantum compute rs
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010032 April 11, 2022 17 / 17

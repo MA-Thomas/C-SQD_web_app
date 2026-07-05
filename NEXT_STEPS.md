@@ -37,17 +37,31 @@ Academic Publishing concepts such as `ScholarlyObject` are intake/access adapter
 
 ## Current Product Slice
 
-The public audit registry path is now the primary MVP slice:
+The public audit registry path is the primary MVP slice. The public frontend
+was rebuilt (July 2026) around a news-briefing information architecture; see
+`PUBLIC_FRONTEND_REBUILD_PLAN.md` for the full design record.
 
-- `/` shows a public registry home.
-- `/discover` searches and filters public scholarly works.
-- `/public-audits` emphasizes public SynthesisReviews and ElementReview depth.
+- `/` is a briefing homepage: the latest public audit report as the lead
+  story, plus rails for recently challenged, gaining scrutiny, and awaiting
+  review.
+- `/discover` searches and filters public scholarly works (criterion, status,
+  sort), absorbing the old CRWE browse as a filter dimension.
+- `/audits` lists delivered public outputs: reports, review depth, contested
+  audits (replaces `/public-audits`).
+- `/works/:id` is the public audit subject "full coverage" page: report,
+  criterion clusters, dissent block, audit trail, sticky action rail
+  (replaces `/scholarly-objects/:id`).
+- `/register` searches/retrieves scholarly metadata and registers Academic
+  Publishing audit subjects (replaces `/intake` and `/retrieve`).
+- `/criteria` is the domain-scoped criterion taxonomy reference (replaces the
+  reference half of `/browse`).
 - `/method` explains AuditSubjects, ElementReviews, SynthesisReviews, CRWE, evaluation tuples, challenges, and public/private audit visibility.
-- `/scholarly-objects/:id` is the public audit subject page.
-- `/commission` creates or reuses an `AuditSubject`, captures sponsor/scope/funding, and commissions an `AuditEpisode`.
-- `/intake` searches/retrieves scholarly metadata and registers Academic Publishing audit subjects.
-- `/browse` explores CRWE criteria and related works.
+- `/commission` creates or reuses an `AuditSubject`, captures sponsor/scope/funding, and commissions an `AuditEpisode`. The form is public up to submission.
 - `/library`, `/sponsor-console`, `/reviewer-queue`, `/operations`, and `/audit-episodes/:id` are backstage surfaces gated behind identity and role state.
+
+Frontend structure: public styling lives in `apps/web/app/public.css`, scoped
+under `.pub-shell`; `globals.css` now holds only base, shared-component, and
+backstage styles. Old public routes were removed without redirects.
 
 ## API Backbone
 
@@ -87,6 +101,12 @@ Done:
 Remaining / deferred:
 
 6. Broaden domain configuration only after real pilot needs require it (intentionally deferred).
+   When a second domain goes live, the frontend needs: a `?domain=` param on
+   `/criteria` and `/discover`, a domain chooser on `/criteria`, and
+   `getAcademicCweNodes` generalized to `getCweNodesForDomain(domainId)`
+   (currently the only academic-domain hard assumption in the public data
+   layer). Never merge criteria across domains into one list — a criterion is
+   owned by its `DomainInstantiation`.
 7. Optional optimization: make the batch public-summary endpoint
    (`/api/public/audit-subjects/summaries?ids=...`) a single aggregating SQL
    pass instead of a server-side loop. Not blocking — the frontend already
@@ -99,13 +119,23 @@ Remaining / deferred:
 
 ## Visual Experience
 
-The visual language should feel like a serious public audit registry with restrained backstage operations:
+The app now has two deliberate visual registers over one substrate:
 
-- quiet, restrained, and operational
-- dense but organized tables, forms, and timelines
+Public (news-briefing register, `public.css`):
+
+- white cards on a near-white canvas, strict headline hierarchy
+- blue links and CTAs; teal reserved for audit-semantic accents (tuple,
+  status, provenance)
+- "full coverage" clustering on subject pages; dissent visually distinct
+- persistent search in the header; section tabs; no sidebar
+- no marketing-style hero treatment
+
+Backstage (operational register, `globals.css`, unchanged):
+
+- quiet, restrained, dense tables, forms, and timelines
 - clear status markers, provenance cues, and audit trails
-- restrained color with semantic highlights
-- strong typography and compact controls
-- no marketing-style hero treatment for the main app
 
-The target feeling is not "publishing platform." It should feel like infrastructure for funded review, evidence work, and organizational decision support.
+The contrast is intentional: feeds invite, artifacts and operations stay
+rigorous. The target feeling remains infrastructure for funded review,
+evidence work, and organizational decision support — not "publishing
+platform."

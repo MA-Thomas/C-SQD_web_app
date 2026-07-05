@@ -61,20 +61,21 @@ http://localhost:3000
 
 ## Useful Routes
 
-- `/` public registry home
-- `/discover` public scholarly work discovery
-- `/public-audits` public SynthesisReviews and ElementReview depth
+- `/` briefing homepage (lead audit report + activity rails)
+- `/discover` search + filtered discovery of public audit subjects
+- `/audits` delivered public audit reports, review depth, contested audits
+- `/works/:id` public audit subject page ("full coverage")
+- `/works/:id/review` ElementReview / SynthesisReview submission
+- `/register` external metadata search + audit subject registration
+- `/criteria` active domain criterion taxonomy (CRWE) reference
 - `/method` C-SQD method explainer
 - `/commission` public path for commissioning a deeper audit
-- `/intake` Search / Register scholarly work metadata adapter
-- `/browse` CRWE criterion browse
-- `/scholarly-objects/:id` public audit subject page
+- `/domains` C-SQD domain overview
 - `/audit-episodes/:id` authenticated episode workspace gate
 - `/sponsor-console` authenticated sponsor console gate
 - `/reviewer-queue` authenticated reviewer queue gate
 - `/operations` authenticated operations gate
 - `/library` authenticated library/watchlist gate
-- `/domains` C-SQD domain overview
 
 ## Key Documents
 

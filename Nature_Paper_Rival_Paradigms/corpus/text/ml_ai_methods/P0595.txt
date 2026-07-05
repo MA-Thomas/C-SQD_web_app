@@ -1,0 +1,3351 @@
+Published in Transactions on Machine Learning Research (05/2025)
+Online Bandit Nonlinear Control
+with Dynamic Batch Length and Adaptive Learning Rate
+Jihun Kim jihun.kim@berkeley.edu
+Department of Industrial Engineering and Operations Research
+University of California, Berkeley
+Javad Lavaei lavaei@berkeley.edu
+Department of Industrial Engineering and Operations Research
+University of California, Berkeley
+Reviewed on OpenReview: https: // openreview. net/ forum? id= qmHlTkLdbL
+Abstract
+This paper is concerned with the online bandit nonlinear control, which aims to learn the best
+stabilizing controller from a pool of stabilizing and destabilizing controllers of unknown types
+for a given nonlinear dynamical system. We develop an algorithm, namedDynamic Batch
+Length andAdaptive LearningRate (DBAR), and study its stability and regret. Unlike the
+existing Exp3 algorithm requiring an exponentially stabilizing controller, DBAR only needs
+a significantly weaker notion of controller stability, in which case substantial time may be
+required to certify the system stability. Dynamic batch length in DBAR effectively addresses
+this issue and enables the system to attain asymptotic stability, where the algorithm behaves
+as if there were no destabilizing controllers. Moreover, adaptive learning rate in DBAR
+only uses the state norm information to achieve a tight regret bound even when none of the
+stabilizing controllers in the pool are exponentially stabilizing.
+1 Introduction
+The multi-armed bandit (MAB) problem aims to minimize the total cost of pulling a series of arms while
+receiving immediate cost feedback for each arm pulled. Given a finite number of arms, the problem balances
+between exploration and exploitation of arms without knowing the exact cost structure of each arm. On
+the other hand, the online optimal control problem considers a transition dynamicxt+1 =f (xt,ut,wt) and
+a set of cost functionsct(xt,ut) for t = 0,...,T , where the goal is to minimize the sum of costs over time,
+while bothf and ct are fully or partially unknown. Basically, MAB is a special type of the online optimal
+control problem in the sense that MAB is stateless and simply selects an action each time, while the online
+control problem has a countable or an uncountable number of states and selects a controller, acting as a
+function from states into actions, each time without knowing the cost functions. Bandit algorithms can thus
+be leveraged for online control, wherein the average cost incurred with a controller can be interpreted as the
+bandit feedback of pulling the controller-arm (Lin et al., 2023; Li et al., 2023).
+In this paper, we address the online non-stochastic control problem where both a transition dynamicf and
+cost functionsct can beunbounded, nonlinear, andadversarially chosen. We only have knowledge aboutxt
+and the bandit feedbackct(xt,ut) at timet, with adversarial disturbanceswt injected at each time step as in
+Gradu et al. (2020) and Cassel & Koren (2020). We operate the system with a single trajectory where the
+system state cannot be reset. To overcome the difficulties of an unknown nonlinear system, we are given a
+finite set ofN controllers in advance, where we are not aware of whether each controller can stabilize the
+system but we are allowed to alternate between these controllers within a single trajectory according to a
+specific logic. We refer to this problem as theonline bandit nonlinear controlproblem.
+1
+Published in Transactions on Machine Learning Research (05/2025)
+To deal with this online bandit nonlinear control, Li et al. (2023) adopted their Exp3-ISS algorithm, which
+uses the well-known Exp3 algorithm (Auer et al., 2002) with a mini-batch approach (Arora et al., 2012), while
+successively removing destabilizing controllers when detected in terms of input-to-state stability (ISS). In this
+paper, we aim to significantly relax the requirement on the controllers and yet guarantee asymptotic stability
+of the closed-loop system and sharpen the regret bound by designing our algorithmDBAR (Dynamic Batch
+Length andAdaptive LearningRate).
+Motivation and contribution.Our main contribution is to allow a broader class of controllers to qualify
+as a stabilizing controller withina priori controller pool. For the motivation, consider a continuous-time
+gradient flow in the vector space:
+˙x(t) =−∇F (x(t)), (1)
+where F : Rn→ R is a smooth function. A merely convexF can be extremely flat around its minimum,
+leading to a slowly (asymptotically) converging trajectory unlike exponentially converging behavior achieved
+for strongly convexF (Khalil, 2015). In fact, assuming that a minimizerx∗ of F exists, the decay rate
+F (x(t))−F (x∗) is O(1/(t log2t)) if F is convex1 (Siegel & Wojtowytsch, 2023), andO(e−t) if F is strongly
+convex. In the machine learning literature, a loss functionl(g(x),y ) of a gradient-based method is often
+given as a convex function ing (e.g., mean-squared error or cross-entropy loss), but not necessarily strongly
+convex sinceg is often over-parameterized and there could be a continuum of parameters corresponding to
+the value ofg. Analogous to this concept, one can considerF as f (xt,π (xt),wt), a dynamic governed by a
+given controllerπ and its converging behavior as a (asymptotic or exponential) controller stability. Our work
+merely requires the existence of at least oneasymptotically stabilizing controller in the pool, which is far
+weaker thanexponentially stabilizing notions and represents a more realistic environment one may encounter.
+The existing literature on online bandit control of linear dynamics with adversarial disturbance has intrinsically
+assumed the existence of strongly stable controllers, which are exponentially stabilizing controllers in our
+context, and achieves ˜O(T 2/3) regret under general convex cost functions (Cassel & Koren, 2020; Chen &
+Hazan, 2021; Ghai et al., 2023). In this paper, we will achieve the same˜O(T 2/3) regret bound even when
+none of the stabilizing controllers are exponentially stabilizing.
+Algorithm Design. The idea of our algorithm is two-fold:
+1. We adopt a dynamic batch length instead of a fixed length to certify the stability of the system
+without requiring exponentially stabilizing controllers and achieve bothasymptotic system stability and a
+sublinear regret bound. The batch length is scheduled to be non-decreasing and growing unboundedly over
+time, but its growth amount eventually saturates. However, the strategy suffers from a resulting multiplicative
+exponential regret in return.
+2. To alleviate the multiplicative exponential regret without requiring the conservative notion of exponen-
+tially stabilizing controllers, we adopt a novel adaptive learning rate scheme that relies on the system state
+norm, instead of a fixed learning rate. While the conventional way to apply the Exp3 Algorithm is to use a
+non-increasing learning rate, we decrease the learning rate if the state is unstable and subsequently increase
+the learning rate if the state returns to a stable region. By implementing this approach, we canalleviate
+the multiplicative exponential term in all cases. In particular, for a specific class of stabilizing controllers
+beyond exponential notions, we attain a regret bound order[ ˜O(T 2/3) + ˜O(T−1/3)· exp(O(|U| ))]· (|U| + 1)α,
+where α = 1/3 if|U| is known andα = 1/2 if|U| is unknown.
+Table 1 shows a summary of our results with related works. Appendix A provides more details on the
+intermediate step “Dynamic Batching”, which operates under asymptotically stabilizing controller assumptions,
+and on how we devised DBAR algorithm to avoid the multiplicative exponential term.
+1Note thatO(1/(t log2t)) is integrable at infinity. In the context of controllers, we also handle the challenging case where
+f (xt,π (xt),w t) − inf x∈Rnf (x,π (x),w t) may not be integrable at infinity. This corresponds to a convex function without
+minimizers, such as a log-exp-type softmax loss function for classification.
+2
+Published in Transactions on Machine Learning Research (05/2025)
+Table 1: Summary of required controllers and results:U is the set of destabilizing controllers and|U| denotes
+its cardinality.n is the dimension of the state. Polynomial factors onN and|U| are hidden.
+Algorithm Required Closed-loop system Regret BoundController asymptotic stability
+Chen & Hazan (2021) Exponential N/A ˜O(T 2/3) + exp(O(n))
+Li et al. (2023) Exponential No ˜O(T 2/3) + exp(O(|U| ))
+Dynamic Batching Asymptotic Yes ˜O(T 2/3) +o(T 1/3)· exp(O(|U| ))
+Algorithm 1 (DBAR) Asymptotic Yes ˜O(T 2/3) +o(1)· exp(O(|U| ))
+Related works. Optimal control problems have been widely leveraged in a variety of fields with the
+influential dynamic programming approach (Bellman, 1957). Recent successes of reinforcement learning
+(RL) in safety-critical systems, such as aircraft (Razzaghi et al., 2022), robotics (Ibarz et al., 2021), and
+autonomous driving (Kiran et al., 2021), are also deeply rooted in optimal control methods (Bertsekas, 2019).
+The common idea to gain system stability of optimal control problems is to falsify the detected destabilizing
+controller, meaning that one can completely remove those controllers failing to satisfy certain stability criteria
+from the controller pool (Baldi et al., 2010; Battistelli et al., 2010; Stefanovic & Safonov, 2011; Battistelli
+et al., 2018; Li et al., 2023).
+Online non-stochastic controlconsiders a dynamical system with adversarial disturbances, which is more
+challenging than having statistical noise. Early papers assumed full access to cost functions, enabling us to
+leverage optimal policy structure with cost function gradients (Agarwal et al., 2019; Foster & Simchowitz,
+2020; Hazan et al., 2020; Hazan & Singh, 2022). Later, studies were generalized to address the problem
+without cost gradients information (Gradu et al., 2020; Cassel & Koren, 2020; Ghai et al., 2023; Sun et al.,
+2023); instead, they estimated the cost gradients, using the history of scalar cost (bandit feedback) along the
+trajectory. However, the above research restricts the system to linear transition dynamics. Instead, our work
+considers the candidate controller pool to handle unknown nonlinear systems.
+Multi-armed banditswith adversarial disturbances were first addressed in the pioneering work by Auer et al.
+(2002) under bounded costs in their notable Exp3 algorithm. Arora et al. (2012) later improved the algorithm
+using the same controller within a mini-batch, attaining a regret bound equivalent to the lower bound
+presented in Dekel et al. (2014). As we have access to the candidate controller pool in our problem setting,
+we adopt a bandit-related approach.
+Dynamic batchinggained considerable attention for training deep neural networks by increasing the batch size
+over time and adaptively increasing the learning rate to maintain the ratio between the two (Devarakonda
+et al., 2017; Bollapragada et al., 2018; Shallue et al., 2019; Ma et al., 2023). Although this has been widely
+used in the machine learning literature, we adopt this idea to online control, progressively increasing the
+batch length within a single trajectory to achieve asymptotic stability.
+Adaptive learning ratein machine learning is generally determined by a set of gradients observed so far (Ruder,
+2016). As we do not have access to the gradients in our problem, we focus on the learning rate for bandit
+algorithms. Several works (van Erven et al., 2011; de Rooij et al., 2014) in hedge setting, an instance of
+multi-armed bandit problem, suggested using decreasing learning rate as the batch length increases. Building
+on this idea, Li et al. (2023) proposed to use a non-increasing learning rate over time, while no theoretical
+guarantee was presented. To the best of our knowledge, this paper is the first work to provide theoretical
+guarantees for the adaptive learning rate scheme based on the stability of state norm, where the rate is not
+necessarily non-increasing.
+Outline. The paper is organized as follows. In Section 2, we formulate the problem and provide necessary
+definitions and assumptions. In Section 3, we propose our DBAR algorithm. In Section 4, we study the
+stability of the algorithm, the regret bound, and its applications in switched systems. In Section 5, we present
+numerical experiments on the DBAR algorithm with an ablation study on batch length and learning rate.
+Finally, concluding remarks are provided in Section 6.
+3
+Published in Transactions on Machine Learning Research (05/2025)
+Notation. For a vectorz,∥z∥ denotes the Euclidean norm of the vector. We useO(·) for the big-O notation,
+o(·) for the small-o notation, and˜O(·) for the big-O notation hiding logarithmic factors. LetE denote the
+expectation operator. For a setZ, we use|Z| for the cardinality andZc for the complement of the setZ. For
+a real numbere, we use⌈e⌉ for the ceiling ofe. Let R denote the set of real numbers andZ+ denote the set
+of nonnegative integers. Fore1,e 2∈ Z+ where e2≤e1, letie1:e2 denote the set{ie :e2≤e≤e1,e∈ Z+}.
+For the notations used in the problem formulation and algorithm, see Appendix B.
+2 Problem Formulation
+Consider a general discrete-time dynamical systemxt+1 =f (xt,ut,wt) for t = 0,...,T − 1, wherext∈ Rn
+is the system state at timet, ut∈ Rm is the control input at timet to be designed via an algorithm.ut is
+determined by selecting a controller froma priorifinite number of controller pool consisting ofπi : Rn→ Rm
+for i = 1,...,N . wt∈W⊂ Rg is the adversarial noise at timet, whereW ={w∈ Rg :∥w∥≤ wmax} and
+the bounding constantwmax > 0 is assumed to be known. Each time instancet is associated with a cost
+function ct : Rn× Rm→ R. The state transition is governed by the dynamicf : Rn× Rm× Rg→ R. We
+have the following assumptions on the dynamicf.
+Assumption 2.1 (Dynamic). The transition dynamicf is Lf-Lipschitz continuous withLf ≥ 1; i.e.,
+|f (x,u,w )−f (˜x, ˜u, ˜w)|≤ Lf (∥x− ˜x∥ +∥u− ˜u∥ +∥w− ˜w∥) for allx, ˜x∈ Rn, u, ˜u∈ Rm, w, ˜w∈W . We let
+f (0, 0, 0) = f0.
+We adopt the notion of locally Lipschitz continuous cost functionsct given in Li et al. (2023), which contains
+quadratic tracking costs along an arbitrary bounded state trajectory and action sequence.
+Assumption 2.2 (Cost functions). There exist Lc1,Lc2 > 0 such that |ct(x,u )− ct(˜x, ˜u)| ≤
+(Lc1(max{∥x∥,∥˜x∥} + max{∥u∥,∥˜u∥}) + Lc2)(∥x− ˜x∥ +∥u− ˜u∥) for all x, ˜x ∈ Rn,u, ˜u ∈ Rm,t ∈ Z+.
+There existsc0,max≥ 0 such that|ct(0, 0)|≤ c0,max for allt∈ Z+.
+Input-to-state(asymptotic)stability(ISS)isaclassicnotionofstabilityimplyingthatthecontrollersuccessfully
+stabilizes the system under any bounded noises (Sontag, 2008; Khalil, 2015). Incremental (asymptotic) stability
+extends the input-to-state stability to describe the asymptotic behavior of some trajectory towards a different
+trajectory (Tran et al., 2016). It is worth noting that Li et al. (2023) also adopted these concepts under an
+exponential stability assumption;i.e., they require some controllers to satisfy exponential ISS and exponential
+incremental stability. However, in practice, general asymptotic concepts need to be considered for stabilizing
+controllers. We will address thiscontroller stabilityissue below.
+Definition 2.3(Input-to-state stable controller). A controllerπ is (asymptotically) input-to-state stable
+(ISS) if there exists a non-increasing functionβ(·) : Z+→ R that satisfiesβ(0) = 1 2 with limt→∞β(t) = 0
+and γ >0 such that for anyx0∈ Rn and∥wt∥≤ wmax for allt≥ 0, the sequence{xt}t≥0 determined by
+xt+1 =f (xt,π (xt),wt) satisfies∥xt∥≤ β(t)∥x0∥ +γwmax.
+Definition 2.4(Incrementally stable controller). A controllerπ is (asymptotically) incrementally stable
+if there exists a non-increasing functionβ(·) : Z+→ R that satisfiesβ(0) = 1 with limt→∞β(t) = 0 such
+that for anyx0, ˜x0∈ Rn and∥wt∥≤ wmax for allt≥ 0, it holds that∥xt− ˜xt∥≤ β(t)∥x0− ˜x0∥ for any two
+sequences determined byxt+1 =f (xt,π (xt),wt) and ˜xt+1 =f (˜xt,π (˜xt),wt).
+Assumption 2.5(Controller pool). Consider the candidate controller index setP0 ={1,...,N }, in which
+there exists a controller satisfying Definitions 2.3 and 2.4. There existsπ0,max≥ 0 such that∥πi(0)∥≤ π0,max
+for alli∈P 0. All candidate controllers areLπ-Lipschitz continuous;i.e.,∥πi(x)−πi(˜x)∥≤ Lπ∥x− ˜x∥ for all
+x, ˜x∈ Rn and i∈P 0.
+In Figure 1, we illustrate a concept of the controller pool for the unknown system, and how general the
+requirement of asymptotically stable notion is. For future use, we define the relevant sets regarding controller
+stability below.
+2This assumption in Definitions 2.3 and 2.4 is to guaranteeβ(t)2 ≤β(t) for allt, which can be overcome by a largeγ. If we
+relax Assumption 2.2 onct to be Lipschitz continuous, we can remove the assumptionβ(0) = 1.
+4
+Published in Transactions on Machine Learning Research (05/2025)
+(a) Controller Stability notions
+ (b) Controller pool for unknown nonlinear systems
+Figure 1: Illustration of Assumption 2.5: (a) Our work does not require exponentially stabilizing controllers,
+which allow the learner to detect the stability inO(log(1/ϵ)) time. Instead, we only require an asymptotically
+stabilizing controller of the true system, where the detectable time may be arbitrarily long. (b) One can
+design stabilizing controllers for each parameter characterizing the nonlinear system. While we know that at
+least one of them should work, we do not know which one works, since the learner is unaware of the true
+parameter of the system. Assumption 2.5 is always satisfied if the given pool contains a rich set of controllers,
+as long as the true system is stabilizable.
+Definition 2.6(Stabilizing and destabilizing controller). LetS denote an index set of stabilizing controllers
+that satisfy both of Definitions 2.3 and 2.4. We also letU denote an index set of destabilizing controllers that
+do not satisfy Definition 2.3. Thus, we have|S|≥ 1 andS⊆U c.
+Remark 2.7. Definition 2.4 is a stronger notion than Definition 2.3 due to the triangle inequality. However,
+for a special case of linear systems with additive noise;i.e., f (xt,π (xt),wt) = Axt +h(wt), whereA∈ Rn×n
+and h : Rg → Rn, a controller π satisfying Definition 2.3 also satisfies Definition 2.4. In such a case,
+Assumption 2.5 boils down to requiring at least one ISS controller in the pool.
+Now, we define different notions of closed-loopsystem stabilitywith bounded adversarial disturbanceswt,
+where∥wt∥≤ wmax holds. Asymptotic stability and finite-gain stability both shed light on the connection
+between the disturbance input and the state output, where none of them implies the other (Hill & Moylan,
+1980). Hence, it is desirable to achieve both system stability notions.
+Definition 2.8(Asymptotic stability). A system is asymptotically stable if the sum of state norms satisfies
+limT→∞ 1
+T
+∑T
+t=0∥xt∥≤ γwmax.
+Definition 2.9(Finite-gain stability). A system is finite-gainL1 stable if there exist constantsA1,A 2 > 0
+such that for allT∈ Z+, it holds that∑T
+t=0∥xt∥≤ A1·wmaxT +A2.
+Recall thatxt and ut denote the state and action sequence for the system according to the algorithm. We
+also letx∗
+t and u∗
+t denote the optimal state and action sequence generated by the best stabilizing controller
+i∗ that satisfies both of Definitions 2.3 and 2.4;i.e., i∗ = arg mini∈S E[∑T−1
+t=0 ct(xt,πi(xt))] subject to the
+dynamic f. Then, the regret of the algorithm is defined as follows.
+Definition 2.10(Regret). The regret of the algorithm implementing the policyπit at timet = 0,...,T − 1
+is defined asRegretT = EiT−1:0
+∑T−1
+t=0 [ct(xt,ut)−ct(x∗
+t,u∗
+t )].
+3 Algorithm Description
+Denote the number of batches in the algorithm byB. Denote by tb the start time for each batchb =
+0, 1,...,B − 1. We implement the same policy within the mini-batch.
+Assumption 3.1(Dynamic batch length). We design our batch length(τb)b≥0 as follows:
+1. τb is non-decreasing inb and limb→∞τb = +∞.
+2. maxb≥0
+τb+1
+τb
+= τ1
+τ0
+and limb→∞
+τb+1
+τb
+= 1.
+5
+Published in Transactions on Machine Learning Research (05/2025)
+For example,τb =z1(νb +z2)z3 for everyb≥ 0 with the constantsz1,z 2,z 3,ν > 0 satisfy Assumption 3.1.
+Specifically,z1 is a scaling factor,z2 provides an initial shift,z3 controls the polynomial growth rate, and
+ν determines the rate at which the batch length increases withb. For future use, we refer to this type of
+formulation as polynomial batches with(z1,z 2,z 3,ν ).
+Remark 3.2. As our dynamic batch length eventually grows unboundedly over time, excessively strict
+controller stability criteria may result in most of the candidate controllers violating these criteria. Thus, it is
+crucial to adopt (asymptotic) ISS and incremental stability as our criteria, instead of exponential notions in
+Li et al. (2023) and the literature on linear dynamics (Cassel & Koren, 2020; Chen & Hazan, 2021; Ghai
+et al., 2023). Figure 5 in Appendix A strongly supports the necessity of a growing batch length regardless
+of the noise assumption. On the other hand, our batch length requireslimb→∞
+τb+1
+τb
+= 1, which means the
+ratio of two consecutive batch lengths should approach 1 as time goes by (e.g., geometric sequences are not
+acceptable). In other words, the batch length is designed toincrease over time but eventuallysaturates,
+which is used to ensure both asymptotic system stability and a sublinear regret. We formally present both
+properties in Theorems 4.1 and 4.6.
+Algorithm Description. We propose our DBAR algorithm in Algorithm 1 (see Appendix B for the
+notations). Lines 3-9 generate the state trajectory based on the selected controllerπib for the current batchb,
+and falsify the controller if it is found to violate Definition 2.3;i.e., ib∈U . Here, letU denote the number
+of times that the Break statement in Line 7 is activated. In the rest of the paper, when we say the Break
+statement is activated, it means that Line 7 of Algorithm 1 has been activated. As the controllers inUc do
+not suffer from the Break statement, they always remain in the controller pool. Accordingly, we haveU≤|U| .
+Lines 11-20 keep track of the state norm ofxb+1 by determiningαb+1 and sb+1 that indicates the magnitude
+of the next batch’s initial state norm compared to∥x0∥. Note that we keep adjusting the value ofαb+1 to
+avoidsb+1 >s b + 1 (Line 14), and the adjustedαb+1 is guaranteed to be bounded by some constant (see
+Lemma C.5 in the Appendix). It is later discussed formally in Lemma 4.7 that these observations cause
+sb̸= 0 to occur at mostO(U ) times throughout the algorithm.
+Lines 21-26 determine the weightWb+1(k) for each controllerk. In Line 21, we use the sum of costs at the
+current batchb to add up to the weight in Line 25. In Lines 22-26, we reset the weight ifsb+1̸=sb. This
+resetting weight idea to forget the costs in the past is also proposed in van Erven et al. (2011). In the scenario
+that the Lipschitz constantLf is very large, it may help to forget the time-varying costsc0,...,c t−1 and
+restart gathering the information from the outset. Line 22 reflects this case where the next batch’s state
+norm significantly deviates from the current state norm.
+Lines 27-29 calculate the adaptive learning rateηb+1 =η0/(αb+1)sb+1 for the next batchb + 1 used to apply
+the Exp3 algorithm to our problem. Since(αb+1)sb+1 increases when the state norm∥xtb+1∥ is large, and
+sb+1 resets to zero for sufficiently small state norm, the corresponding learning rate decreases in unstable
+states and increases back to the initial value when the state norm returns to a stable region. Thus, the
+learning rate fluctuates based on the state norm. However, it is essential to note that theeffective learning
+rate, determined by the ratioηb
+τb
+, indeed decreases as the batch length increases even ifsb+1 =sb. The only
+plausible situation in which the effective rate may increase issb+1 < sb with (αb+1)2 > τb+1
+τb
+. Apart from
+this scenario, the effective learning rate experiences a polynomial decay with polynomial batches defined
+in Assumption 3.1, which does not cause any contradiction with the polynomially decreasing learning rate
+concept proposed in Aubert et al. (2023).
+Our adaptive learning rate stabilizes the cost of current batch, alleviating the multiplicative exponential term
+in the regret bound (see Table 1). Moreover, since we run the algorithm along a single trajectory with the
+selection of the policy only relying on the state norm as a context, we obtain a linear-time algorithm by
+harnessing a form of contextual bandit without requiring strict assumptions.
+In the next section, we will provide a formal analysis and a proof sketch for the guaranteed system stability
+(Definitions 2.8 and 2.9) and the attained regret bound (Definition 2.10) of Algorithm 1.
+6
+Published in Transactions on Machine Learning Research (05/2025)
+Algorithm 1DBAR
+Input: Time horizonT; Batch length(τb)b≥0; Controller parametersβ(·) and γ; δ≥γwmax/(1−β(τ0)).
+Initial statex0̸= 0; Initial learning rateη0 > 0; Initial timet0 = 0; Initial weightW0(k) = 0 for allk∈P 0.
+Initial probability distributionp0(k) = 1
+N for allk∈P 0 (uniform); Initial parameterss0 = 0. α0 > 1.
+1: for Batchb = 0, 1, 2,..., do
+2: Sample ib from a distributionpb. Terminate
+the algorithm ifPb is empty.
+// Phase 1: Falsify a detected destabilizing controller
+3: for t =tb,..., min(tb +τb− 1,T ) do
+4: Implementπib, observext+1.
+5: if∥xt+1∥>β (t + 1−tb)∥xtb∥ +γwmax then
+6: SetPb+1 =Pb−{ib}.
+7: Break
+8: end if
+9: end for
+10: Let tb+1 =t + 1.
+// Record the magnitude of the state norm for Phase 2
+11: if∥xtb+1∥≥ αb∥x0∥ +δ then
+12: Picks≥ 1 that satisfies
+(αb)s∥x0∥≤∥ xtb+1∥− δ <(αb)s+1∥x0∥.
+13: if s−sb > 1 then
+14: Let αb+1 be anyα>α b such that
+αsb+1∥x0∥≤∥ xtb+1∥− δ <αsb+2∥x0∥
+and letsb+1 =sb + 1.
+15: else
+16: Let sb+1 =s and letαb+1 =αb.
+17: end if
+18: else
+19: Let sb+1 = 0 and letαb+1 =αb.
+20: end if
+// Phase 2: Set or reset weight for each controller
+21: Let wb(ib) =∑tb+1−1
+t=tb
+ct(xt,ut)
+and w′
+b(k) = wb(ib)
+pb(k)I(ib=k) for k∈P b.
+22: if sb+1̸=sb then
+23: Let Wb+1(k) = 0 for allk∈P b.
+24: else
+25: Let Wb+1(k) = Wb(k) +w′
+b(k) for k∈P b.
+26: end if
+27: Let ηb+1 =η0/(αb+1)2sb+1.
+28: For allk∈P b+1, let
+pb+1(k) = exp(−ηb+1Wb+1(k))∑
+i∈Pb+1
+exp(−ηb+1Wb+1(i))
+29: end for
+4 Main Results
+4.1 Stability
+In this section, we will present the stability results of Algorithm 1.
+Theorem 4.1(Asymptotic stability). In Algorithm 1, suppose thatτ1
+τ0
+β(τ0)< 1. Then, it holds that
+lim
+T→∞
+1
+T
+T∑
+t=0
+∥xt∥≤ γwmax.
+Theorem 4.2(Finite-gain stability). In Algorithm 1, suppose thatτ1
+τ0
+β(τ0)< 1. Assume thatlimt→∞H(t)<
+∞. Then, Algorithm 1 achieves finite-gainL1 stability; i.e., there exist constantsA1,A 2 > 0 such that
+T∑
+t=0
+∥xt∥≤ A1·wmaxT +A2, ∀T≥ 0.
+Lemma 4.3. Define H(t) :=∑t−1
+i=0β(i), which determines the scope of stabilizing controllers throughout the
+entire horizon. Under Assumption 3.1, we havelimt→∞
+H(t)
+t = 0.
+Proof sketch of Theorems 4.1 and 4.2:Let B denote the number of batches in Algorithm 1 and recall thatU
+denote the number of times that the Break statement in Line 7 is activated. By using Lemma 4.3 (see the
+proof in Lemma C.1) with the non-decreasing property of bothτb and H(τb), we obtain
+lim
+T→∞
+∑B−1
+b=0 H(τb)
+T ≤ lim
+B→∞
+H(τB−1)
+τB−1
+·
+B−2∏
+b=B−U−1
+τb+1
+τb
+= 0· 1U = 0, (2)
+7
+Published in Transactions on Machine Learning Research (05/2025)
+where the equalities stem from two important steps:limB→∞
+H(τB−1)
+τB−1
+= 0, which follows from Lemma 4.3
+with the unboundedly increasing batch length stated in Assumption 3.1, andlimB→∞
+∏B−2
+b=B−U−1
+τb+1
+τb
+= 1,
+which follows from the saturating batch length stated in Assumption 3.1 (more detailed derivation can be
+found in (17)). Moreover, Lemmas C.3-C.7 indicate that falsifying destabilizing controllers in Lines 5-8 result
+in the existence of a constantM >0 such that the following inequality holds for allT≥ 0:
+T∑
+t=0
+∥xt∥≤ M +γwmax·
+(
+O
+(B−1∑
+b=0
+H(τb)
+)
++T
+)
+. (3)
+Substituting (2) into (3) proves both Theorems 4.1 and 4.2 (see Appendix C for more proof details).
+Remark 4.4. With a fixed batch lengthτ as presented in Li et al. (2023), the resulting closed-loop system
+cannot achieve asymptotic stability sincelimT→∞ 1
+T
+∑T
+t=0∥xt∥ = γwmax(1 +O( 1
+τ )) > γwmax. Thus, it is
+intuitively desirable to design aslimb→∞τb =∞ to achieve an asymptotic system stability, validating our
+dynamic batch length strategy in Algorithm 1. This idea also results in havinglimT→∞B/T = 0 (see
+Lemma C.9 in the Appendix). It is crucial to note that we have achieved asymptotic stability even when
+limt→∞H(t) =∞. In addition, finite-gain stability can be achieved for everyβ(·) that satisfiesH(·)<∞,
+which incorporates exponentially stabilizing controllers.
+4.2 Regret
+In this section, we will present the regret bound of Algorithm 1, where the regret defined in Definition 2.10 is
+equivalent toEiB−1:0
+∑T−1
+t=0 [ct(xt,ut)−ct(x∗
+t,u∗
+t )], considering that the policy at each timet is determined
+by the policyπib at the corresponding batchb.
+Theorem 4.5(Regret Bound). In Algorithm 1, suppose thatτ1
+τ0
+(β(τ0))2 < 1
+2
+√
+2. Then, we have
+RegretT =O(|U| ) +
+˜O(|U| + 1)
+η0
++O(
+B−1∑
+b=0
+H(τb)) + η0N
+2 [exp(O(|U| ))O(τB−1H(τB−1)) +O(
+B−1∑
+b=0
+(τb)2)].
+Theorem 4.6(Regret bound with known|U|). Consider Algorithm 1 with polynomial batches defined in
+Assumption 3.1 with proper parameters satisfyingτ1
+τ0
+(β(τ0))2 < 1
+2
+√
+2. Then, with η0 = O( (|U| +1)2/3
+T 2/3N 1/3 ) and
+T≥ max{ |U| 3/2
+(N (|U| +1))1/2,N (|U| +1)}, we achieve asublinearregret bound. Moreover3, whenH(t)≤O(∑t
+i=1
+1
+i )
+for allt≥ 1, we have
+RegretT =
+[˜O(T 2/3) + ˜O(T−1/3) exp(O(|U| ))
+]
+N 1/3(|U| + 1)1/3. (4)
+Theorem 4.6 follows from Theorem 4.5 by substituting the relevant parameters, where the regret bound in
+Theorem 4.5 deeply hinges on Lemma 4.7. For the lemma, defineL :={0≤b≤B− 1, b∈ Z+ :sb+1̸=sb}
+and Also, defineV :={0≤b≤B− 1, b∈ Z+ :sb̸= 0}. In other words,|L| is the number of transitions ofsb
+across the batches, and|V| is the number of batches whosesb is nonzero. It turns out that both quantities are
+bounded in terms of the number of the Break statement activationU (see the proof details in Lemma D.3).
+Lemma 4.7. In Algorithm 1, suppose thatβ(τ0)< 1 and letU denote the number of times that the Break
+statement is activated. Then, it holds that|L| =O(U ) and|V| =O(U ).
+Proof sketch of Theorem 4.5:Note that the expected total cost can be written asEiB−1:0 [Ek∼pb [w′
+b(k)]] due
+to Lemma D.1. By adopting the analysis performed in previous works (Cesa-Bianchi & Lugosi, 2006; van
+Erven et al., 2011; de Rooij et al., 2014), we divide the inner expectation of the total cost into two terms:
+mix loss− 1
+η0
+log(Ek∼pb exp(−ηbw′
+b(k))), mixability gap Ek∼pb [w′
+b(k)] + 1
+η0
+log(Ek∼pb exp(−ηbw′
+b(k))).
+3Among stabilizing controllers achieving˜O(T 2/3) regret bound, we also cover the case whereH(t) can be of the order of a
+harmonic series that is not summable at infinity.
+8
+Published in Transactions on Machine Learning Research (05/2025)
+Unlike the previous analysis which has the same value forη0 and ηb, our approach uses different learning
+rates forη0 andηb since we use an adaptive learning rate given by the update rule in Line 27. The additional
+terms introduced by using different rates are in|L| for the cumulative mix loss (see Lemma D.4) and|V| for
+the cumulative mixability gap (see Lemma D.5). These terms are bounded in terms ofU by Lemma 4.7 and
+are reflected in the first two terms of Theorem 4.5 sinceU≤|U| .
+After bounding the expected total cost with cumulative mix loss and mixability gap, we need to study
+EiB−1:0
+∑B−1
+b=0
+∑tb+1−1
+t=tb
+[ct(xK
+t (i∗),uK
+t (i∗))
+(αb)2sb −ct(x∗
+t,u∗
+t )
+]
+, wherexK
+t (i) anduK
+t (i) fort =tb,...,t b+1−1 denote the
+state and action sequence generated by selecting the controllers before batchb according to Algorithm 1, while
+selecting the controlleri at batchb. This does not produce any exponential term since the costs are regularized
+with the factor(αb)2sb. The additional term introduced by regularization is inO(|V|) +O(∑B−1
+b=0 H(τb)) (see
+Lemma D.7), where|V| is again bounded in terms ofU. These terms are reflected in the first and the third
+terms of Theorem 4.5. More proof details on the rest of the terms are provided in Appendix D.
+Remark 4.8(Lower bound). The regret bound ˜O(T 2/3N 1/3(|U| + 1)1/3) provided in Theorem 4.6 is similar
+to thelower boundpresented in Dekel et al. (2014), except that there is an extra term(|U| + 1)1/3, reflecting
+the unbounded costs that cannot be mitigated by merely asymptotically stabilizing controllers. Moreover,
+a stability-agnostic nature of the given controllers implies that any algorithm will normally encounter
+destabilizing controllers and it is unavoidable to face the exponential termexp(O(|U| )) in regret. To illustrate,
+the work Chen & Hazan (2021) provides thelower boundinvolving an exponential term in the state dimension
+n (see Theorem 3 in their work), which is analogous to|U| in our setting in the sense that the magnitude of
+both quantities explains the difficulty of controlling the system. They showed that any algorithm must observe
+at leastO(n) states to learn every mode of the system and arrive at a stabilizing controller, during which it
+inevitably experiences a regret bound ofexp(O(n)). Similarly, in our setting with a finite set of controllers,
+any algorithm should observe the behaviors of|U| number of destabilizing controllers before consistently
+applying a stabilizing controller, andexp(O(|U| )) is unavoidable as a result. While Chen & Hazan (2021)
+assumed linear dynamics, our work deals with nonlinear dynamics for which finding an optimal controller is
+NP-hard, and thus the discrepancy between the lower boundsexp(O(n)) and exp(O(|U| )) is indeed necessary
+to reduce some of the complexity. Due to our case of thelower bound, the exponentially increasing term can
+be tackled by reducing it by the inverse power term onT at best. Theorem 4.6 aligns with this idea since the
+resulting regret bound involves the term˜O(T−1/3)· exp(O(|U| )) by factoring in every potential exponential
+term to be multiplied with the initial learning rateη0 =O(T−2/3), which inherently serves as a mitigating
+factor. Note that instead of dramatically reducing the regret bound, our main contribution is on significantly
+relaxing the stability assumptions for required controllers (see Table 1 and Appendix A).
+Remark 4.9(Nonlinear control). Our approach is useful to extend the stability and regret analysis beyond
+linear dynamics, but if|U| is too large, it would be difficult to reach good enough performance as the regret
+bound depends onexp(O(|U| )). This occurs because we have focused on a discrete set of controllers instead
+of a connected set as in linear dynamics. Note that in the linear dynamics case, it is guaranteed that the set
+of stabilizing controllers is connected. However, adopting a discrete set was inevitable to handle unknown
+nonlinear systems since the set of stabilizing controllers may not be connected. To address this limitation,
+we believe that this issue can be mitigated by the formulation where the problem of interest is|U| number
+of connected sets, where|U| is not too large and each set is disjoint from the others. The agent can apply
+techniques of continuous parameterization (e.g. gradient descent) within a set and also transition between
+separate sets by leveraging our technique, where many real-world problems involve both types of decisions,
+such as selecting a high-level strategy (discrete) and fine-tuning parameters within that strategy (continuous).
+This mixture of algorithms for discrete and connected sets will be an interesting future work.
+4.3 Regret with Unknown Number of Destabilizing Controllers
+Now, a question arises as to what happens if|U| is not knownin advance. With Algorithm 1, one can
+leverage|U| + 1≤N to upper-bound the regret in Theorem 4.6 and achieve˜O(T 2/3N 2/3) at best (without
+considering exponential terms) by determiningη0 and (τb)b≥0 as if there were only one stabilizing controller.
+It turns out that we can reduce the bound to˜O(T 2/3N 1/3(|U| + 1)1/2) by adaptively changing the value ofηb
+as in Algorithm 2, where we increase the value ofµb if the Break statement in Algorithm 1 is activated and
+keep it unchanged otherwise.
+9
+Published in Transactions on Machine Learning Research (05/2025)
+Algorithm 2DBAR-unknown|U|
+Input: Add two more inputsµ0 = 0. y >0.
+// Modification 1: Add the following IF-ELSE Statement right after Line 9 in Algorithm 1.
+if Pb+1 =Pb then µb+1 =µb. else µb+1 =µb + 1. end if
+// Modification 2: Incorporateµb+1 to setηb+1 in Line 27 in Algorithm 1.
+ηb+1 =η0· (µb+1 + 1)y/(αb+1)2sb+1.
+Theorem 4.10(Regret bound with unknown|U|). Consider Algorithm 2 with polynomial batches defined in
+Assumption 3.1 with proper parameters satisfyingτ1
+τ0
+(β(τ0))2 < 1
+2
+√
+2. Then, withy = 1
+2, η0 =O( 1
+T 2/3N 1/3 ),
+and T≥ max{ |U| 3/2
+N 1/2(|U| +1)3/4,N}, we achieve asublinear regret bound. Moreover, whenH(t)≤O(∑t
+i=1
+1
+i )
+for allt≥ 1, we have
+RegretT =
+[˜O(T 2/3) + ˜O(T−1/3) exp(O(|U| ))
+]
+N 1/3(|U| + 1)1/2. (5)
+Proof sketch:Define η0,r :=η0
+√r + 1. It turns out that for everyr = 0,...,U , ˜O( 1
+η0,r
+) appears in the regret
+instead of the integrated term˜O(|U| +1
+η0
+) in Theorem 4.5. The constant|U| + 1 is distributed among each
+˜O( 1
+η0,r
+) term. Under the constraints given by the disintegration rule using Lemma 4.7 for eachr, one can
+establish an upper bound of˜O( (|U| +1)1/2
+η0
+) on the sum of ˜O( 1
+η0,r
+) terms overr = 0,...,U by attaining the
+coefficients of these terms with complementary slackness in Karush-Kuhn-Tucker (KKT) conditions. The
+details are available in Appendix E.
+Our DBAR algorithm can also be applied to scenarios such as those switched systems (Tousi et al., 2008;
+Zhao et al., 2022) in which the transition dynamics and the associated controller pool change according to
+either the detection of a destabilizing controller or pre-determined time instants (Battistelli et al., 2011), as
+well as the ballooning problem (Ghalme et al., 2021) where the controller pool may expand. We proposed
+Algorithm 3, the switching version of DBAR, in Appendix F.
+5 Numerical Experiments
+To demonstrate the main results of this paper, we provide illustrative examples on both linear and nonlinear
+dynamics with adversarial disturbances.
+Example 1 (Linear):Consider the following linear dynamical system withxt∈ R10 and ut∈ R10:
+xt+1 =A∗xt +B∗ut +wt, t = 0, 1,..., (6)
+whereA∗ andB∗ are 10× 10 matrices whose entries are randomly generated fromUniform[−1, 1]. We also set
+x0 = [100, 200]′⊗ 15 and wt = [sin
+(t
+5π
+)
+, sin
+( t
+11π
+)
+]′⊗ 15, where⊗ denotes Kronecker product and1d denotes
+a d× 1 vector of ones. We consider a linear policyut =Kxt, whereK∈ R10×10. To construct a controller
+pool, we first generateK∗ such that the absolute values of all eigenvalues ofA∗ +B∗K∗ are less than 0.8.
+K∗ is naturally an exponentially stabilizing controller. Then, we construct our controller pool to includeK∗
+along with 100 other controllers, each of which is a variation ofK∗ obtained by selecting one entry ofK∗
+and multiplying it by 1.1. The constructed pool has|U| = 58 out of 101 candidate controllers. The goal is to
+keep the state near the origin, where the cost function is quadratic at each time, namelyct(xt,ut) =∥xt∥2.
+Falsifying destabilizing controllers moderately stabilizes the state norm (Li et al., 2023). Compared to their
+work, Figures 2(a) and 2(b) show that both integral components of our algorithm DBAR, dynamic batch
+length and adaptive learning rate, further lowers the regret and stabilizes the system, where approximately60%
+of controllers in the pool are destabilizing the system. In this case, Figures 2(c) and 2(d) both demonstrate
+that the two components of our algorithm mutually reinforce each other, where each component stabilizes
+the state norm with or without time delay. This supports the observations in Appendix A. In Appendix G.1,
+we also provide the experiment details and simulation results with noise terms generated by uniform random
+10
+Published in Transactions on Machine Learning Research (05/2025)
+(a) Stability analysis
+ (b) Regret analysis
+ (c) Adaptive learning rate under
+dynamic batch length
+(d) Dynamic batch length under
+adaptive learning rate
+Figure 2: The stability and the regret in the linear system under sinusoidal noise.Fixedτ, fixedη represents
+the algorithm in Li et al. (2023). Ablation study of the algorithm is presented.
+(a) Ball-beam Leader-follower system
+ (b) Stability analysis underβ1(t)
+ (c) Regret analysis underβ1(t)
+Figure 3: The stability and the regret in the leader-follower system under sinusoidal noise, where the leader
+is represented by a ball-beam system. We selectedβ1(t) = min{10/t1.05, 1} and used squared sum of state
+and action norms as the cost.
+walk, wherewt−wt−1 has a uniform distribution fort≥ 1, as well as the results with truncated Gaussian
+noise for sanity check.
+Example 2 (Nonlinear):We now consider the 100-dimensional leader-follower system (Morbidi et al., 2011),
+where the leader is represented by a ball-beam system, and the followers leverage the leader’s state to stabilize
+themselves. Specifically, if the leader is controlled by destabilizing controllers, the followers may also fail to
+stabilize. The leader is represented by a nonlinear noise-injected ball-beam system (Hauser et al., 1992):
+¨x =B(x ˙θ2− 9.81 sinθ) + 3wx, ¨θ =ux, B = 0.7143, (7)
+where x is the ball position,θ is the beam angle,ux is the action, andwx(t) = sin
+(t
+7π
+)
+. Also, consider the
+followers’ system:
+˙z =A[x, ˙x, −9.81Bθ, −9.81B ˙θ]′ + ˜Az +uz + 3wz, (8)
+where [x, ˙x,θ, ˙θ]∈ R4 are the states of the leader given below in (7),z∈ R96 are the states of the followers,
+uz∈ R96 is the action of the followers,wz = [sin
+(t
+5π
+)
+, sin
+( t
+11π
+)
+]′⊗ 148∈ R96, andA, ˜A are relevant random
+matrices. Note that the number of states in the entire system is 100.
+For the actionux, we now adopt a broader notion of stabilizing controllers and choose the policy class to be
+the nested saturating control (Teel, 1992), without considering exponentially stabilizing notions. For the
+actionuz, we consider a linear policy inz; however, the policy is inherently nonlinear with respect to the entire
+state, as the leader’s system itself is nonlinear. In Figures 3(b) and 3(c), we observe that dynamic batching
+does not necessarily stabilize the state norm by itself. However, if an adaptive learning rate is additionally
+11
+Published in Transactions on Machine Learning Research (05/2025)
+(a) Robustness to batch length designs
+(b) Stability analysis underβ2(t)
+ (c) Regret analysis underβ2(t)
+Figure 4: Sensitivity analysis of hyperparameters. (a) For the linear system in Example 1, we report the
+regret at time 2000 based on various initial batch lengths and batch length designs. (b), (c) For the nonlinear
+system in Example 2, we selectedβ2(t) = min{10/t1.08, 1} to compare withβ1(t) given in Figure 3.
+applied, DBAR effectively stabilizes the explosion of the nonlinear system and enjoys the improved regret,
+even when we use a polynomially stabilizing criterionβ1(t) = min{10/t1.05, 1} = O(1/t1.05) to define the
+stabilizing controllers (see Definition 2.3). More experiment details are available in Appendix G.2.
+Sensitivity Analysis of Hyperparameters:We now provide the robustness of our algorithm under modifications
+in hyperparameters. For the linear system in Example 1, we examine the hyperparameters associated with
+the two important components of DBAR: the batch lengths(τb)b≥0 and the initial learning rateη0. Figure
+4(a) presents the behavior of different batch length designs, and shows that any batch lengthτb yields a
+desirable regret at time 2000, as long asthe initial batch lengthτ0 is sufficiently large. This phenomenon
+strongly supports Theorem 4.6, stating thatτ1
+τ0
+(β(τ0))2 < 1
+2
+√
+2 with polynomial batches defined in Assumption
+3.1 ensures a regret given in (4). Note that a largeτ0 will naturally satisfy the inequality sinceβ(·) is a
+non-increasing function and the polynomial batch structure ensures thatτ1
+τ0
+remains constant regardless ofτ0.
+Meanwhile, we observed that the policy selection was not affected by the initial learning rateη0, resulting in
+the same regret and demonstrating the robustness of our algorithm toη0.
+For the nonlinear system in Example 2, we provide the robustness of our algorithm with respect to the
+choice of β(t) defined in Definitions 2.3 and 2.4. We compare two polynomially decreasing functions:
+β1(t) = min{10/t1.05, 1} (see Figures 3(b), 3(c)) andβ2(t) = min{10/t1.08, 1} (see Figures 4(b), 4(c)). While
+DBAR performs effectively in both cases, the behaviors of the two functions are slightly different in the sense
+that the system already appears to be stabilized even without some components of DBAR based onβ2(t).
+This stems from the extent of destabilizing controller removal:β2(t) removes the controller based on criteria
+more strict thanβ1(t) since 1.08> 1.05. This prevents the explosion of the nonlinear system by eliminating
+potential destabilizing controllers not yet seen in an unstable region in advance. However, in practice, if the
+candidate controller pool had not included any controller satisfying the strict assumptions, the algorithm
+would haveterminated, failing to keep the system running. This finding illustrates why it is crucial to allow a
+broader class of controllers and yet achieve a tight regret bound, which was the ultimate goal of our work.
+6 Conclusion
+In an online bandit nonlinear control problem, an agent makes decisions with the bandit feedback information,
+while suffering from nonlinear dynamics and adversarial disturbances. To address such challenges, this paper
+develops a novel Exp3-type algorithm with theoretical guarantees. The proposed algorithm uses a dynamic
+batch length to achieve asymptotic stability of the system without requiring an exponential assumption on
+stabilizing controllers in the pool. Our adaptive learning rate scheme observes the stability of state norm to
+overcome the inherent multiplicative exponential term in the regret, thereby improving the overall regret.
+Future directions include extending these results to problems with explicit safety constraints while selecting
+the best stabilizing controller among a continuum of candidate controllers.
+12
+Published in Transactions on Machine Learning Research (05/2025)
+Acknowledgments
+This work was supported by the U. S. Army Research Laboratory and the U. S. Army Research Office under
+Grant W911NF2010219, Office of Naval Research under Grant N000142412673, AFOSR, NSF, and the UC
+Noyce Initiative.
+References
+Naman Agarwal, Brian Bullins, Elad Hazan, Sham M. Kakade, and Karan Singh. Online control with
+adversarial disturbances. InInternational Conference on Machine Learning, pp. 111–119. PMLR, 2019.
+Jason Altschuler and Kunal Talwar. Online learning over a finite action set with limited switching. In
+Conference on Learning Theory, volume 75, pp. 1569–1573. PMLR, 2018.
+Oren Anava, Elad Hazan, and Shie Mannor. Online learning for adversaries with memory: Price of past
+mistakes. InAdvances in Neural Information Processing Systems, volume 28, pp. 784–792, 2015.
+Raman Arora, Ofer Dekel, and Ambuj Tewari. Online bandit learning against an adaptive adversary: from
+regret to policy regret. InInternational Conference on Machine Learning, pp. 1747–1754. PMLR, 2012.
+Raman Arora, Teodor V. Marinov, and Mehryar Mohri. Bandits with feedback graphs and switching costs.
+In Advances in Neural Information Processing Systems, volume 32, pp. 10397–10407, 2019.
+Julien Aubert, Luc Luhéricy, and Patricia Reynaud-Bouret. On the convergence of the mle as an estimator of
+the learning rate in the exp3 algorithm. InInternational Conference on Machine Learning, pp. 1244–1275.
+PMLR, 2023.
+Peter Auer, Nicoló Cesa-Bianchi, Yoav Freund, and Robert E. Schapire. The non-stochastic multi-armed
+bandit problem. SIAM Journal on Computing, 32(1):48–77, 2002.
+Simone Baldi, Giorgio Battistelli, Edoardo Mosca, and Pietro Tesi. Multi-model unfalsified adaptive switching
+supervisory control. Automatica, 46(2):249–259, 2010.
+Corneliu Barbu, Rodolphe Sepulchre, Wei Lin, and Petar V. Kokotović. Global asymptotic stabilization of
+the ball-and-beam system. InConference on Decision and Control. IEEE, 1997.
+Giorgio Battistelli, Edoardo Mosca, Michael G. Safonov, and Pietro Tesi. Stability of unfalsified adaptive
+switching control in noisy environments.IEEE Transactions on Automatic Control, 55(10):2424–2429,
+2010.
+Giorgio Battistelli, João P. Hespanha, Edoardo Mosca, and Pietro Tesi. Model-free adaptive switching control
+of uncertain time-varying plants.The International Federation of Automatic Control, 44(1):1273–1278,
+2011.
+Giorgio Battistelli, Daniele Mari, Daniela Selvi, and Pietro Tesi. Direct control design via controller
+unfalsification. International Journal of Robust and Nonlinear Control, 28:3694–3712, 2018.
+Richard E. Bellman.Dynamic programming. Princeton university press, 1957.
+Dimitri P Bertsekas.Reinforcement learning and optimal control. Athena Scientific Belmont, MA, 2019.
+Raghu Bollapragada, Jorge Nocedal, Dheevatsa Mudigere, Hao-Jun Shi, and Ping Tak Peter Tang. A
+progressive batching l-bfgs method for machine learning. InInternational Conference on Machine Learning,
+pp. 620–629. PMLR, 2018.
+Asaf Cassel and Tomer Koren. Bandit linear control. InAdvances in Neural Information Processing Systems,
+volume 33, pp. 8872–8882, 2020.
+N. Cesa-Bianchi and G. Lugosi.Prediction, learning, and games. Cambridge University Press, 2006.
+13
+Published in Transactions on Machine Learning Research (05/2025)
+Xinyi Chen and Elad Hazan. Black-box control for linear dynamical systems. InConference on Learning
+Theory, volume 134, pp. 1114–1143. PMLR, 2021.
+Steven de Rooij, Tim van Erven, Peter Grünwald, and Wouter M Koolen. Follow the leader if you can, hedge
+if you must.Journal of Machine Learning Research, 15(1):1281–1316, 2014.
+Ofer Dekel, Jian Ding, Tomer Koren, and Yuval Peres. Bandits with switching costs:T 2/3 regret. In
+Symposium on the Theory of Computing, pp. 459–467, 2014.
+Aditya Devarakonda, Maxim Naumov, and Michael Garland. Adabatch: Adaptive batch sizes for training
+deep neural networks.arXiv preprint arXiv:1712.02029, 2017.
+Dylan J. Foster and Max Simchowitz. Logarithmic regret for adversarial online control. InInternational
+Conference on Machine Learning, pp. 3211–3221, 2020.
+Udaya Ghai, Arushi Gupta, Wenhan Xia, Karan Singh, and Elad Hazan. Online nonstochastic model-free
+reinforcement learning. InAdvances in Neural Information Processing Systems, volume 36, 2023.
+Ganesh Ghalme, Swapnil Dhamal, Shweta Jain, Sujit Gujar, and Y. Narahari. Ballooning multi-armed
+bandits. Artificial Intelligence, 296:103485, 2021.
+Paula Gradu, John Hallman, and Elad Hazan. Non-stochastic control with bandit feedback. InAdvances in
+Neural Information Processing Systems, volume 34, pp. 10764–10774, 2020.
+John Hauser, Shankar Sastry, and Petar V. Kokotović. Nonlinear control via approximate input-output
+linearization: the ball and beam example.IEEE Transactions on Automatic Control, 37(3):392–398, 1992.
+Elad Hazan and Karan Singh. Introduction to online nonstochastic control.arXiv preprint arXiv:2211.09619,
+2022.
+Elad Hazan, Sham M. Kakade, and Karan Singh. The nonstochastic control problem. InProceedings of the
+31st International Conference on Algorithmic Learning Theory, volume 117, pp. 408–421. PMLR, 2020.
+David J. Hill and Peter J. Moylan. Connections between finite-gain and asymptotic stability. IEEE
+Transactions on Automatic Control, 25(5):931–936, 1980.
+Julian Ibarz, Jie Tan, Chelsea Finn, Mrinal Kalakrishnan, Peter Pastor, and Sergey Levine. How to train your
+robot with deep reinforcement learning: lessons we have learned.The International Journal of Robotics
+Research, 40(4-5):698–721, 2021.
+Hassan K. Khalil.Nonlinear Systems. Pearson Education, 2015.
+B. Ravi Kiran, Ibrahim Sobh, Victor Talpaert, Patrick Mannion, Ahmad A. Al Sallab, Senthil Yogamani,
+and Patrick Pérez. Deep reinforcement learning for autonomous driving: A survey.IEEE Transactions on
+Intelligent Transportation Systems, 23(6):4909–4926, 2021.
+Yingying Li, James A. Preiss, Na Li, Yiheng Lin, Adam Wierman, and Jeff Shamma. Online switching control
+with stability and regret guarantees. InLearning for Dynamics and Control Conference, pp. 1138–1151.
+PMLR, 2023.
+Yiheng Lin, James A. Preiss, Emile Anand, Yingying Li, Yisong Yue, and Adam Wierman. Online adaptive
+policy selection in time-varying systems: No-regret via contractive perturbations. InAdvances in Neural
+Information Processing Systems, volume 37, 2023.
+Zhenguo Ma, Yang Xu, Hongli Xu, Zeyu Meng, Liusheng Huang, and Yinxing Xue. Adaptive batch size for
+federated learning in resource-constrained edge computing.IEEE Transactions on Mobile Computing, 22
+(1):37–53, 2023.
+Fabio Morbidi, Francesco Bullo, and Domenico Prattichizzo. Visibility maintenance via controlled invariance
+for leader–follower vehicle formations.Automatica, 47(5), 2011.
+14
+Published in Transactions on Machine Learning Research (05/2025)
+Pouria Razzaghi, Amin Tabrizian, Wei Guo, Shulu Chen, Abenezer Taye, Ellis Thompson, Alexis Bregeon,
+Ali Baheri, and Peng Wei. A survey on reinforcement learning in aviation applications.arXiv preprint
+arXiv:2211.02147, 2022.
+Sebastian Ruder. An overview of gradient descent optimization algorithms.arXiv preprint arXiv:1609.04747,
+2016.
+Christopher J. Shallue, Jaehoon Lee, Joseph Antognini, Jascha Sohl-Dickstein, Roy Frostig, and George E.
+Dahl. Measuring the effects of data parallelism on neural network training.Journal of Machine Learning
+Research, 20(112):1–49, 2019.
+Jonathan W. Siegel and Stephan Wojtowytsch. A qualitative difference between gradient flows of convex
+functions in finite- and infinite-dimensional hilbert spaces.arXiv preprint arXiv:2310.17610, 2023.
+Eduardo D. Sontag. Input to state stability: Basic concepts and results.Nonlinear and Optimal Control
+Theory, pp. 163–220, 2008.
+Margareta Stefanovic and Michael G. Safonov.Safe Adaptive Control: Data-driven Stability Analysis and
+Robust Synthesis. Springer, 2011.
+Y. Jennifer Sun, Stephen Newman, and Elad Hazan. Optimal rates for bandit nonstochastic control. In
+Advances in Neural Information Processing Systems, volume 36, 2023.
+Andrew R. Teel. Global stabilization and restricted tracking for multiple integrators with bounded controls.
+Systems & control letters, 18(3):165–171, 1992.
+Mani M. Tousi, Idin Karuei, Shahin Hashtrudi-Zad, and Amir G. Aghdam. Supervisory control of switching
+control systems. Systems & control letters, 57(2):132–141, 2008.
+Duc N. Tran, Björn S. Rüffer, and Christopher M. Kellett. Incremental stability properties for discrete-time
+systems. In Conference on Decision and Control. IEEE, 2016.
+Tim van Erven, Wouter M Koolen, Steven de Rooij, and Peter Grünwald. Adaptive hedge. InAdvances in
+Neural Information Processing Systems, pp. 10565–10576, 2011.
+Rui Zhao, Zhiqiang Zuo, and Yijing Wang. Event-triggered control for networked switched systems with
+quantization. IEEE Transactions on Systems, Man, and Cybernetics: Systems, 52(10):6120–6128, 2022.
+15
+Published in Transactions on Machine Learning Research (05/2025)
+A Necessity of DBAR under weaker stability notion of required controllers
+To illustrate how significant the weaker controller stability notion is compared to the exponential notions,
+let us further present a one-dimensional system, where the current system state is1. The goal is to achieve
+a state near0, and we would like to detect this stability by observing whether one arrives at a state less
+than 1−ϵ, whereϵ is an arbitrarily small positive number. Exponentially stabilizing controllers guarantee
+to detect the stability inO(log(1/ϵ)) time. However, with an asymptotically stabilizing controller, if the
+controller is designed to keep the system state unchanged for an arbitrarily long timeT and then collapse the
+state towards 0 afterward, one cannot detect the stability before timeT regardless of how smallϵ is. In such
+a case, even though the controller ultimately achieves the goal, it may take a lot of time to learn whether a
+closed-loop system would be stable or not.
+Note that dynamic batch length is an important part of our work. If an exponentially stabilizing controller
+is applied to a system, one can quickly certify the stability. However, if we only have the asymptotically
+stabilizing controllers as in our problem setting, it may take a long time to observe any abnormal behavior in
+the closed-loop system. Such an issue cannot be handled by a fixed batch length and in that sense dynamic
+batch length is a necessary part of our work. In Table 1, we have stated the intermediate step “Dynamic
+Batching” to achieve closed-loop system asymptotic stability, which was not achievable by the previous works.
+Figure 5 also demonstrates the necessity of a dynamic batch length regardless of the noise assumption. The
+blue and orange lines represent the state norms generated by a fixed batch length and a dynamic batch
+length, respectively. With both relatively easier statistical noise and more challenging adversarial noise, the
+blue line shows a larger state norm than the orange line. Moreover, the blue line occasionally has higher
+values than the red line, which is our asymptotic stability boundγwmax = 1.5, while the orange line remains
+below the red line after a certain time.
+(a) Statistical Noise
+ (b) Adversarial Noise
+Figure 5: The state norm with a fixed batch length compared to that with a dynamic batch length.
+xt+1 =xt + 0.15ut +wt withut =Kxt whereK∈ [−3.0,−2.9,−2.8,..., 4.9, 5.0]. We useτ0 = 10,γ = 3, and
+set wmax = 0.5. The noisewt is (a) i.i.d. sampled from Uniform[−0.2, 0.5], and (b)0.15 + 0.35 sin( t
+3π ).
+However, it turns out that the resulting regret by dynamic batching contains the multiplicative term
+o(T 1/3)· exp(O(|U| )), which is because a dynamic batch length inducesH(τB−1) to be necessarily multiplied
+with exp(O(|U| )). (see Corollary D.10). Thus, we came up with a careful switching strategy, an adaptive
+learning rate, to address this issue. The multiplicative term can be resolved with splitting technique by
+introducing an adaptive learning rate, achieving both closed-loop system asymptotic stability (by dynamic
+batch length) and the improved regret (by adaptive learning rate), even though we have greatly relaxed the
+assumption on controller stability (exponential to asymptotic). We developed this approach by factoring in
+every potential exponential term to be multiplied with the initial learning rateη0 =O(T−2/3), which has
+a negative exponent onT, thus inherently serving as a mitigating factor (see Theorem 4.6 and the term
+η0N
+2
+∑B−1
+b=0 Eib−1:0 (wK
+b (ib))2 in Lemma D.5). Due to Lemma 4.7, one can explain that the remaining terms
+produced by the splitting can be bounded byO(|U| ). More details can be found in Appendix D.
+16
+Published in Transactions on Machine Learning Research (05/2025)
+B Glossary
+Before formally presenting the proofs, we provide a glossary to help readers understand the notations of our
+algorithm DBAR (see Algorithm 1).
+Table 2: Glossary
+Notation Meaning
+xt state at timet in the algorithm
+x∗
+t optimal state at timet
+ut action at timet in the algorithm
+u∗
+t optimal action at timet
+ct(xt,ut) cost at timet
+wmax the maximum norm of the noise
+T the length of time in the algorithm
+B the number of batches in the algorithm
+tb the initial time for each batchb
+τb the batch length at batchb
+ηb learning rate at batchb
+ib the controller selected at batchb
+N the number of controllers in the candidate pool
+Wb(k) the weight of controllerk at batchb
+pb(k) the probability of selecting controllerk at batchb
+Pb a set of available controllers at batchb
+αb,sb (αb)sb indicates the magnitude of the state norm attb compared to∥x0∥
+β(t), γ applying a stabilizing controller incurs∥xt∥≤ β(t)∥x0∥ +γwmax
+Lf Lipschitz constant for the dynamicf
+Lπ Lipschitz constant for any controllerπ
+U the number of times the Break statement is activated
+b1,...,b U the next batch after the Break statement is activated
+C Stability Proof
+Let b1,...,b U denote the next batch after the Break statement is activated; i.e., ∥xtbu∥ > β(tbu−
+tbu−1)∥xtbu−1∥ +γwmax for everyu = 1,...,U . For future use, letb0 = 0 and bU +1 = B. Accordingly,
+tb0 =t0 = 0 and tbU +1 =tB =T + 1.
+Lemma C.1(Restatement of Lemma 4.3). Define H(t) :=∑t−1
+i=0β(i). Under Assumption 3.1, we have
+lim
+t→∞
+H(t)
+t = 0.
+Proof. Recall that we designedβ(·) to be non-increasing and nonnegative. Then, we haveβ(i)≤
+∫i
+i−1β(x)dx
+for every integeri≥ 1. Using the inequality, one can write
+0≤H(t) = β(0) +
+t−1∑
+i=1
+β(i)≤β(0) +
+∫t−1
+0
+β(x)dx. (9)
+If limt→∞H(t)<∞, clearly limt→∞
+H(t)
+t = 0 holds. If limt→∞H(t) =∞, we leverage L’Hôpital’s rule with
+β(t)→ 0 as t→∞ to derive
+lim
+t→∞
+H(t)
+t ≤ lim
+t→∞
+β(0) +
+∫t−1
+0 β(x)dx
+t = lim
+t→∞
+β(t− 1)
+1 = 0,
+where the first inequality follows from (9).
+17
+Published in Transactions on Machine Learning Research (05/2025)
+Lemma C.2. For 0≤j≤k, we have
+H(τk)
+H(τj)≤ τk
+τj
+.
+Proof. For 0≤j≤k,
+H(τk)
+H(τj)≤
+H(τj) +∑τk−1
+i=τj β(i)
+H(τj) ≤ 1 + (τk−τj)·β(τj)
+τj·β(τj) = τk
+τj
+,
+where the last inequality is due to the non-increasing property ofβ(·). The equality holds whenβ(0) =··· =
+β(τk− 1).
+Lemma C.3(Sum of state norms in a single batch). In Algorithm 1, for each batchb = 0, 1,...,B − 1, the
+following inequality holds:
+tb+1−1∑
+t=tb
+∥xt∥≤ H(τb)∥xtb∥ +γwmax(τb− 1)
+Proof. Fort =tb, we have∥xt∥≤ β(0)∥xtb∥ since β(0) = 1. Fortb <t ≤tb+1− 1, we have
+∥xt∥≤ β(t−tb)∥xtb∥ +γwmax. (10)
+Summing up all inequalities gives
+tb+1−1∑
+t=tb
+∥xt∥≤ H(tb+1−tb)∥xtb∥ +γwmax(tb+1−tb− 1).
+Since Line 5 of Algorithm 1 is not satisfied,τb =tb+1−tb. This completes the proof.
+Lemma C.4(Weighted sum of state norms between the two consecutive Break statements). In Algorithm 1,
+suppose thatτ1
+τ0
+β(τ0)< 1. For every next batch index after the Break statementu = 0,...,U , the following
+inequality holds:
+bu+1−1∑
+b=bu
+H(τb)∥xtb∥≤ 1
+1− τbu +1
+τbu
+β(τbu )H(τbu )∥xtbu∥ + γwmax
+1−β(τbu+1)
+bu+1−1∑
+b=bu+1
+H(τb).
+Proof. Since we designed(τb)b≥0 to have a non-decreasingτb and non-increasing τb+1
+τb
+, notice that we have
+β(τb)≤ τb+1
+τb
+β(τb)≤ τb
+τb−1
+β(τb−1)≤ τ1
+τ0
+β(τ0)< 1 for everyb≥ 1 since β(·) is non-increasing.
+If bu+1 = bu + 1, the inequality clearly holds since 1
+1−
+τbu +1
+τbu
+β(τbu ) > 0. Otherwise, consider the following
+inequality forbu <b ≤bu+1− 1:
+H(τb)∥xtb∥≤ H(τb)β(τb−1)∥xtb−1∥ +H(τb)γwmax
+= H(τb)
+H(τb−1)β(τb−1)H(τb−1)∥xtb−1∥ +H(τb)γwmax,
+where the inequality holds since Line 5 of Algorithm 1 is not satisfied. Recursively applying this inequality,
+one arrives at
+H(τb)∥xtb∥≤
+b−1∏
+a=bu
+[H(τa+1)
+H(τa) β(τa)
+]
+·H(τbu )∥xtbu∥ +H(τb)γwmax(1 +
+b−1∑
+b′=bu+1
+b−1∏
+a=b′
+β(τa))
+≤
+b−1∏
+a=bu
+[H(τa+1)
+H(τa) β(τa)
+]
+·H(τbu )∥xtbu∥ +H(τb)γwmax(1 +
+b−1∑
+b′=bu+1
+[β(τbu+1)]b−b′
+)
+18
+Published in Transactions on Machine Learning Research (05/2025)
+≤
+b−1∏
+a=bu
+[H(τa+1)
+H(τa) β(τa)
+]
+·H(τbu )∥xtbu∥ +H(τb) γwmax
+1−β(τbu+1) (11)
+≤
+b−1∏
+a=bu
+[τa+1
+τa
+β(τa)
+]
+·H(τbu )∥xtbu∥ +H(τb) γwmax
+1−β(τbu+1)
+≤
+[τbu+1
+τbu
+β(τbu)
+]b−bu
+·H(τbu )∥xtbu∥ +H(τb) γwmax
+1−β(τbu+1),
+where the second inequality comes from the non-increasing property ofβ(·), the third inequality is by
+β(τbu+1)< 1, the fourth inequality is due to Lemma C.2, and the last inequality comes from the non-increasing
+property of τb+1
+τb
+β(τb). Since τbu +1
+τbu
+β(τbu ) < 1, summing up the above inequalities forbu < b≤ bu+1− 1
+completes the proof.
+Lemma C.5(Next state norm after the Break statement). Define M1 :=Lf (1 +Lπ)γwmax +Lf (π0,max +
+wmax) +f0. Then, for everyu = 1,...,U , we have
+∥xtbu∥≤ Lf (1 +Lπ)β(0)∥xtbu−1∥ +M1.
+Proof. Suppose we picked a controllerπt at time stept. Then, by Assumption 2.5, we have
+∥ut∥ =∥πt(xt)−πt(0) +πt(0)∥≤∥ πt(xt)−πt(0)∥ +∥πt(0)∥≤ Lπ∥xt∥ +π0,max. (12)
+Combining the above inequality with Assumption 2.1, one can write
+∥xt+1∥ =∥f (xt,ut,wt)−f (0, 0, 0) +f (0, 0, 0)∥
+≤∥f (xt,ut,wt)−f (0, 0, 0)∥ +∥f (0, 0, 0)∥≤ Lf (∥xt∥ +∥ut∥ +∥wt∥) +f0
+≤Lf (∥xt∥ +Lπ∥xt∥ +π0,max +wmax) +f0
+=Lf (1 +Lπ)∥xt∥ +Lf (π0,max +wmax) +f0.
+Thus, for everyu = 1,...,U , we obtain that
+∥xtbu∥≤ Lf (1 +Lπ)∥xtbu−1∥ +Lf (π0,max +wmax) +f0
+≤Lf (1 +Lπ)(β(tbu−tbu−1− 1)∥xtbu−1∥ +γwmax) +Lf (π0,max +wmax) +f0
+=Lf (1 +Lπ)β(tbu−tbu−1− 1)∥xtbu−1∥ +M1
+≤Lf (1 +Lπ)β(0)∥xtbu−1∥ +M1,
+where the second inequality holds since Line 5 of Algorithm 1 is not satisfied duringtbu−1≤t≤tbu− 1 and
+the equality holds for the last inequality whentbu =tbu−1 + 1. This completes the proof.
+Lemma C.6 (Weighted sum of state norms along the Break statements). In Algorithm 1, suppose that
+τ1
+τ0
+β(τ0)< 1. DefineM2 :=Lf (1 +Lπ)β(0) γwmax
+1−β(τ1) +M1. Then, there exists a constantC≥ 1 such that
+U∑
+u=0
+H(τbu )∥xtbu∥≤ [Lf (1 +Lπ)β(0)C]U +1− 1
+Lf (1 +Lπ)β(0)C− 1 H(τ0)∥x0∥ + ([Lf (1 +Lπ)β(0)C]U− 1)M2
+[Lf (1 +Lπ)β(0)C− 1]2 H(τbU )
+Proof. Since we designedτb+1
+τb
+to converge, there existsR> 0 such that τb+1
+τb
+≤R for allb≥ 0. Moreover,
+since limb→∞
+τb+1
+τb
+= 1 and β(τ0)< 1, there existsb∗ > 0 such that
+b≥b∗ =⇒ τb+1
+τb
+< 1
+β(τ0). (13)
+19
+Published in Transactions on Machine Learning Research (05/2025)
+Accordingly, for any two batchesb′ >b ≥ 0, we have
+τb′
+τb
+[β(τb)]b′−b−1≤ [β(τ0)]b′−b−1
+b′−1∏
+a=b
+τa+1
+τa
+≤ Rb∗
+β(τ0), (14)
+considering thatb = 0 andb′ =b∗ yields the largest possible upper bound due to (13). Now, defineC := Rb∗
+β(τ0).
+Notice that we haveC≥ 1 since the left-hand side of (14) is greater than equal to1 when b′ =b + 1. Then,
+for everyu = 1,...,U , one can write
+H(τbu )∥xtbu∥≤ Lf (1 +Lπ)β(0) H(τbu)
+H(τbu−1)H(τbu−1)∥xtbu−1∥ +H(τbu )M1
+≤Lf (1 +Lπ)β(0) H(τbu)
+H(τbu−1)
+bu−2∏
+a=bu−1
+[H(τa+1)
+H(τa) β(τa)
+]
+·H(τbu−1 )∥xtbu−1
+∥
++Lf (1 +Lπ)β(0)H(τbu ) γwmax
+1−β(τbu−1+1) +H(τbu )M1
+≤Lf (1 +Lπ)β(0) H(τbu )
+H(τbu−1 ) [β(τbu−1 )]bu−bu−1−1·H(τbu−1 )∥xtbu−1
+∥ +H(τbu)M2
+≤Lf (1 +Lπ)β(0) τbu
+τbu−1
+[β(τbu−1 )]bu−bu−1−1·H(τbu−1 )∥xtbu−1
+∥ +H(τbu )M2
+≤Lf (1 +Lπ)β(0)C·H(τbu−1 )∥xtbu−1
+∥ +H(τbu )M2
+where the first inequality is due to Lemma C.5, the second inequality is by (11) in Lemma C.4, the fourth
+inequality is due to Lemma C.2, and the last inequality is by (14). Recursively applying this inequality, one
+arrives at
+H(τbu )∥xtbu∥≤ [Lf (1 +Lπ)β(0)C]uH(τ0)∥x0∥ +M2·
+u∑
+i=1
+[Lf (1 +Lπ)β(0)C]u−iH(τbi )
+≤ [Lf (1 +Lπ)β(0)C]uH(τ0)∥x0∥ +M2H(τbU )· [Lf (1 +Lπ)β(0)C]u− 1
+Lf (1 +Lπ)β(0)C− 1
+< [Lf (1 +Lπ)β(0)C]u·
+[
+H(τ0)∥x0∥ + M2H(τbU )
+Lf (1 +Lπ)β(0)C− 1
+]
+,
+where the second inequality comes from the non-decreasing property ofH(·) and the equality holds when
+H(τb1 ) = ··· = H(τbU ). Notice that for b′ > b≥ 0, the caseH(τb′) = H(τb) arises when τb′ = τb or
+β(τb + 1) =··· =β(τb′) = 0. SinceLf (1 +Lπ)β(0)C >1, summing up the above inequality foru = 1,...,U
+completes the proof.
+Lemma C.7(Sum of state norms). In Algorithm 1, suppose thatτ1
+τ0
+β(τ0)< 1. Then, we have
+T∑
+t=0
+∥xt∥≤ O([Lf (1 +Lπ)β(0)C]U (∥x0∥ +H(τbU ))) +γwmax· (O(
+B−1∑
+b=0
+H(τb)) +T )
+Proof. Applying Lemma C.3, C.4, and C.6 in turn, we have
+T∑
+t=0
+∥xt∥ =
+U∑
+u=0
+bu+1−1∑
+b=bu
+tb+1−1∑
+t=tb
+∥xt∥
+≤
+U∑
+u=0
+bu+1−1∑
+b=bu
+[
+H(τb)∥xtb∥ +γwmax(τb− 1)
+]
+≤
+U∑
+u=0
+[ 1
+1− τbu +1
+τbu
+β(τbu )H(τbu )∥xtbu∥ + γwmax
+1−β(τbu+1)
+bu+1−1∑
+b=bu+1
+H(τb) +γwmax(tbu+1−tbu− 1)
+]
+20
+Published in Transactions on Machine Learning Research (05/2025)
+≤ 1
+1− τ1
+τ0
+β(τ0)
+U∑
+u=0
+H(τbu )∥xtbu∥ + γwmax
+1−β(τ1) (
+B−1∑
+b=0
+H(τb)−
+U∑
+u=0
+H(τbu )) +γwmax(T−U )
+≤ 1
+1− τ1
+τ0
+β(τ0)
+U∑
+u=0
+H(τbu )∥xtbu∥ + γwmax
+1−β(τ1)
+B−1∑
+b=0
+H(τb) +γwmaxT
+≤ H(τ0)∥x0∥
+1− τ1
+τ0
+β(τ0)
+[Lf (1 +Lπ)β(0)C]U +1− 1
+Lf (1 +Lπ)β(0)C− 1 + H(τbU )
+1− τ1
+τ0
+β(τ0)
+([Lf (1 +Lπ)β(0)C]U− 1)M2
+[Lf (1 +Lπ)β(0)C− 1]2
++ γwmax
+1−β(τ1)
+B−1∑
+b=0
+H(τb) +γwmaxT
+=O([Lf (1 +Lπ)β(0)C]U (∥x0∥ +H(τbU ))) +γwmax· (O(
+B−1∑
+b=0
+H(τb)) +T )
+where the equality holds for the fourth inequality when Line 5 of Algorithm 1 is not satisfied for the entire
+horizon.
+Theorem C.8(Restatement of Theorem 4.1, Asymptotic stability). In Algorithm 1, suppose that
+τ1
+τ0
+β(τ0)< 1. Then, it holds that
+lim
+T→∞
+1
+T
+T∑
+t=0
+∥xt∥≤ γwmax.
+Proof. We mainly use Lemma C.1 to prove the asymptotic stability. First, we have
+H(τbU )≤H(τB−1) = o(τB−1) = o(T ), (15)
+where the first equality is due to Lemma C.1 andτB−1 =T when there is only one batch over the entire
+horizon. Now, consider the following relationship between the number of batchB and the time horizonT:
+B−1∑
+b=0
+τb≥T≥
+B−U−1∑
+b=0
+τb +U, (16)
+where the second inequality is due to the non-decreasing property ofτb. Now, if∑B−1
+b=0 H(τb)<∞, clearly∑B−1
+b=0 H(τb) = o(T ). Otherwise, defineH(τB) = H(τB−1). Then, we have
+lim
+T→∞
+∑B−1
+b=0 H(τb)
+T ≤ lim
+B→∞
+∑B−1
+b=0 H(τb)
+∑B−U−1
+b=0 τb +U
+≤ lim
+B→∞
+∫B
+0 H(τb)db
+τ0 +
+∫B−U−1
+0 τbdb +U
+= lim
+B→∞
+H(τB−1)
+τB−U−1
+= lim
+B→∞
+H(τB−1)
+τB−1
+·
+B−2∏
+b=B−U−1
+τb+1
+τb
+= 0· 1U = 0 (17)
+where the second inequality leverages the non-decreasing property of bothτb and H(τb), the remaining
+equalities leverage L’Hôpital’s rule, Lemma C.1, andlimb→∞
+τb+1
+τb
+= 1. Thus, with Lemma C.7, we have
+T∑
+t=0
+∥xt∥≤ O([Lf (1 +Lπ)β(0)C]U (∥x0∥ +o(T ))) +γwmax· (T +o(T )).
+This completes the proof.
+Lemma C.9. In Algorithm 1, we have
+lim
+T→∞
+B
+T = 0
+21
+Published in Transactions on Machine Learning Research (05/2025)
+Proof. Recall the relationship stated in (16) betweenT and B. Using the second inequality, we have
+0≤ lim
+T→∞
+B
+T ≤ lim
+T→∞
+B∑B−U−1
+b=0 τb +U
+≤ lim
+T→∞
+B
+τ0 +
+∫B−U−1
+0 τbdb +U
+= lim
+T→∞
+1
+τB−U−1
+= 0,
+where the third inequality uses the non-decreasing property ofτb, after which we use L’Hôpital’s rule. This
+completes the proof.
+Theorem C.10(Restatement of Theorem 4.2, Finite-gain stability). In Algorithm 1, suppose thatτ1
+τ0
+β(τ0)< 1.
+Assume that limt→∞H(t)<∞. Then, Algorithm 1 achieves finite-gainL1 stability; i.e., there exist constants
+A1,A 2 > 0 such that for allT∈ Z+,
+T∑
+t=0
+∥xt∥≤ A1·wmaxT +A2.
+Proof. Since limt→∞H(t)<∞, there exists a constantq1 that upper-boundsH(t); i.e., H(t)≤q1 for all
+t≥ 0. Likewise, by Lemma C.9, there exists a constantq2 that upper-bounds B
+T . Thus, with Lemma C.7,
+one can write
+T∑
+t=0
+∥xt∥≤ O([Lf (1 +Lπ)β(0)C]U (∥x0∥ +q1)) +γwmax· (O(Bq1) +T )
+=O([Lf (1 +Lπ)β(0)C]U (∥x0∥ +q1)) +γ(1 + B
+TO(q1))·wmaxT
+≤O([Lf (1 +Lπ)β(0)C]U (∥x0∥ +q1)) +γ(1 +O(q1q2))·wmaxT.
+This completes the proof.
+D Regret Proof for Algorithm 1
+Lemma D.1. In Algorithm 1, we have
+EiB−1:0 [wb(ib)] = EiB−1:0 [Ek∼pb [w′
+b(k)]],
+Proof. Givenib−1,...,i 0, we have
+Ek∼pb [w′
+b(k)] =
+∑
+k∈Pb
+pb(k)wb(ib)
+pb(k)I(ib=k) =wb(ib), (18)
+which implies thatw′
+b(k) sampled frompb is an unbiased estimator ofwb(ib).
+Thus, for allb = 0, 1,...,B − 1, one can write
+EiB−1:0 [wb(ib)] = Eib:0 [wb(ib)] = Eib−1:0 Eib [wb(ib)| ib−1:0]
+= Eib−1:0 Eib [Ek∼pb [w′
+b(k)]| ib−1:0]
+= Eib:0 [Ek∼pb [w′
+b(k)]] = EiB−1:0 [Ek∼pb [w′
+b(k)]],
+where the first equality is becauseiB−1,...,i b+1 does not affect the value ofwb(ib) and the remaining
+equalities are by law of total expectation and (18).
+Now, we letwK
+b (i) denote the cost incurred at batchb if one selects the controllers for batch0,...,b − 1
+according to Algorithm 1, and the controller for batchb to bei.
+22
+Published in Transactions on Machine Learning Research (05/2025)
+Lemma D.2. In Algorithm 1, for anyi∈P b, we have
+EiB−1:0 [w′
+b(i)] = EiB−1:0 [wK
+b (i)]
+and for some controllerib∈P b, we have
+EiB−1:0
+[η0
+2
+(wb(ib))2
+pb(ib)
+]
+≤ η0N
+2 Eib−1:0 (wK
+b (ib))2.
+Proof. For allb = 0, 1,...,B − 1 and for alli∈P b, we have
+EiB−1:0 [w′
+b(i)] = Eib:0 [w′
+b(i)] = Eib−1:0 [Eib [w′
+b(i)| ib−1:0]]
+= Eib−1:0 [
+∑
+ib∈Pb
+pb(ib)wb(ib)
+pb(i)I(ib=i)]
+= Eib−1:0 [wK
+b (i)] = EiB−1:0 [wK
+b (i)]
+where the first equality is becauseiB−1,...,i b+1 does not affect the value ofw′
+b(i) and the last equality is
+because iB−1,...,i b does not affect the value ofwK
+b (i). Next, we can also obtain that
+EiB−1:0
+[η0
+2
+(wb(ib))2
+pb(ib)
+]
+= Eib:0
+[η0
+2
+(wb(ib))2
+pb(ib)
+]
+= Eib−1:0 Eib
+[η0
+2
+(wb(ib))2
+pb(ib) | ib−1:0
+]
+= Eib−1:0
+∑
+ib∈Pb
+[η0
+2 pb(ib) (wb(ib))2
+pb(ib)
+]
+= Eib−1:0
+∑
+ib∈Pb
+[η0
+2 (wb(ib))2
+]
+≤ η0N
+2 Eib−1:0 (wK
+b (ib))2,
+for the controllerib = arg maxi∈Pb (wK
+b (i))2. This completes the proof.
+In Algorithm 1, defineL :={0≤ b≤ B− 1, b∈ Z+ : sb+1̸= sb} and letb1,...,b |L| denote the batch
+where Line 22 of Algorithm 1 is satisfied;i.e., sbl+1̸=sbl for l = 1,..., |L|. For convenience, we letb0 = 0,
+b|L|+1 =B− 1, and sB =sB−1. Also, defineV :={0≤b≤B− 1, b∈ Z+ :sb̸= 0}.
+Lemma D.3(Restatement of Lemma 4.7). In Algorithm 1, suppose thatβ(τ0)< 1 and letU denote the
+number of times that the Break statement is activated. Then, it holds that|L| =O(U ) and|V| =O(U ).
+Proof. For every batchb = 0,...,B − 1, we have
+∥xtb∥< (αb)sb+1∥x0∥ +δ (19)
+by Lines 11-20. If the Break statement is not activated, since we designedδ≥ γwmax
+1−β(τ0), it yields that
+∥xtb+1∥≤ β(τb)∥xtb∥ +γwmax≤β(τ0)(αb)sb+1∥x0∥ +β(τ0)δ +γwmax
+≤β(τ0)(αb)sb+1∥x0∥ +δ <(αb)sb+1∥x0∥ +δ,
+where the second and the last inequalities are due toβ(τb)≤β(τ0)< 1 and the third inequality is by the
+formulation ofδ. Then,sb+1 >s b cannot occur when the Break statement is not activated. Also, Line 14
+avoidssb+1 >s b + 1. As a result, starting froms0 = 0, the eventsb+1 =sb + 1 can occur at mostU times.
+Accordingly, the eventsb+1 <s b also can occur at mostU times, leading to|L|≤ 2U.
+Now, we observe the number of batches˜b needed to stabilize the state norm;i.e., min{˜b >0 : sb+˜b < sb}
+when the Break statement is not activated. Starting from batchb and the correspondingsb, provided that
+the Break statement is not activated, one can write
+∥xtb+˜b∥≤ β(τb+˜b−1)∥xtb+˜b−1∥ +γwmax≤β(τ0)∥xtb+˜b−1∥ +γwmax
+23
+Published in Transactions on Machine Learning Research (05/2025)
+≤ (β(τ0))
+˜b∥xtb∥ +γwmax
+˜b−1∑
+a=0
+(β(τ0))a≤ (β(τ0))
+˜b∥xtb∥ + γwmax
+1−β(τ0)
+≤ (β(τ0))
+˜b∥xtb∥ +δ <(β(τ0))
+˜b[(αb)sb+1∥x0∥ +δ] +δ, (20)
+where the first and third inequalities are due to not satisfying Line 5 iteratively when the Break statement is
+not activated, the second and fourth inequalities are byβ(τb)≤β(τ0)< 1, and the last two inequalities are
+by the design ofδ and (19). It is desirable to find the minimum value of˜b that makes the right-hand side of
+(20) smaller than(αb)sb∥x0∥ +δ:
+(β(τ0))
+˜b[(αb)sb+1∥x0∥ +δ] +δ≤ (αb)sb∥x0∥ +δ ⇐⇒ 1
+(β(τ0))˜b≥αb + δ
+(αb)sb∥x0∥, (21)
+where the right-hand side of (21) can be upper-bounded byαb + δ
+∥x0∥ since αb > 1. Thus, ifsb̸= 0,
+min{˜b> 0 : sb+˜b <s b}≤
+⌈
+log(αb + δ
+∥x0∥ )
+− logβ(τ0)
+⌉
+, (22)
+when the Break statement is not activated. In other words, starting from a batchb where sb > 0, within the
+number of batches on the right-hand side of (22), either the Break statement is activated or the value ofsb
+decreases.
+More specifically, consider two sets of batches:B1 ={0≤b≤B− 1,b∈ Z+ : the Break statement activated}
+andB2 ={0≤b≤B− 1,b∈ Z+ :sb+1 <s b}. LetB =B1∪B 2 be the set ordered by batch numbers. Then,
+the batch interval between two consecutive batches inB is upper-bounded by (22). Thus, considering that
+|L|≤ 2U, we have
+|V|≤ (2U− 1)
+⌈
+log(αb + δ
+∥x0∥ )
+− logβ(τ0)
+⌉
+,
+which completes the proof.
+Lemma D.4 (cumulative mix loss). In Algorithm 1, for any controlleril ∈U c for l = 0,..., |L|, the
+cumulative mix loss is upper-bounded as follows:
+EiB−1:0
+B−1∑
+b=0
+− 1
+η0
+log(Ek∼pb exp(−ηbw′
+b(k)))≤
+˜O(U + 1)
+η0
++ EiB−1:0
+|L|∑
+l=0
+bl+1−1∑
+b=bl
+wK
+b (il)
+(αb)2sb
+Proof. Givenl = 0,..., |L|, we can analyze a single mix loss forb =bl + 1,...,b l+1− 1 as follows:
+− 1
+η0
+log(Ek∼pb exp(−ηbw′
+b(k))) =− 1
+η0
+log(
+∑
+k∈Pb
+pb(k) exp(−ηbw′
+b(k)))
+=− 1
+η0
+log(
+∑
+k∈Pb
+exp(−ηbWb(k)) exp(−ηbw′
+b(k))∑
+i∈Pb
+exp(−ηbWb(i)) )
+=− 1
+η0
+log(
+∑
+k∈Pb
+exp(−ηbWb+1(k))∑
+i∈Pb
+exp(−ηbWb(i)) ), (23)
+while a mix loss forb =bl is as follows:
+− 1
+η0
+log(Ek∼pb exp(−ηblw′
+bl (k))) =− 1
+η0
+log(
+∑
+k∈Pbl
+pbl (k) exp(−ηblw′
+bl (k)))
+=− 1
+η0
+log( 1
+|Pbl|
+∑
+k∈Pbl
+exp(−ηblw′
+bl (k)))
+24
+Published in Transactions on Machine Learning Research (05/2025)
+≤ logN
+η0
+− 1
+η0
+log(
+∑
+k∈Pbl
+exp(−ηblw′
+bl (k))) (24)
+= logN
+η0
+− 1
+η0
+log(
+∑
+k∈Pbl
+exp(−ηblWbl+1(k))), (25)
+where the last equality only holds whenbl+1 >b l + 1. Now, notice that the batchesb =bl,...,b l+1− 1 share
+the same learning rate;i.e., ηbl =··· =ηbl+1−1 since the samesb yields the sameαb, and thus the sameηb.
+Thus, in the case wherebl+1 >b l + 1, we have
+bl+1−1∑
+b=bl
+− 1
+η0
+log(Ek∼pb exp(−ηbw′
+b(k)))≤ logN
+η0
+− 1
+η0
+log(
+bl+1−1∏
+b=bl+1
+∑
+k∈Pb−1
+exp(−ηblWb(k))
+∑
+k∈Pb
+exp(−ηblWb(k)) )
+− 1
+η0
+log(
+∑
+k∈Pbl+1−1
+exp(−ηblWbl+1 (k)))
+≤ logN
+η0
+− 1
+η0
+log(
+∑
+k∈Pbl+1−1
+exp(−ηblWbl+1 (k))), (26)
+where the first inequality is by (23) and (25) and the second inequality comes fromPb⊆P b−1. Considering
+both cases (24) and (26), for any controlleri0,...,i |L|∈U c, one can write
+B−1∑
+b=0
+− 1
+η0
+log(Ek∼pb exp(−ηbw′
+b(k)))≤
+|L|∑
+l=0
+[logN
+η0
+− 1
+η0
+log(
+∑
+k∈Pbl+1−1
+exp(−ηbl
+bl+1−1∑
+b=bl
+w′
+b(k)))
+]
+≤ (|L| + 1) logN
+η0
+−
+|L|∑
+l=0
+1
+η0
+log(exp(−ηbl
+bl+1−1∑
+b=bl
+w′
+b(il)))
+=
+˜O(U + 1)
+η0
++
+|L|∑
+l=0
+∑bl+1−1
+b=bl w′
+b(il)
+(αbl )2sbl
+, (27)
+where the first inequality considersWbl+1(k) =∑bl+1−1
+b=bl w′
+b(k) in (26), the second inequality is because any
+controlleril is an element ofPbl+1−1, and the last equality comes from the definition ofηbl =η0/(αbl )2sbl and
+|L| =O(U ) by Lemma D.3. Finally, by Lemma D.2, taking the expectation of (27) with respect toiB−1:0
+completes the proof.
+Now, we consider the cumulative mixability gap.
+Lemma D.5 (cumulative mixability gap). In Algorithm 1, there exists a set of controllersib∈P b for
+b = 0,...,B − 1 such that the cumulative mixability gap is upper-bounded as follows:
+EiB−1:0
+B−1∑
+b=0
+Ek∼pb [w′
+b(k)] + 1
+η0
+log(Ek∼pb exp(−ηbw′
+b(k)))≤ O(U )
+2η0
++ η0N
+2
+B−1∑
+b=0
+Eib−1:0 (wK
+b (ib))2
+Proof. Given the setV, we can analyze a single mixability gap forb /∈V andb∈V , respectively. Sincesb = 0
+for b /∈V , givenib−1,...,i 0, we have
+Ek∼pb [w′
+b(k)] + 1
+η0
+log(Ek∼pb exp(−ηbw′
+b(k))) = Ek∼pb [w′
+b(k)] + 1
+η0
+log(Ek∼pb exp(−η0w′
+b(k)))
+≤ Ek∼pb [w′
+b(k)] + 1
+η0
+(Ek∼pb exp(−η0w′
+b(k))− 1)
+≤ Ek∼pb [w′
+b(k)] + 1
+η0
+(Ek∼pb
+η2
+0(w′
+b(k))2
+2 −η0w′
+b(k))
+25
+Published in Transactions on Machine Learning Research (05/2025)
+= η0
+2 Ek∼pb [(w′
+b(k))2]
+= η0
+2
+∑
+k∈Pb
+pb(k) (wb(ib))2
+(pb(k))2I(ib=k) = η0
+2
+(wb(ib))2
+pb(ib) , (28)
+where the first inequality useslog(x)≤x− 1 for allx∈ R and the second inequality usesex≤ 1 +x + x2
+2 for
+all x∈ R. Now, forb∈V , givenib−1,...,i 0, we obtain that
+Ek∼pb [w′
+b(k)] + 1
+η0
+log(Ek∼pb exp(−ηbw′
+b(k)))≤ Ek∼pb [w′
+b(k)] + 1
+η0
+(Ek∼pb exp(−ηbw′
+b(k))− 1)
+≤ Ek∼pb [w′
+b(k)]
+≤ Ek∼pb [w′
+b(k)] + 1
+η0
+(Ek∼pb
+η2
+0(w′
+b(k))2
+2 −η0w′
+b(k) + 1
+2 )
+= η0
+2 Ek∼pb [(w′
+b(k))2] + 1
+2η0
+= η0
+2
+(wb(ib))2
+pb(ib) + 1
+2η0
+, (29)
+where the second inequality usesex≤ 1 for allx≤ 0 and the third inequality usesx2
+2 +x + 1
+2≥ 0 for all
+x∈ R. Since|V| = O(U ) by Lemma D.3, we have inequality (29) holding at mostO(U ) times and (28)
+holding in the remaining batches amongb = 0,...,B − 1. Finally, by Lemma D.2, taking expectation of (28)
+and (29) with respect toiB−1:0 completes the proof.
+We letxt and ut denote the state and action sequence in the algorithm depending on the context. We let
+xK
+t (i) and uK
+t (i) for t = tb,...,t b+1− 1 denote the state and action sequence generated by selecting the
+controllers before batchb according to Algorithm 1, while selecting the controlleri at batchb. Accordingly,
+we havewK
+b (i) = ∑tb+1−1
+t=tb
+ct(xK
+t (i),uK
+t (i)). We also let x∗
+t and u∗
+t denote the optimal state and action
+sequence generated by the best stabilizing controlleri∗ that satisfies both of Definitions 2.3 and 2.4;i.e.,
+i∗ = arg mini∈S
+∑T
+t=0ct(xt,πi∗ (xt)) subject to the transition dynamics.
+Lemma D.6.In Algorithm 1, suppose thatτ1
+τ0
+(β(τ0))2 < 1
+2
+√
+2. For any controllerib∈P b forb = 0,...,B − 1,
+we have
+B−1∑
+b=0
+Eib−1:0 (wK
+b (ib))2 = exp(O(U ))O(τB−1H(τB−1)) +O(
+B−1∑
+b=0
+(τb)2).
+Proof. By Assumption 2.2, for allx∈ Rn and u∈ Rm, we have
+|ct(x,u )| =|ct(x,u )−ct(0, 0) +ct(0, 0)|≤| ct(x,u )−ct(0, 0)| +|ct(0, 0)|
+≤ (Lc1 (∥x∥ +∥u∥) +Lc2)(∥x∥ +∥u∥) +c0,max
+=Lc1 (∥x∥ +∥u∥)2 +Lc2(∥x∥ +∥u∥) +c0,max
+≤ 2Lc1 (∥x∥2 +∥u∥2) +Lc2(∥x∥ +∥u∥) +c0,max, (30)
+where the last inequality is due to Cauchy–Schwarz inequality. Thus, we can upper-bound(wK
+b (ib))2 for any
+controllerib∈P b for b = 0,...,B − 1 as follows:
+(wK
+b (ib))2 =
+[tb+1−1∑
+t=tb
+ct(xK
+t (ib),uK
+t (ib))
+]2
+≤
+tb+1−1∑
+t=tb
+ct(xK
+t (ib),uK
+t (ib))2(tb+1−tb)
+≤ (tb+1−tb)
+tb+1−1∑
+t=tb
+(2Lc1 (∥xK
+t (ib)∥2 +∥uK
+t (ib)∥2) +Lc2(∥xK
+t (ib)∥ +∥uK
+t (ib)∥) +c0,max)2
+≤ 5(tb+1−tb)
+tb+1−1∑
+t=tb
+(4L2
+c1 (∥xK
+t (ib)∥4 +∥uK
+t (ib)∥4) +L2
+c2(∥xK
+t (ib)∥2 +∥uK
+t (ib)∥2) +c2
+0,max) (31)
+where the first and the third inequalities are due to Cauchy–Schwarz inequality.
+26
+Published in Transactions on Machine Learning Research (05/2025)
+From (10), fortb <t ≤tb+1− 1, we have
+∥xK
+t (ib)∥2≤ 2[β(t−tb)]2∥xK
+tb (ib)∥2 + 2γ2w2
+max (32)
+∥xK
+t (ib)∥4≤ 8[β(t−tb)]4∥xK
+tb (ib)∥4 + 8γ4w4
+max, (33)
+where the inequalities are by Cauchy-Schwarz inequality. Accordingly, we obtain that
+tb+1−1∑
+t=tb
+∥xK
+t (ib)∥2≤ 2H(tb+1−tb)∥xK
+tb (ib)∥2 + 2γ2w2
+max(tb+1−tb− 1) (34)
+tb+1−1∑
+t=tb
+∥xK
+t (ib)∥4≤ 8H(tb+1−tb)∥xK
+tb (ib)∥4 + 8γ4w4
+max(tb+1−tb− 1), (35)
+where we useβ(·)≤ 1 to derive∑tb+1−tb−1
+t=0 [β(t)]p≤∑tb+1−tb−1
+t=0 [β(t)] = H(tb+1−tb) for p≥ 1.
+From (12), fortb≤t≤tb+1− 1, we have
+∥uK
+t (ib)∥2≤ 2L2
+π∥xK
+t (ib)∥2 + 2π2
+0,max (36)
+∥uK
+t (ib)∥4≤ 8L4
+π∥xK
+t (ib)∥4 + 8π4
+0,max, (37)
+where the inequalities are by Cauchy-Schwarz inequality. Now, we substitute (34), (35), (36), (37), and
+tb+1−tb≤τb into the right-hand side of (31) to upper-bound(wK
+b (ib))2 as follows:
+(wK
+b (ib))2≤ 5τb[32L2
+c1(1 + 8L4
+π)H(τb)∥xK
+tb (ib)∥4 + 2L2
+c2(1 + 2L2
+π)H(τb)∥xK
+tb (ib)∥2]+
+5τ 2
+b [32L2
+c1((1 + 8L4
+π)γ4w4
+max +π4
+0,max) + 2L2
+c2((1 + 2L2
+π)γ2w2
+max +π2
+0,max) +c2
+0,max]
+=M3τbH(τb)∥xK
+tb (ib)∥4 +M4τbH(τb)∥xK
+tb (ib)∥2 +M5τ 2
+b
+=M3τbH(τb)∥xtb∥4 +M4τbH(τb)∥xtb∥2 +M5τ 2
+b, (38)
+where M3,M 4,M 5 are constants determined byLc1,Lc2,Lπ,γ,w max,π 0,max, andc0,max. The last equality
+comes fromxK
+tb (ib) = xtb for anyib∈P b.
+Meanwhile, one can upper-bound both∑B−1
+b=0 τbH(τb)∥xtb∥4 and∑B−1
+b=0 τbH(τb)∥xtb∥2 by successively applying
+Lemma C.3, C.4, and C.6 in the same fashion as presented in the proof of Lemma C.7. Sinceτ 2
+1
+τ 2
+0
+8(β(τ0))4 < 1,
+by (32) and (33), there existsC1,C 2≥ 1 such that
+B−1∑
+b=0
+τbH(τb)∥xtb∥4 =O([8L4
+f (1 +Lπ)4β(0)4C1]U (∥x0∥4 +τbUH(τbU ))) + 8γ4w4
+max·O(
+B−1∑
+b=0
+τbH(τb))
+B−1∑
+b=0
+τbH(τb)∥xtb∥2 =O([2L2
+f (1 +Lπ)2β(0)2C2]U (∥x0∥2 +τbUH(τbU ))) + 2γ2w2
+max·O(
+B−1∑
+b=0
+τbH(τb)).
+Substituting the equalities into the summation of (38) forb = 0,...,B − 1 yields
+B−1∑
+b=0
+(wK
+b (ib))2 = exp(O(U ))O(τbUH(τbU )) +O(
+B−1∑
+b=0
+τbH(τb)) +O(
+B−1∑
+b=0
+(τb)2). (39)
+Notice that taking expectation of(wK
+b (ib))2 with respect toib−1:0 does not affect the inequality. Finally,
+τbU≤τB−1 and H(τb) = o(τb) completes the proof.
+Lemma D.7. In Algorithm 1, for the best stabilizing controlleri∗∈S , we have
+EiB−1:0
+B−1∑
+b=0
+tb+1−1∑
+t=tb
+[ct(xK
+t (i∗),uK
+t (i∗))
+(αb)2sb
+−ct(x∗
+t,u∗
+t )
+]
+≤O(U ) +O(
+B−1∑
+b=0
+H(τb)).
+27
+Published in Transactions on Machine Learning Research (05/2025)
+Proof. Since x∗
+t is generated by a stabilizing controller, we have
+∥x∗
+t∥≤ β(t)∥x0∥ +γwmax≤β(0)∥x0∥ +γwmax
+∥x∗
+t∥2≤ 2β(t)2∥x0∥2 + 2γ2w2
+max≤ 2β(0)2∥x0∥2 + 2γ2w2
+max,
+where the inequalities are by Cauchy-Schwarz inequality and the non-increasing property ofβ(·). Then, by
+(12), (30), and (36), we have
+ct(x∗
+t,u∗
+t )≤ 2Lc1 (∥x∗
+t∥2 +∥u∗
+t∥2) +Lc2(∥x∗
+t∥ +∥u∗
+t∥) +c0,max
+≤ 2Lc1 ((1 + 2L2
+π)∥x∗
+t∥2 + 2π2
+0,max) +Lc2((1 +Lπ)∥x∗
+t∥ +π0,max) +c0,max
+≤ 4Lc1(1 + 2L2
+π)(β(0))2∥x0∥2 +Lc2(1 +Lπ)β(0)∥x0∥ + 4Lc1(1 + 2L2
+π)γ2w2
+max
++Lc2(1 +Lπ)γwmax + 4Lc1π2
+0,max +Lc2π0,max +c0,max :=M6. (40)
+In Algorithm 1, one can write
+
+xtb
+(αb)sb
+≤ (αb)sb+1∥x0∥ +δ
+(αb)sb
+≤αb∥x0∥ +δ (41)
+
+x∗
+t
+(αb)sb
+≤ β(t)∥x0∥ +γwmax
+(αb)sb
+≤β(0)∥x0∥ +γwmax, (42)
+where the equalities hold for the last inequalities of (41) and (42) whensb = 0.
+By Assumption 2.2, for the best stabilizing controlleri∗∈S and fortb≤t<t b+1, we have
+1
+(αb)2sb
+|ct(xK
+t (i∗),uK
+t (i∗))−ct(x∗
+t,u∗
+t )|
+≤ 1
+(αb)2sb
+(Lc1(max{∥xK
+t (i∗)∥,∥x∗
+t∥} + max{∥uK
+t (i∗)∥,∥u∗
+t∥}) +Lc2)(∥xK
+t (i∗)−x∗
+t∥ +∥uK
+t (i∗)−u∗
+t∥)
+≤ 1
+(αb)2sb
+(Lc1((1 +Lπ) max{∥xK
+t (i∗)∥,∥x∗
+t∥} +π0,max) +Lc2)(1 +Lπ)∥xK
+t (i∗)−x∗
+t∥
+= (1 +Lπ)(Lc1(1 +Lπ) max{
+
+xK
+t (i∗)
+(αb)sb
+,
+
+x∗
+t
+(αb)sb
+} + Lc1π0,max +Lc2
+(αb)sb
+)
+
+xK
+t (i∗)−x∗
+t
+(αb)sb
+
+≤ (1 +Lπ)(β(t−tb)Lc1(1 +Lπ) max{
+
+xK
+tb (i∗)
+(αb)sb
+,
+
+x∗
+tb
+(αb)sb
+}
++ Lc1(1 +Lπ)γwmax +Lc1π0,max +Lc2
+(αb)sb
+)·β(t−tb)
+
+xK
+tb (i∗)−x∗
+tb
+(αb)sb
+
+≤Lc1(1 +Lπ)2β(t−tb)2
+(
+xtb
+(αb)sb
++
+
+x∗
+tb
+(αb)sb
+
+)2
++ Lc1(1 +Lπ)γwmax +Lc1π0,max +Lc2
+(αb)sb
+(1 +Lπ)β(t−tb)
+(
+xtb
+(αb)sb
++
+
+x∗
+tb
+(αb)sb
+
+)
+≤Lc1(1 +Lπ)2β(t−tb)2((αb +β(0))∥x0∥ +δ +γwmax)2
++ (Lc1(1 +Lπ)γwmax +Lc1π0,max +Lc2)(1 +Lπ)β(t−tb)((αb +β(0))∥x0∥ +δ +γwmax)
+≤M7β(t−tb)2 +M8β(t−tb), (43)
+where M7 and M8 are constants determined byLc1,Lc2,Lπ,π 0,max,β (0),δ,γ,w max and maxb∈{0,1,...,B−1}αb.
+Notice thatαb in Line 14 of Algorithm 1 is upper-bounded by some constant by Lemma C.5. The second
+inequality is by (12), the third inequality is due to Definition 2.4 and by leveraging the same stabilizing
+controlleri∗ from tb for both trajectoriesxK
+t (i∗) and x∗
+t, the fourth inequality usesxK
+tb (i∗) = xtb, and the
+fifth inequality is by (41) and (42). By combining (40) and (43), we have
+⏐⏐⏐⏐
+ct(xK
+t (i∗),uK
+t (i∗))
+(αb)2sb
+−ct(x∗
+t,u∗
+t )
+⏐⏐⏐⏐=
+⏐⏐⏐⏐
+ct(xK
+t (i∗),uK
+t (i∗))
+(αb)2sb
+− ct(x∗
+t,u∗
+t )
+(αb)2sb
+− (αb)2sb− 1
+(αb)2sb
+ct(x∗
+t,u∗
+t )
+⏐⏐⏐⏐
+28
+Published in Transactions on Machine Learning Research (05/2025)
+≤ 1
+(αb)2sb
+|ct(xK
+t (i∗),uK
+t (i∗))−ct(x∗
+t,u∗
+t )| + (αb)2sb− 1
+(αb)2sb
+ct(x∗
+t,u∗
+t )
+≤
+{
+M7β(t−tb)2 +M8β(t−tb), if sb = 0,
+M7β(t−tb)2 +M8β(t−tb) +M6, if sb̸= 0.
+Thus, one can conclude that
+B−1∑
+b=0
+tb+1−1∑
+t=tb
+[ct(xK
+t (i∗),uK
+t (i∗))
+(αb)2sb
+−ct(x∗
+t,u∗
+t )
+]
+≤M6|V| +
+B−1∑
+b=0
+(M7 +M8)H(tb+1−tb)
+=O(U ) +O(
+B−1∑
+b=0
+H(τb)), (44)
+where the first inequality usesβ(·)≤ 1 to derive∑tb+1−1
+t=tb
+[β(t−tb)]2≤∑tb+1−1
+t=tb
+[β(t−tb)] = H(tb+1−tb)
+and the last equality usestb+1−tb≤τb and Lemma D.3. Taking expectation of (44) with respect toiB−1:0
+completes the proof.
+Theorem D.8(Restatement of Theorem 4.5, Regret Bound). In Algorithm 1, suppose thatτ1
+τ0
+(β(τ0))2 < 1
+2
+√
+2.
+Then, the regret bound is as follows:
+EiB−1:0
+T∑
+t=0
+[ct(xt,ut)−ct(x∗
+t,u∗
+t )]
+=O(|U| ) +O(
+B−1∑
+b=0
+H(τb)) +
+˜O(|U| + 1)
+η0
++ η0N
+2 [exp(O(|U| ))O(τB−1H(τB−1)) +O(
+B−1∑
+b=0
+(τb)2)].
+Proof. By Lemma D.1, we have
+EiB−1:0
+T∑
+t=0
+ct(xt,ut) = EiB−1:0
+B−1∑
+b=0
+tb+1−1∑
+t=tb
+ct(xt,ut) = EiB−1:0
+B−1∑
+b=0
+[wb(ib)]
+= EiB−1:0
+B−1∑
+b=0
+[Ek∼pb [w′
+b(k)]]
+≤
+˜O(U + 1)
+η0
++ η0N
+2
+B−1∑
+b=0
+Eib−1:0 (wK
+b (ib))2 + EiB−1:0
+|L|∑
+l=0
+bl+1−1∑
+b=bl
+wK
+b (i∗)
+(αb)2sb
+≤
+˜O(U + 1)
+η0
++ η0N
+2 [exp(O(U ))O(τB−1H(τB−1)) +O(
+B−1∑
+b=0
+(τb)2)]
++O(U ) +O(
+B−1∑
+b=0
+H(τb)) + EiB−1:0
+T∑
+t=0
+ct(x∗,u∗),
+where the first inequality is due to Lemma D.4 and D.5, and the last inequality is due to Lemma D.6 and
+D.7. UsingU≤|U| completes the proof.
+Theorem D.9 (Restatement of Theorem 4.6, Regret bound with known|U|). In Algorithm 1, letτb =
+( (νb+z)
+N (|U| +1) )1/2 for everyb≥ 0 with the constantsz,ν > 0 that satisfiesτ0 > 0 and τ1
+τ0
+(β(τ0))2 < 1
+2
+√
+2. Also, let
+η0 =O( (|U| +1)2/3
+T 2/3N 1/3 ). WhenT≥ max{ |U| 3/2
+(N (|U| +1))1/2,N (|U| + 1)}, we have
+EiB−1:0
+T∑
+t=0
+[ct(xt,ut)−ct(x∗
+t,u∗
+t )] = ˜O(T 2/3N 1/3(|U| + 1)1/3)) +o(1) exp(O(|U| )) +o(T ),
+29
+Published in Transactions on Machine Learning Research (05/2025)
+which implies that we achieve a sublinear regret bound. Moreover, whenH(t)≤O(∑t
+i=1
+1
+i ) for allt≥ 1, we
+have
+EiB−1:0
+T∑
+t=0
+[ct(xt,ut)−ct(x∗
+t,u∗
+t )] =
+[˜O(T 2/3) + ˜O(T−1/3) exp(O(|U| ))
+]
+N 1/3(|U| + 1)1/3.
+Proof. By the formulation of(τb)b≥0, we have
+B−1∑
+b=0
+(νb +z)1/2
+(N (|U| + 1))1/2− 1≤
+B−1∑
+b=0
+τb =T≤
+B−1∑
+b=0
+(νb +z)1/2
+(N (|U| + 1))1/2 + (B− 1),
+where we can further use non-decreasing property of(·)1/2 to arrive at
+z1/2 + 2
+3ν [(ν(B− 1) +z)3/2−z3/2]
+(N (|U| + 1))1/2 − 1 = z1/2 +
+∫B−1
+0 (νb +z)1/2db
+(N (|U| + 1))1/2 − 1≤T
+≤
+∫B
+0 (νb +z)1/2db
+(N (|U| + 1))1/2 + (B− 1) =
+2
+3ν [(νB +z)3/2−z3/2]
+(N (|U| + 1))1/2 + (B− 1), (45)
+thus we haveB =O(T 2/3N 1/3(|U| + 1)1/3) from the first inequality andT =O(B3/2N−1/2(|U| + 1)−1/2)
+from the second inequality andT≥N (|U| + 1). Similarly, we can find the order of∑B−1
+b=0 (τb)2 as follows:
+B−1∑
+b=0
+(τb)2≤
+B−1∑
+b=0
+[ (νb +z)1/2
+(N (|U| + 1))1/2 + 1
+]2
+≤
+∫B
+0
+[ (νb +z)
+(N (|U| + 1)) + 2(νb +z)1/2
+(N (|U| + 1))1/2 + 1
+]
+db
+=O( B2
+N (|U| + 1) ) = O(T 4/3N−1/3(|U| + 1)−1/3), (46)
+where the last equality is byB =O(T 2/3N 1/3(|U| + 1)1/3). We also have
+τB−1 = ( (ν(B− 1) +z)
+N (|U| + 1) )1/2 =O(B1/2N−1/2(|U| + 1)−1/2) = O(T 1/3N−1/3(|U| + 1)−1/3). (47)
+Thus, we have
+O(τB−1H(τB−1)) = o((τB−1)2) = o(T 2/3N−2/3(|U| + 1)−2/3) = o(1)
+η0N, (48)
+where the first equality is due to Lemma C.1. WithT≥ |U| 3/2
+(N (|U| +1))1/2, we have
+η0N exp(O(|U| ))O(τB−1H(τB−1)) = o(1) exp(O(|U| )) (49)
+O(|U| ) = O(T 2/3N 1/3(|U| + 1)1/3). (50)
+With (46), (48), (49), and (50), we can apply Theorem D.8 to derive
+EiB−1:0
+T∑
+t=0
+[ct(xt,ut)−ct(x∗
+t,u∗
+t )] = ˜O(T 2/3N 1/3(|U| + 1)1/3) +o(1) exp(O(|U| )) +O(
+B−1∑
+b=0
+H(τb)).
+Applying (17) toO(∑B−1
+b=0 H(τb)) achieves a sublinear regret bound.
+Moreover, when limt→∞H(t)<∞, there exists a constantq1 that upper-boundsH(t); i.e., H(t)≤q1 for all
+t≥ 0. Then, we have
+B−1∑
+b=0
+H(τb)≤q1B =O(B) = O(T 2/3N 1/3(|U| + 1)1/3). (51)
+30
+Published in Transactions on Machine Learning Research (05/2025)
+Also, (48) and (49) can be modified to
+τB−1H(τB−1)≤q1τB−1 =O(T 1/3N−1/3(|U| + 1)−1/3),
+η0N exp(O(|U| )))O(τB−1H(τB−1)) = O(T−1/3N 1/3(|U| + 1)1/3)· exp(O(|U| )). (52)
+Similarly, whenH(t) = O(∑t
+i=1
+1
+i ) for allt≥ 1, we have
+B−1∑
+b=0
+H(τb)≤BH (τB−1) = O(B logτB−1) = ˜O(T 2/3N 1/3(|U| + 1)1/3), (53)
+η0N exp(O(|U| )))O(τB−1H(τB−1)) = ˜O(T−1/3N 1/3(|U| + 1)1/3)· exp(O(|U| )). (54)
+Using (51), (52), (53), and (54) completes the proof.
+Small modification provides the regret bound for the intermediate step “Dynamic Batching” mentioned in
+Appendix A.
+Corollary D.10. Consider “Dynamic Batching” strategy without adaptive learning rate, i.e.sb = 0 for all
+b = 0,...,B − 1 in Algorithm 1. Letτ0,...,τ B−1 and η0 be the same quantity with Theorem D.9. When
+T≥ max{ |U| 3/2
+(N (|U| +1))1/2,N (|U| + 1)}, the termo(1) exp(O(|U| )) in the regret bound of Theorem D.9 is replaced
+by o(T 1/3) exp(O(|U| )).
+Proof. Since sb = 0 for allb, we need to modify Lemma D.7. Equation (43) is modified to
+|ct(xK
+t (i∗),uK
+t (i∗))−ct(x∗
+t,u∗
+t )|≤ Lc1(1 +Lπ)2β(t−tb)2(∥xtb∥ +∥x∗
+tb∥)2 +Lc1(1 +Lπ)γwmax
++Lc1π0,max +Lc2(1 +Lπ)β(t−tb)(∥xtb∥ +∥x∗
+tb∥),
+which incurs
+tb+1−1∑
+t=tb
+|ct(xK
+t (i∗),uK
+t (i∗))−ct(x∗
+t,u∗
+t )|≤ O(H(τb)∥xtb∥2) +O(H(τb)∥xtb∥) +O(H(τb)).
+Thus, it follows that
+B−1∑
+b=0
+tb+1−1∑
+t=tb
+|ct(xK
+t (i∗),uK
+t (i∗))−ct(x∗
+t,u∗
+t )|≤ exp(O(|U| ))(∥x0∥2 +∥x0∥) + exp(O(|U| ))H(τB−1)
+= exp(O(|U| ))·o(T 1/3),
+where the last equality is by the choice ofτB−1 =O(B1/2) = O(T 1/3) and applying Lemma 4.3. This shows
+that o(1) exp(O(|U| )) in Theorem D.9 should be replaced byo(T 1/3) exp(O(|U| )) in the algorithm without
+adaptive learning rate.
+E Regret Proof for Algorithm 2
+Theorem E.1 (Restatement of Theorem 4.10, Regret bound with unknown|U|). In Algorithm 2, let
+τb = ( (νb+z)
+N )1/2 for everyb≥ 0 with the constantsz,ν > 0 that satisfiesτ0 > 0 and τ1
+τ0
+(β(τ0))2 < 1
+2
+√
+2. Also,
+let η0 =O( 1
+T 2/3N 1/3 ) and y = 1
+2. WhenT≥ max{ |U| 3/2
+N 1/2(|U| +1)3/4,N}, we have
+EiB−1:0
+T∑
+t=0
+[ct(xt,ut)−ct(x∗
+t,u∗
+t )] = ˜O(T 2/3N 1/3(|U| + 1)1/2) +o(1) exp(O(|U| ))(|U| + 1)1/2 +o(T ),
+which implies that we achieve a sublinear regret bound. Moreover, whenH(t)≤O(∑t
+i=1
+1
+i ) for allt≥ 1, we
+have
+EiB−1:0
+T∑
+t=0
+[ct(xt,ut)−ct(x∗
+t,u∗
+t )] =
+[˜O(T 2/3) + ˜O(T−1/3) exp(O(|U| ))
+]
+N 1/3(|U| + 1)1/2
+31
+Published in Transactions on Machine Learning Research (05/2025)
+Proof. By the formulation of(τb)b≥0, as in (45), we can derive
+B =O(T 2/3N 1/3) and T =O(B3/2N−1/2)
+when T≥N. We can also obtain
+B−1∑
+b=0
+(τb)2 =O(T 4/3N−1/3) and O(τB−1H(τB−1)) = o(T 2/3N−2/3)
+similar to (46) and (48). Now, defineη0,r :=η0(r + 1)y =η0
+√r + 1. LetBr denote the set of batches where
+µb =r; i.e.,Br ={0≤b≤B− 1, b∈ Z+ :µb =r}. Then, one can write
+N
+2
+U∑
+r=0
+∑
+b∈Br
+η0,rEib−1:0 (wK
+b (ib))2≤ η0N
+2
+U∑
+r=0
+∑
+b∈Br
+√
+U + 1Eib−1:0 (wK
+b (ib))2
+=
+√
+U + 1·O(T−2/3N 2/3)[exp(O(U ))O(τB−1H(τB−1)) +O(
+B−1∑
+b=0
+(τb)2)]
+≤
+√
+|U| + 1· [o(1) exp(O(|U| )) +O(T 2/3N 1/3)], (55)
+where the first equality holds by Lemma D.6 and the second inequality holds byU≤|U| .
+Recall the definition and the cardinality ofL ={0≤ b≤ B− 1, b∈ Z+ : sb+1̸= sb} andV ={0≤ b≤
+B− 1, b∈ Z+ :sb̸= 0} in Lemma D.3. We focus on the mix loss and the mixability gap with the denominator
+η0,r; i.e.,− 1
+η0,r
+log(Ek∼pb exp(−ηbw′
+b(k))) and Ek∼pb [w′
+b(k)] + 1
+η0,r
+log(Ek∼pb exp(−ηbw′
+b(k))). Considering
+that ηb
+η0,r
+still remains to be 1
+(αb)2sb as in Algorithm 1, Lemma D.4 can be modified to
+EiB−1:0
+U∑
+r=0
+∑
+b∈Br
+− 1
+η0,r
+log(Ek∼pb exp(−ηbw′
+b(k)))≤
+U∑
+r=0
+ρl
+r logN
+η0,r
++ EiB−1:0
+|L|∑
+l=0
+bl+1−1∑
+b=bl
+wK
+b (il)
+(αb)2sb
+, (56)
+where ρl
+r denotes the number of batches inBr∩L. Similarly, considering thatη0,r now depends on the value
+of r, Lemma D.5 can be modified to
+EiB−1:0
+U∑
+r=0
+∑
+b∈Br
+Ek∼pb [w′
+b(k)] + 1
+η0,r
+log(Ek∼pb exp(−ηbw′
+b(k)))
+≤
+U∑
+r=0
+ρv
+r
+2η0,r
++ N
+2
+U∑
+r=0
+∑
+b∈Br
+η0,rEib−1:0 (wK
+b (ib))2, (57)
+where ρv
+r denotes the number of batches in Br∩V . Now, our goal is to upper-bound ∑U
+r=0
+ρl
+r
+η0,r
+=
+1
+η0
+∑U
+r=0
+ρl
+r logN√r+1 in (56) and ∑U
+r=0
+ρv
+r
+η0,r
+= 1
+η0
+∑U
+r=0
+ρv
+r√r+1 in (57). It is straightforward to infer that
+ρl
+0 +ρl
+1 +··· +ρl
+U ≤ 2U + 1 by Lemma D.3 and (27), which also leads toρl
+0 +ρl
+1 +··· +ρl
+r≤ 2r + 1
+for r = 0,...,U . Similarly, we can infer that ρv
+0 = 0 and ρv
+1 +··· +ρv
+U ≤ (2U− 1)⌈
+log(αb+ δ
+∥x0∥ )
+− logβ(τ0) ⌉ by
+Lemma D.3 and (29), which also leads toρv
+1 +··· +ρv
+r≤ (2r− 1)⌈
+log(αb+ δ
+∥x0∥ )
+− logβ(τ0) ⌉ for r = 1,...,U . Define
+M9 :=⌈
+log(αb+ δ
+∥x0∥ )
+− logβ(τ0) ⌉ and consider the following maximization problems to get the upper bound.
+l∗ = max
+ρl
+0,...,ρl
+U
+U∑
+r=0
+ρl
+r√r + 1 v∗ = max
+ρv
+1,...,ρv
+U
+U∑
+r=1
+ρv
+r√r + 1
+s.t. ρl
+0≤ 1 s.t. ρv
+1≤M9
+ρl
+0 +ρl
+1≤ 3 ρv
+1 +ρv
+2≤ 3M9
+... ...
+ρl
+0 +ρl
+1 +··· +ρl
+U≤ 2U + 1, ρ v
+1 +ρv
+2 +··· +ρv
+U≤ (2U− 1)M9.
+32
+Published in Transactions on Machine Learning Research (05/2025)
+We can easily achieve an optimal point of each linear programming (LP) problem by the well-known
+Karush-Kuhn-Tucker (KKT) conditions. There exist positive constantsλ0,...,λ U,κ 1,...,κ U such that
+[1 1√
+2 ... 1√
+U + 1 ] = [
+U∑
+r=0
+λr
+U∑
+r=1
+λr ... λ U ] (58)
+[ 1√
+2
+1√
+3 ... 1√
+U + 1 ] = [
+U∑
+r=1
+κr
+U∑
+r=2
+κr ... κ U ], (59)
+which yieldsλU =κU = 1√U +1, λr =κr = 1√r+1− 1√r+2 > 0 for r = 1,...,U − 1, andλ0 = 1− 1√
+2. Since
+every dual variable is positive, complementary slackness tells that there is no slack for every inequality at the
+optimal solution. Thus, the optimal solutions are
+ρl
+0 = 1, ρ l
+r = 2, r = 1,...,U.
+ρv
+1 =M9, ρ v
+r = 2M9, r = 2,...,U,
+where the corresponding optimal objective values are
+l∗ = 1 +
+U∑
+r=1
+2√r + 1≤ 1 +
+√
+2 + 2
+∫U
+1
+1√r + 1dr =O(
+√
+U + 1)
+v∗ = M9√
+2 +
+U∑
+r=2
+2M9√r + 1≤ M9√
+2 + 2M9√
+3 + 2M9
+∫U
+2
+1√r + 1dr =O(
+√
+U + 1),
+where we leverage the non-increasing property of 1√r+1 for the inequalities. Thus, we have both
+1
+η0
+∑U
+r=0
+ρl
+r logN√r+1 = ˜O(T 2/3N 1/3(U + 1)1/2) and 1
+η0
+∑U
+r=0
+ρv
+r√r+1 =O(T 2/3N 1/3(U + 1)1/2). Combining (55),
+(56), and (57) with Lemma D.7 andU≤|U| , one can write
+EiB−1:0
+T∑
+t=0
+[ct(xt,ut)−ct(x∗
+t,u∗
+t )]
+= ˜O(T 2/3N 1/3(|U| + 1)1/2) +o(1) exp(O(|U| ))(|U| + 1)1/2 +O(|U| ) +O(
+B−1∑
+b=0
+H(τb))
+= ˜O(T 2/3N 1/3(|U| + 1)1/2) +o(1) exp(O(|U| ))(|U| + 1)1/2 +O(
+B−1∑
+b=0
+H(τb)),
+where the second equality holds whenT≥ |U| 3/2
+N 1/2(|U| +1)3/4. Using (17) shows a sublinear regret bound. When
+H(t)≤O(∑t
+i=1
+1
+i ) for allt≥ 1, (51) and (52) are modified to
+B−1∑
+b=0
+H(τb)≤O(BH (τB−1)) = ˜O(T 2/3N 1/3),
+τB−1H(τB−1)≤τB−1O(log(τB−1)) = ˜O(T 1/3N−1/3),
+η0N exp(O(|U| )))O(τB−1H(τB−1)) = ˜O(T−1/3N 1/3)· exp(O(|U| )).
+Applying this equality to re-derive (55) completes the proof.
+F Applications: Switched systems
+So far, we have used the best stabilizing controlleri∗∈S for all time stepst = 0,...,T as the baseline
+of regret. However, the proofs of the theorems stated above imply one can even use any set of controllers
+33
+Published in Transactions on Machine Learning Research (05/2025)
+{i0,i 1,... }⊆S as a baseline, where the controller is switched fromil to il+1 whenever the cumulative weight
+W (·) resets. This motivates the application of our DBAR algorithm to scenarios such as the switched systems
+(Tousi et al., 2008; Zhao et al., 2022) for which the transition dynamics and the associated controller pool
+may undergo changes, as well as the ballooning problem (Ghalme et al., 2021) where the controller pool may
+expand up to some finite set. We propose Algorithm 3, the switching version of DBAR, which resets the
+weight whenever the system is faced with a finite number ofO(U ) switches. Here, we consider the regret
+with switching costs where the unit costd≥ 1 is additionally incurred when the controller is switched;i.e.,
+d∑T
+t=1I(it̸=it−1) done in Altschuler & Talwar (2018) and Arora et al. (2019).
+For an eventA,I(A) denotes an indicator function, whereI(A) = 1 if an eventA occurs andI(A) = 0 otherwise.
+Pr (A) denotes the probability of an eventA. Letx′
+t and u′
+t denote the state and action sequence generated
+by our set of best stabilizing controllers{i′
+0,...,i ′
+|L|}⊆S . We consider a regret with switching cost where the
+unit switching cost isd≥ 1; i.e., EiB−1:0
+[∑T
+t=0[ct(xt,ut)−ct(x′
+t,u′
+t)] +d∑B−1
+b=1 I(ib̸=ib−1)−d∑|L|
+l=1I(i′
+l̸=i′
+l−1)
+]
+.
+Algorithm 3 can easily be generalized to the situation where we haveO(U ) number of system switches or
+controller pool switches. In fact, we can simply addi′
+|L|+1,...,i ′
+|L|+O(U )∈S to the set of best stabilizing
+controllers{i′
+0,...,i ′
+|L|}⊆S , where|L| =O(U ) by Lemma D.3. Thus, it suffices to derive the regret bound
+of Algorithm 3, even in the context of general switched systems or ballooning problem. We first provide a
+useful lemma to construct a regret bound.
+Algorithm 3DBAR-switching
+// Modification: Use this IF-ELSE Statement to select the current policy in Line 2 in Algorithm 1.
+if b> 0 and sb =sb−1 andPb =Pb−1 then
+Pickib =ib−1 with probability exp(−ηbWb(ib−1))
+exp(−ηb−1Wb−1(ib−1)). Sampleib from a distributionpb with
+probability 1− exp(−ηbWb(ib−1))
+exp(−ηb−1Wb−1(ib−1)).
+else
+Sample ib from a distributionpb. Terminate the algorithm ifPb is empty.
+end if
+Lemma F.1. In Algorithm 3, letτb = ( (νb+z)
+N (|U| +1) )1/2 for everyb≥ 0 with the constantsz,ν > 0 that satisfies
+τ0 > 0 and τ1
+τ0
+(β(τ0))2 < 1
+2
+√
+2. WhenT≥ (o(1)exp(O(|U| )))3/2
+(N (|U| +1))1/2 , we have
+EiB−1:0
+B−1∑
+b=1
+I(ib̸=ib−1) =O(|U| ) +O(η0NT ).
+Proof. For allb = 1,...,B − 1 such thatsb =sb−1, givenib−1,...,i 0, we have
+Pr (ib̸=ib−1)≤ 1− exp(−ηbWb(ib−1))
+exp(−ηb−1Wb−1(ib−1))≤ 1− exp(−ηb−1Wb(ib−1))
+exp(−ηb−1Wb−1(ib−1))
+= 1− exp(−ηb−1w′
+b−1(ib−1))≤ 1− exp(−η0w′
+b−1(ib−1))
+≤η0w′
+b−1(ib−1) = η0
+wb−1(ib−1)
+pb−1(ib−1), (60)
+where the second inequality is becauseηb =ηb−1 when sb =sb−1, the third inequality usesη0≥ηb for all
+b≥ 0, and the last inequality uses1 +x≤ ex for allx∈ R. Now, given a set of controllersib∈P b for
+b = 0,...,B − 1, we can upper-bound∑B−2
+b=0 wb(ib) bytb+1−tb≤τb as follows:
+B−2∑
+b=0
+wb(ib) =
+B−2∑
+b=0
+tb+1−1∑
+t=tb
+ct(xt,ut)≤
+B−2∑
+b=0
+tb+1−1∑
+t=tb
+2Lc1 (∥xt∥2 +∥ut∥2) +Lc2(∥xt∥ +∥ut∥) +c0,max
+≤
+B−2∑
+b=0
+tb+1−1∑
+t=tb
+2Lc1 ((1 + 2L2
+π)∥xt∥2 + 2π2
+0,max) +Lc2((1 +Lπ)∥xt∥ +π0,max) +c0,max
+34
+Published in Transactions on Machine Learning Research (05/2025)
+≤
+B−2∑
+b=0
+2Lc1 (1 + 2L2
+π)H(τb)∥xtb∥2 +Lc2(1 +Lπ)H(τb)∥xtb∥ +τb[4Lc1π2
+0,max +Lc2π0,max +c0,max]
+=O(exp(O(|U| ))H(τbU )) +O(
+B−2∑
+b=0
+H(τb)) +O(
+B−2∑
+b=0
+τb), (61)
+where the first inequality is due to (30), the second inequality is by (12) and (36), the third inequality is
+due to usingβ(·)≤ 1 to derive∑tb+1−tb
+t=0 [β(t)]2≤∑tb+1−tb
+t=0 [β(t)] = H(tb+1−tb), and the last equality can be
+derived in the same fashion with (39). WithT≥ (o(1)exp(O(|U| )))3/2
+(N (M +1))1/2 , we obtain by (47) that
+O(exp(O(|U| ))H(τbU )) +O(
+B−2∑
+b=0
+H(τb)) +O(
+B−2∑
+b=0
+τb)≤O(T ). (62)
+Thus, one can write
+EiB−1:0
+B−1∑
+b=1
+I(ib̸=ib−1) =
+B−1∑
+b=1
+Eib:0I(ib̸=ib−1) =
+B−1∑
+b=1
+Eib−1:0 Eib [I(ib̸=ib−1)| ib−1:0]
+=
+B−1∑
+b=1
+Eib−1:0Pr (ib̸=ib−1| ib−1:0)
+=
+B−1∑
+b=1
+Eib−1:0 [Pr (sb =sb−1,Pb =Pb−1| ib−1:0)Pr (ib̸=ib−1| sb =sb−1,Pb =Pb−1,ib−1:0)
++Pr (sb̸=sb−1 orPb̸=Pb−1| ib−1:0)Pr (ib̸=ib−1| sb̸=sb−1 orPb̸=Pb−1,ib−1:0)]
+=|L| +U +
+B−1∑
+b=1
+Eib−1:0 [Pr (sb =sb−1,Pb =Pb−1| ib−1:0)Pr (ib̸=ib−1| sb =sb−1,Pb =Pb−1,ib−1:0)
+≤|L| +U +
+B−1∑
+b=1
+Eib−1:0Pr (ib̸=ib−1| sb =sb−1,Pb =Pb−1,ib−1:0)
+≤|L| +U +
+B−1∑
+b=1
+Eib−1:0η0
+wb−1(ib−1)
+pb−1(ib−1)
+=|L| +U +
+B−1∑
+b=1
+Eib−2:0 Eib−1
+[
+η0
+wb−1(ib−1)
+pb−1(ib−1) | ib−2:0
+]
+=|L| +U +
+B−1∑
+b=1
+η0Eib−2:0
+∑
+ib−1∈Pb−1
+pb−1(ib−1)wb−1(ib−1)
+pb−1(ib−1)
+≤|L| +U +
+B−1∑
+b=1
+η0N Eib−2:0wb−1(ib−1) (63)
+for the controllerib−1 = arg maxi∈Pb−1wb−1(i). The first equality is becauseiB−1,...,i b+1 does not affect
+onI(ib̸=ib−1) and the second inequality is by (60). Taking expectation of (61) with respect toib−1:0 and
+applying it to (63) yields
+EiB−1:0
+B−1∑
+b=1
+I(ib̸=ib−1) =|L| +U +O(η0NT )
+by (62). Using|L| =O(U ) in Lemma D.3 andU≤|U| completes the proof.
+Algorithm 3 uses the same distribution with Algorithm 1 ifb = 0 or sb̸=sb−1 orPb̸=Pb−1. It turns out
+that even ifsb =sb−1 andPb =Pb−1, the distribution of policy from Algorithm 1 and 3 are indeed the same,
+which is motivated by Anava et al. (2015). For the sake of completeness, we state the lemma in this paper.
+35
+Published in Transactions on Machine Learning Research (05/2025)
+Lemma F.2.Letpb and ˜pb denote the distribution of policy at batchb = 0,...,B − 1 resulting from Algorithm
+1 and 3, respectively. Then,p and ˜p are the same distribution.
+Proof. Forb = 0,p0(k) = ˜p0(k) = 1
+N for allk∈P 0. For allb = 1,...,B − 1 such thatsb̸=sb−1 orPb̸=Pb−1,
+it holds thatpb = ˜pb. Thus, it suffices to prove the induction step forb = 1,...,B − 1 such thatsb =sb−1
+andPb =Pb−1. DefineYb :=∑
+k∈Pb
+exp(−ηbWb(k)) and suppose thatpb−1 = ˜pb−1. Thus, we have
+˜pb(k) = ˜pb−1(k)· exp(−ηbWb(k))
+exp(−ηb−1Wb−1(k)) +pb(k)·
+∑
+i∈Pb
+(1− exp(−ηbWb(i))
+exp(−ηb−1Wb−1(i)) )· ˜pb−1(i)
+=pb−1(k)· exp(−ηbWb(k))
+exp(−ηb−1Wb−1(k)) +pb(k)·
+∑
+i∈Pb
+(1− exp(−ηbWb(i))
+exp(−ηb−1Wb−1(i)) )·pb−1(i)
+= exp(−ηb−1Wb−1(k))
+Yb−1
+· exp(−ηbWb(k))
+exp(−ηb−1Wb−1(k))
++ exp(−ηbWb(k))
+Yb
+∑
+i∈Pb
+(1− exp(−ηbWb(i))
+exp(−ηb−1Wb−1(i)) ) exp(−ηb−1Wb−1(k))
+Yb−1
+= exp(−ηbWb(k))
+Yb−1
++ exp(−ηbWb(k))
+Yb
+∑
+i∈Pb
+exp(−ηb−1Wb−1(i))− exp(−ηbWb(i))
+Yb−1
+= exp(−ηbWb(k))
+Yb−1
++ exp(−ηbWb(k))
+Yb
+· Yb−1−Yb
+Yb−1
+= exp(−ηbWb(k))·Yb−1
+Yb·Yb−1
+=pb(k),
+where the first equality is due to the law of total probability, the second equality is due to the induction
+hypothesis, and the fifth equality is byPb =Pb−1. Notice thatsb = sb−1 yields ηb = ηb−1 and Wb(k)≥
+Wb−1(k), and thus0≤ exp(−ηbWb(k))
+exp(−ηb−1Wb−1(k))≤ 1; i.e., the probability distribution is properly defined for every
+batch. This completes the proof.
+Theorem F.3(Regret with switching costs bound with known|U|). In Algorithm 3, letτb = ( (νb+z)
+N (|U| +1) )1/2
+for every b≥ 0 with the constantsz,ν > 0 that satisfies τ0 > 0 and τ1
+τ0
+(β(τ0))2 < 1
+2
+√
+2. Also, let η0 =
+O( (|U| +1)2/3
+T 2/3N 1/3d1/3 ). WhenT≥ max{ (o(1)exp(O(|U| )))3/2
+(N (|U| +1))1/2 , |U| 3/2d
+(N (|U| +1))1/2,N (|U| + 1)d}, we have
+EiB−1:0
+[T∑
+t=0
+[ct(xt,ut)−ct(x′
+t,u′
+t)] +d
+B−1∑
+b=1
+I(ib̸=ib−1)−d
+|L|∑
+l=1
+I(i′
+l̸=i′
+l−1)
+]
+= ˜O(T 2/3N 1/3(|U| + 1)1/3d1/3) +o(T ),
+which implies that we achieve a sublinear regret bound. Moreover, when limt→∞H(t) < ∞ and T ≥
+max{ exp(O(|U| ))
+d2/3 , |U| 3/2d
+(N (|U| +1))1/2,N (|U| + 1)d}, we have
+EiB−1:0
+[T∑
+t=0
+[ct(xt,ut)−ct(x′
+t,u′
+t)] +d
+B−1∑
+b=1
+I(ib̸=ib−1)−d
+|L|∑
+l=1
+I(i′
+l̸=i′
+l−1)
+]
+= ˜O(T 2/3N 1/3(|U| + 1)1/3d1/3).
+Proof. The distribution of policy is the same for Algorithm 1 and 3 by Lemma F.2. Thus, we can use Theorem
+D.8 with Lemma F.1 to achieve
+EiB−1:0
+[T∑
+t=0
+[ct(xt,ut)−ct(x′
+t,u′
+t)] +d
+B−1∑
+b=1
+I(ib̸=ib−1)−d
+|L|∑
+l=1
+I(i′
+l̸=i′
+l−1)
+]
+≤
+˜O(|U| + 1)
+η0
++ η0N
+2 [exp(O(|U| ))O(τB−1H(τB−1)) +O(
+B−1∑
+b=0
+(τb)2)]
++O(
+B−1∑
+b=0
+H(τb)) +O(d|U| ) +O(dη0NT ), (64)
+36
+Published in Transactions on Machine Learning Research (05/2025)
+since d≥ 1 and∑L
+l=1I(i′
+l̸=i′
+l−1)≥ 0. Notice that (τb)b≥0 is the same for Algorithm 1 and 3. Accordingly, we
+still haveB =O(T 2/3N 1/3(|U| + 1)1/3) by (45) andT≥N (|U| + 1)d≥N (|U| + 1). We also still have (46)
+and (47). Thus, withT≥ (o(1)exp(O(|U| )))3/2
+(N (|U| +1))1/2 and T≥ |U| 3/2d
+(N (|U| +1))1/2, we obtain that
+η0N exp(O(|U| ))O(τB−1H(τB−1)) = o(d−1/3) exp(O(|U| )) = O(T 2/3N 1/3(|U| + 1)1/3d−1/3).
+O(d|U| ) = O(T 2/3N 1/3(|U| + 1)1/3d1/3).
+Also, withT≥N (|U| + 1)d, we have
+O(dη0NT ) = O(T 2/3N 1/3(|U| + 1)1/3d1/3).
+Combining all the above equalities with (64), one can write
+EiB−1:0
+[T∑
+t=0
+[ct(xt,ut)−ct(x′
+t,u′
+t)] +d
+B−1∑
+b=1
+I(ib̸=ib−1)−d
+|L|∑
+l=1
+I(i′
+l̸=i′
+l−1)
+]
+=O(T 2/3N 1/3(|U| + 1)1/3d1/3) +O(
+B−1∑
+b=0
+H(τb)).
+Using (17) shows a sublinear regret bound. Whenlimt→∞H(t)<∞, (52) is modified to
+η0N exp(O(|U| ))O(τB−1H(τB−1)) = O(T 2/3N 1/3(|U| + 1)1/3d1/3),
+only withT≥ exp(O(|U| ))
+d2/3 . This completes the proof.
+G Numerical Experiment Details
+Inthetwofollowingsubsections, wewillpresentexperimentdetailsonlinearandnonlinearsystems, respectively.
+Since our Algorithm 1 only hinges on the system state norm as a context, we can avoid computational burden;
+thus, Apple M1 Chip with 8-Core CPU is sufficient for the experiments. The error bars (shaded area) in
+all the figures in the paper report 95% confidence intervals based on the standard error. We calculate the
+standard error by randomly sampling 100 seeds to consider the variability of our experimental results. The
+first factor of variability is the randomness of selecting the policy determined by the probability calculated
+in Algorithm 1. The second factor is the randomness of adversarial disturbances stated in each experiment.
+For example, sinusoidal noise does not involve any randomness but the uniform random walk contains the
+randomness in the difference between two consecutive noises.
+G.1 Experiments for the Linear system
+In this subsection, we introduce the implementation details and present more experiments on the linear
+system (6) discussed in Example 1 of Section 5. The random matricesA∗,B∗∈ R10×10 generated by seed 42
+is as follows:
+A∗ =
+
+
+−0.250 0 .901 0 .463 0 .197 −0.687 −0.688 −0.883 0 .732 0 .202 0 .416
+−0.958 0 .939 0 .664 −0.575 −0.636 −0.633 −0.391 0 .049 −0.136 −0.417
+0.223 −0.721 −0.415 −0.267 −0.087 0 .570 −0.600 0 .028 0 .184 −0.907
+0.215 −0.658 −0.869 0 .897 0 .931 0 .616 −0.390 −0.804 0 .368 −0.119
+−0.755 −0.009 −0.931 0 .818 −0.482 0 .325 −0.376 0 .040 0 .093 −0.630
+0.939 0 .550 0 .878 0 .789 0 .195 0 .843 −0.823 −0.608 −0.909 −0.349
+−0.222 −0.457 0 .657 −0.286 −0.438 0 .085 −0.718 0 .604 −0.850 0 .973
+0.544 −0.602 −0.988 0 .630 0 .413 0 .458 0 .542 −0.851 −0.283 −0.768
+0.726 0 .246 −0.338 −0.872 −0.378 −0.349 0 .459 0 .275 0 .774 −0.055
+−0.760 0 .426 0 .521 0 .122 0 .541 −0.012 0 .045 −0.144 −0.949 −0.784
+
+
+,
+37
+Published in Transactions on Machine Learning Research (05/2025)
+B∗ =
+
+
+−0.937 0 .272 −0.371 0 .017 0 .815 −0.501 −0.179 0 .511 −0.542 −0.846
+−0.420 −0.677 0 .859 0 .616 0 .266 0 .742 0 .607 −0.626 0 .785 0 .078
+0.614 0 .792 −0.363 −0.779 −0.544 −0.145 0 .636 0 .721 −0.986 0 .021
+−0.165 −0.555 −0.760 −0.324 0 .885 −0.353 0 .037 0 .406 −0.272 0 .943
+0.924 −0.496 −0.005 −0.398 −0.430 −0.926 0 .219 0 .005 −0.897 −0.442
+0.816 −0.520 −0.710 −0.021 0 .971 −0.515 0 .344 0 .523 −0.524 0 .456
+−0.264 0 .264 0 .267 0 .071 −0.819 0 .670 −0.358 −0.626 −0.918 0 .181
+0.355 −0.966 0 .024 −0.547 0 .290 −0.651 0 .381 −0.226 0 .873 −0.724
+−0.317 −0.773 0 .849 0 .754 −0.484 0 .319 0 .634 0 .110 0 .059 −0.516
+−0.813 0 .794 0 .800 0 .266 −0.321 −0.301 0 .451 0 .794 0 .774 0 .559
+
+
+.
+The generatedK∗ which renders the absolute values of all eigenvalues ofA∗ +B∗K∗ less than 0.8 is
+K∗ =
+
+
+−40.748 12 .262 −39.303 −4.808 −8.199 −20.971 16 .954 17 .300 61 .898 −4.465
+31.536 −10.692 27 .743 3 .956 6 .884 15 .973 −12.235 −13.553 −45.862 3 .885
+−142.210 43 .435 −137.480 −17.793 −28.937 −73.009 61 .443 60 .575 218 .313 −15.583
+93.148 −30.162 88 .110 11 .829 19 .573 48 .086 −39.686 −40.256 −141.263 10 .178
+−64.436 18 .536 −63.263 −8.220 −12.714 −32.839 28 .580 27 .373 98 .987 −7.165
+−67.582 21 .285 −63.397 −7.021 −13.663 −33.861 27 .655 28 .119 100 .042 −8.308
+101.088 −32.099 95 .308 12 .523 21 .119 51 .371 −41.699 −42.555 −152.249 12 .494
+−94.335 29 .944 −87.537 −10.944 −19.780 −47.585 38 .049 39 .530 139 .826 −10.609
+20.847 −6.058 20 .699 2 .767 3 .727 10 .752 −10.122 −8.425 −32.410 2 .621
+6.452 −1.620 5 .426 0 .085 0 .618 2 .488 −2.083 −2.061 −8.201 1 .019
+
+
+.
+We construct a controller pool by selecting each entry fromK∗ and multiplying it by 1.1. Among 101
+controllers includingK∗, 43 controllers are stabilizing controllers, and the others are destabilizing controllers.
+We consider three different noises for the experiments. To perform a fair comparison, the bounding constant
+wmax is set to 1.
+(a) Sanity check: Gaussian noise with mean 0.3 and standard deviation 0.1, truncated to[−0.4, 1]
+(b) Sinusoidal noisewt =
+[
+sin
+(t
+5π
+)
+, sin
+( t
+11π
+)]′
+⊗ 15
+(c) Uniform random walk, wherew0 = Uniform
+[1
+3− 2
+3T, 1
+3 + 2
+3T
+]10
+and wt−wt−1 follows Uniform
+[
+− 2
+3T, 2
+3T
+]10
+,
+where T is time horizon. One can easily see that for uniform random walk,|wT|≤ 1 for anyT. Notice that
+we use statistical (Gaussian) noise for the sanity check, and the rest are the adversarial disturbances.
+We perform the ablation study of Algorithm 1, which means that we consider four scenarios: (fixed, dynamic)
+batch length and (fixed, adaptive) learning rate. For all the experiments implementing the algorithm, we use
+T = 1200,η 0 = 0.025,γ = 2.5,α 0 = 1.01, andx0 = [100, 200]′⊗ 15. For the dynamic batch length, we consider
+τ0 = 7 and τb =⌈τ0· (b+10
+10 )0.5⌉. It is well known that every (asymptotically) stabilizing controller in the
+linear system is indeed exponentially stabilizing controller (Khalil, 2015). Hence, we useβ(t) = 0.99t without
+relaxing the assumptions on stabilizing controllers. Finally, we useδ = γwmax
+1−β(τ0). Since the sinusoidal noise
+case is already presented in Figure 2, we only present truncated Gaussian noise case and uniform random
+walk case here.
+In Figures 2, 6, and 7, we observe that each component of DBAR, a dynamic batch length and an adaptive
+learning rate,jointly improves both the stability and the regret regardless of the noise form. For example, a
+dynamic batch length delays the time that large state norms occur during learning, but does not necessarily
+stabilize that state norm by itself (see Figures 7(a) and 7(b)). However, when applied together with an
+adaptive learning rate, a potential multiplicative exponential term is mitigated (see Remark 4.8) and the
+state norm is thus stabilized. This can be observed in Figures 2(d), 6(d), and 7(d) when comparing fixed
+38
+Published in Transactions on Machine Learning Research (05/2025)
+(a) Stability analysis
+ (b) Regret analysis
+ (c) Adaptive learning rate under
+dynamic batch length
+(d) Dynamic batch length under
+adaptive learning rate
+Figure 6: The stability and the regret in the linear system under truncated Gaussian noise. Ablation study
+of the algorithm is presented.
+(a) Stability analysis
+ (b) Regret analysis
+ (c) Adaptive learning rate under
+dynamic batch length
+(d) Dynamic batch length under
+adaptive learning rate
+Figure 7: The stability and the regret in the linear system under Uniform random walk. Ablation study of
+the algorithm is presented.
+and dynamic batch lengths under an adaptive learning rate. This results from using a non-decreasing batch
+length where the increasing ratio between two consecutive batch lengths is determined to converge to 1 (see
+Assumption 3.1). On the other hand, an adaptive learning rate effectively lowers the state norm at the time
+that large state norms occur without delay, since the learning rate adaptively decreases whenever the agent
+faces large state norm. This can be seen in 2(c), 6(c), and 7(c), the ablation study about the comparison
+between fixed and adaptive learning rates under a dynamic batch length. Thus, DBAR effectively stabilizes
+the state norm belowγwmax and minimizes the regret, where the two components support each other.
+G.2 Experiments for the Nonlinear system
+In this subsection, we introduce the implementation details and present more experiments on the nonlinear
+ball-beam system introduced in Example 2 of Section 5. To study this continuous-time nonlinear system,
+we first derive the first-order state representation of the leader system (7) with the states(y1,y 2,y 3,y 4) =
+(x, ˙x,−9.81Bθ,−9.81B ˙θ)∈ R4 and the actionv =−9.81Bux:
+˙y1 =y2, ˙y2 = 9.81B sin
+( y3
+9.81B
+)
++ y1y2
+4
+B(9.81)2 + 3w, ˙y3 =y4, ˙y4 =v,
+where wx is a sinusoidal noise sin
+(t
+7π
+)
+and wmax = 1. A nested saturating control policy is known to
+successfully stabilize the leader ball-beam system if the correct parameters are given, but it does not
+necessarily exponentially stabilize the system (Barbu et al., 1997). This necessitates our approach of
+extending the notion of stabilizing controllers beyond exponential assumptions. In this experiment, we aim
+to learn the parameters of the best stabilizing controller. We choose a nested saturating control policyv′
+39
+Published in Transactions on Machine Learning Research (05/2025)
+determined by three positive parameters(p,k 1,k 2):
+ϵ = 1√
+1 +y2
+1 +y2
+2
+, p 1 =p, p 2 = p
+ϵ, p 3 = p
+ϵ2, p 4 = p
+ϵ3,
+z1 =y1 +k1y2 +k1y3 +y4, z 2 =y2 +k2y3 +y4, z 3 =y3 +y4, z 4 =y4,
+v′ =σp4 (z4 +σp3 (z3 +σp2 (z2 +σp1 (z1)))),
+where σp(z) is the saturating function defined asp if z >p,−p if z <−p, andz if|z|≤ p. We consider the
+controller pool
+V′ ={v′ :p∈{ 2, 16, 30, 44, 58, 72, 86, 100}, k1∈{ 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5},
+k2∈{ 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5}},
+which has a total of 800 controllers. Moreover, the follower systems are formulated by generatingA, ˜A in
+(8) as random matrices, where each entry is independently sampled fromUnif[0, 1]. For the actionuz of the
+follower systems, we consider a linear policy as in Example 1. Then, the action is parameterized byuz =Kzz,
+where Kz∈ R96×96. We letKz be a multiple of identity matrix, and the diagonal entry is selected from the
+pool{−45,−47.5,−50,−52.5,−55,−60,−70,−80,−90,−100}. Thus, considering the actions of both leader
+and followers, the controller pool contains 8000 controllers. Among them, we do not know if each controller
+stabilizes the system.
+For simplicity, we perform forward-Euler discretization on the system with a sampling time0.01. The resulting
+discrete-time states and actions are denoted by[yt,zt] and [vt
+y,vt
+z] at tth sampling time. We use the cost
+function ct(yt,zt,vt
+y,vt
+z) =∥yt∥2 +∥zt∥2 +∥vt
+y∥2 +∥vt
+z∥2 to stabilize the ball position and the beam angle
+towards 0. We again perform the ablation study of Algorithm 1. For the experiments implementing the
+algorithm, we useT = 5000, η0 = 0.25,γ = 1.5,α 0 = 1.01, y0 = [−32, 24, 5.6, 24], andz0 = [10, 10,... ]∈ R96.
+For the dynamic batch length, we considerτ0 = 9 and τb =⌈τ0· (b+41
+40 )0.5⌉.
+Unlike the choice ofβ(t) in Section G.1, we select the stabilizing controller only to satisfy (asymptotic) ISS
+in Definition 2.3, instead of exponential ISS. To deeply study this notion, we consider different polynomially
+decreasing series (which is not exponentially decreasing) to be the candidates forβ(t):
+β1(t) = min
+{10
+t1.05, 1
+}
+, β 2(t) = min
+{10
+t1.08, 1
+}
+.
+Figures 3(b), 3(c),4(b), and 4(c) show the stability and regret analysis of the system underβ(t) and ˜β(t).
+In our experiment, there are 3400 controllers out of 8000 controllers that induces the system to explode,
+starting from the initial state. However, there exist far more destabilizing controllers within this pool, since
+most of 5600 controllers are only locally stabilizing controllers, meaning that the system is stabilized only at
+some initial states. With only few stabilizing controllers in the pool, Figures 3(b) and 3(c) illustrate that
+a dynamic batch length by itself still suffers from a multiplicative exponential term regarding a series of
+destabilizing controllers. However, for bothβ1(t) and β2(t), even thoughH(t) and O(∑t
+i=1
+1
+i ) are close, one
+can observe from Figures 3(b), 3(c),4(b), and 4(c) that the combination of the two components of DBAR
+effectively resolves this malignant term and the resulting closed-loop system enjoys both asymptotic system
+stability and the improved regret (see Table 1).
+40

@@ -67,15 +67,15 @@ function CompleteSignIn() {
   }, [refresh, router, searchParams]);
 
   return (
-    <article className="auth-panel">
-      <p className="eyebrow">Sign in</p>
+    <article className="pub-auth">
+      <p className="pub-kicker">Sign in</p>
       {state === "working" ? (
         <h1>Completing sign-in…</h1>
       ) : (
         <>
           <h1>Sign-in failed</h1>
           <p>{error}</p>
-          <div className="source-actions">
+          <div className="pub-auth-actions">
             <Link className="primary-action" href="/sign-in">
               Request a new link
             </Link>
@@ -88,10 +88,8 @@ function CompleteSignIn() {
 
 export default function CompleteSignInPage() {
   return (
-    <section className="workspace auth-workspace">
-      <Suspense fallback={null}>
-        <CompleteSignIn />
-      </Suspense>
-    </section>
+    <Suspense fallback={null}>
+      <CompleteSignIn />
+    </Suspense>
   );
 }

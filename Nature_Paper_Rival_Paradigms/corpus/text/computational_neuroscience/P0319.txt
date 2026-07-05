@@ -1,0 +1,1395 @@
+--- Page 1 ---
+ORIGINAL RESEARCH
+published: 07 September 2020
+doi: 10.3389/fncom.2020.00078
+Frontiers in Computational Neuroscience | www.frontiersi n.org 1 September 2020 | Volume 14 | Article 78
+Edited by:
+Pulin Gong,
+The University of Sydney, Australia
+Reviewed by:
+Louis Kang,
+University of California, Berkeley,
+United States
+Upinder S. Bhalla,
+National Centre for Biological
+Sciences, India
+Dilawar Singh,
+National Centre for Biological
+Sciences, Bangalore, India in
+collaboration with reviewer UB
+Bhanu Priya Somasekharan,
+National Centre for Biological
+Sciences, Bangalore, India in
+collaboration with reviewer UB
+*Correspondence:
+Philippe Vincent-Lamarre
+pvinc058@uottawa.ca
+Received: 13 February 2020
+Accepted: 24 July 2020
+Published: 07 September 2020
+Citation:
+Vincent-Lamarre P , Calderini M and
+Thivierge J-P (2020) Learning Long
+Temporal Sequences in Spiking
+Networks by Multiplexing Neural
+Oscillations.
+Front. Comput. Neurosci. 14:78.
+doi: 10.3389/fncom.2020.00078
+Learning Long T emporal Sequences
+in Spiking Networks by Multiplexing
+Neural Oscillations
+Philippe Vincent-Lamarre *, Matias Calderini and Jean-Philippe Thivierge
+School of Psychology and Center for Neural Dynamics, Univer sity of Ottawa, Ottawa, ON, Canada
+Many cognitive and behavioral tasks—such as interval timing , spatial navigation, motor
+control, and speech—require the execution of precisely-tim ed sequences of neural
+activation that cannot be fully explained by a succession of external stimuli. We show how
+repeatable and reliable patterns of spatiotemporal activi ty can be generated in chaotic
+and noisy spiking recurrent neural networks. We propose a ge neral solution for networks
+to autonomously produce rich patterns of activity by provid ing a multi-periodic oscillatory
+signal as input. We show that the model accurately learns a va riety of tasks, including
+speech generation, motor control, and spatial navigation. Further, the model performs
+temporal rescaling of natural spoken words and exhibits seq uential neural activity
+commonly found in experimental data involving temporal pro cessing. In the context of
+spatial navigation, the model learns and replays compresse d sequences of place cells
+and captures features of neural activity such as the emergence of ripples and theta phase
+precession. T ogether, our ﬁndings suggest that combining oscillatory neuronal inputs with
+different frequencies provides a key mechanism to generate precisely timed sequences
+of activity in recurrent circuits of the brain.
+Keywords: neural oscillations, spiking neural networks, r ecurrent neural networks, temporal processing,
+balanced networks
+1. INTRODUCTION
+Virtually every aspect of sensory, cognitive, and motor proce ssing in biological organisms involves
+operations unfolding in time (
+Buonomano and Maass, 2009 ). In the brain, neuronal circuits
+must represent time on a variety of scales, from milliseconds to minutes and longer circadian
+rhythms (Buhusi and Meck, 2005). Despite increasingly sophisticated models of brain activity, time
+representation remains a challenging problem in computationa l modeling ( Grondin, 2010; Paton
+and Buonomano, 2018).
+Recurrent neural networks oﬀer a promising avenue to detect and produce precisely timed
+sequences of activity (Abbott et al., 2016). However, it is challenging to train these networks due to
+their complexity ( Pascanu et al., 2013 ), particularly when operating in a chaotic regime associated
+with biological neural networks ( van Vreeswijk and Sompolinsky, 1996; Abarbanel et al., 2008 ).
+One avenue to address this issue has been to use reservoir com puting (RC) models ( Jaeger,
+2002; Maass et al., 2002 ). Under this framework, a recurrent network (the reservoir) projects onto
+a read-out layer whose synaptic weights are adjusted to produc e a desired response. However,
+while RC can capture some behavioral and cognitive processes ( Sussillo and Abbott, 2009; Laje
+and Buonomano, 2013; Nicola and Clopath, 2017 ), it often relies on biologically implausible
+mechanisms, like strong feedback form the readout to the res ervoir or implausible learning rules
+
+
+--- Page 2 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+required to control the reservoir’s dynamics. Further, cur rent
+RC implementations oﬀer little insight to understand how the
+brain generates activity that does not follow a strict rhythm ic
+pattern (
+Buonomano and Maass, 2009; Abbott et al., 2016 ). That
+is because RC models are either restricted to learning period ic
+functions, or require an aperiodic input to generate an aperiod ic
+output, thus leaving the neural origins of aperiodic activity
+unresolved (
+Abbott et al., 2016 ). A solution to this problem is
+to train the recurrent connections of the reservoir to stabi lize
+innate patterns of activity ( Laje and Buonomano, 2013 ), but this
+approach is more computationally expensive and is sensitive to
+structural perturbations (
+Vincent-Lamarre et al., 2016).
+To address these limitations, we propose a biologically
+plausible spiking recurrent neural network (SRNN) model that
+receives multiple independent sources of neural oscillations
+as input. The architecture we propose is similar to previous
+RC implementations (
+Nicola and Clopath, 2017 ), but we use
+a balanced SRNN following Dale’s law, which are typically
+used to model the activity of cortical networks (
+van Vreeswijk
+and Sompolinsky, 1998; Brunel, 2000 ). The combination of
+oscillators with diﬀerent periods creates a multi-periodic co de
+that serves as a time-varying input that can largely exceed
+the period of any of its individual components. We show
+that this input can be generated endogenously by distinct sub-
+networks, alleviating the need to train recurrent connecti ons
+of the SRNN to generate long segments of aperiodic activity.
+Thus, multiplexing a set of oscillators into a SRNN provides an
+eﬃcient and neurophysiologically grounded means of controlling
+a recurrent circuit (
+Vincent-Lamarre et al., 2016 ). Analogous
+mechanisms have been hypothesized in other contexts includi ng
+grid cell representations ( Fiete et al., 2008 ) and interval timing
+(Miall, 1989; Matell and Meck, 2004 ).
+This paper is structured as follows. First, we describe a
+simpliﬁed scenario where a SRNN that receives a collection of
+input oscillations learns to reproduce an arbitrary time-evo lving
+signal. Second, we extend the model to show how oscillations
+can be generated intrinsically by oscillatory networks tha t can be
+either embedded or external to the main SRNN. Third, we show
+that a network can learn several tasks in parallel by “tagging ”
+each task to a particular phase conﬁguration of the oscillatory
+inputs. Fourth, we show that the activity of the SRNN captures
+temporal rescaling and selectivity, two features of neural a ctivity
+reported during behavioral tasks. Fifth, we train the model
+to reproduce natural speech at diﬀerent speeds when cued by
+input oscillations. Finally, we employ a variant of the model t o
+capture hippocampal activity during spatial navigation. Together,
+results highlight a novel role for neural oscillations in reg ulating
+temporal processing within recurrent networks of the brain.
+2. METHODS
+2.1. Integrate-and-Fire Networks
+2.1.1. Driven Networks
+Our network consists of leaky integrate-and-ﬁre neurons, w here
+Nrnn = 1, 000 for the SRNN projecting to the read-out units
+and Nosc = 500 for each oscillatory network, by default. Eighty
+percent of these neurons are selected to be excitatory while t he
+remaining 20% are inhibitory. The membrane potential of all
+neurons is given by
+C dV
+dt = 1
+R (EL − V)+ gex(Eex − V)+ gin(Ein − V)+ Itonic + Iext (1)
+where C and R are the membrane capacitance and resistance,
+EL is the leak reversal potential, gex and gin are the time-
+dependent excitatory and inhibitory conductances, Eex and Ein
+are the excitatory and inhibitory reversal potentials, Itonic is
+a constant current applied to all neurons and Iext is a time-
+varying input described below. Parameters were sampled from
+Gaussian distributions as described in Table 1. The excitatory
+and inhibitory conductances, gex and gin, respectively, obey the
+following equations:
+τ exi
+dgexi
+dt = − gexi +
+Nrnn∑
+j = 1
+Wi,jGexi δ (t − t(j) − T(j)
+delay) (2)
+τ ini
+dgini
+dt = − gini +
+Nrnn∑
+j = 1
+Wi,jGini δ (t − t(j) − T(j)
+delay) (3)
+where τ ex and τ in are the time constants of the excitatory and
+inhibitory conductances, and Gin and Gex are the change in
+conductance from incoming spikes to excitatory and inhibito ry
+synapses. Vθ is the spiking threshold, t(j) denotes the time since
+the last spike of the pre-synaptic neuron j, after which V is set to
+Vreset for a duration equal to τ ref . Tdelay is the propagation delay
+of the action potential. The SRNN connectivity is deﬁned as a
+Nrnn× Nrnn sparse and static connectivity matrixW with a density
+prnn (probability of having a non-zero pairwise connection). The
+non-zero connections are drawn from a half-normal distribut ion
+f (0, σ rnn), where σ rnn = γ rnn
+√
+Nrnn× prnn
+. All ODEs are solved using a
+forward Euler method with time-step )Delta1 t = 0.05 ms. This results
+in an asynchronous regular network ( Figure S1).
+Each SRNN neuron is connected to each of the Ninp input
+units with probability pinp. The external inputs ( Iext) follow:
+Iext(t) = M( A
+2 (sin(2π ft + φ ) + 1)) (4)
+where Iext ∈ I RNrnn and f , φ ∈ I RNinp . The frequency of the
+sine waves and their initial phase are represented by f (hz)
+and φ are drawn from the uniform distributions U(− π , π ) and
+U(fmin, fmax), respectively (ﬁxed for each realization of a task).
+The sine wave is then transformed by adding 1 and dividing by
+2 to limit its range to [0,A]. The full input-to-SRNN connectiv ity
+matrix M is a Nrnn × Ninp sparse and static matrix, with a density
+of pinp. The non-zero connections of M are drawn from a normal
+distribution N (0, 1) and A is the amplitude of the input (30 pA
+by default).
+All of the SRNN’s excitatory neurons project to the readout
+units. Their spiking activity r is ﬁltered by a double exponential:
+τ d
+drj
+dt = − rj + hj (5)
+Frontiers in Computational Neuroscience | www.frontiersi n.org 2 September 2020 | Volume 14 | Article 78
+
+
+--- Page 3 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+TABLE 1 | SRNN parameters.
+Main SRNN Input (oscillatory networks)
+N 1,000 500
+R 100 M)Omega1 100 M)Omega1
+C 200 pF 200 pF
+EL µ = − 60 mV ,σ = 1.2 mV µ = − 60 mV ,σ = 0.6 mV
+Vθ µ = − 50 mV ,σ = 0.5 mV µ = − 50 mV ,σ = 0.5 mV
+Vreset µ = − 60 mV ,σ = 1.2 mV µ = − 60 mV ,σ = 0.6 mV
+Itonic 90 pA 90 pA
+Tdelay µ = 1 ms, σ = 0.02 ms µ = 1 ms, σ = 0.01 ms
+τ ref µ = 2 ms, σ = 0.04 ms µ = 2 ms, σ = 0.02 ms
+Gex µ = 20 pS, σ = 0.4 pS µ = 30 pS, σ = 0.03 pS
+Gin µ = 160 pS, σ = 3.2 pS µ = 140 pS, σ = 1.4 pS
+τ ex µ = 20 ms, σ = 0.4 ms µ = 20 ms, σ = 0.2 ms
+τ in µ = 20 ms, σ = 0.4 ms µ = 80 ms, σ = 0.8 ms
+Eex 0 mV 0 mV
+Ein − 80 mV − 80 mV
+prnn 0.1 1
+pinp 0.3 1
+γ rnn 1 1
+τ r
+dhj
+dt = − hj + 1
+τ d
+N∑
+j = 1
+δ (t − t(j)) (6)
+where τ r = 6 ms is the synaptic rise time and τ d = 60 ms is the
+synaptic decay time.
+2.2. Output and T arget Functions
+The signal derived from Equations (5) and (6) is sent to the Nout
+linear output units resulting in the ﬁnal output ˆy = WT
+out(t)r(t).
+Wout is initialized as a N(ex)
+rnn × Nout null matrix that is modiﬁed
+according to the learning rule described below (see trainin g
+procedure). Nout is the number of readout units and N(ex)
+rnn is the
+number of excitatory neurons in the SRNN.
+Unless otherwise stated, the target functions y ∈ I RNout
+employed to train the model were generated from white noise
+with a normal distribution N(0, 30), then low-pass ﬁltered with a
+cut-oﬀ at 6 Hz. To assess network performance, we computed the
+Pearson correlation between the output of the network ( ˆy) and
+the target function (y).
+2.3. Learning Algorithm for the Readout
+Unit
+We used the recursive least square algorithm (
+Haykin, 2002) to
+train the readout units to produce the target functions. The Wout
+weight matrix was updated based on the following equations:
+Wout(t) = Wout(t − )Delta1 t) − P(t)r(t)e(t)T, (7)
+e(t) = ˆ y − y(t). (8)
+Where the error e(t) was determined by the diﬀerence between
+the values of the readout units obtained with the multiplicat ion
+of the reservoir’s activity with the weights Wout, and the target
+functions’ values y at time t. Each weight update was separated
+by a time interval )Delta1 t of 2.5 ms for all simulations. P is a running
+estimate of the inverse of the correlation matrix of the netw ork
+rates r (see Equation 5), modiﬁed according to Equation (9) and
+initialized with Equation (10).
+P(t) = P(t − )Delta1 t) − P(t − )Delta1 t)r(t)rT(t)P(t − )Delta1 t)
+1 + rT(t)P(t − )Delta1 t)r(t) , (9)
+P(0) = I
+α . (10)
+where I is the identity matrix and α is a learning rate constant.
+2.4. Oscillatory Networks
+2.4.1. External Drive
+Each oscillatory network obey the same equations as the SRNNs.
+However, theIext term in Equation (1) is replaced by a summation
+of the following step functions:
+I(ex) =
+{
+0 if tstim > t, or t > tex
+end
+AWin otherwise (11)
+I(in) =
+{
+0 if tstim > t, or t > tin
+end
+AWin otherwise (12)
+where tstim = 500 ms, tex
+end denotes the end of the excitatory pulse
+and tin
+end (diﬀerent across oscillatory networks) is the end of the
+inhibitory pulse, where tex
+end >tin
+end and Win ∈ I RNosc representing
+the connections from the tonic inputs to the oscillatory networks,
+where A = 20 pA.
+The oscillatory networks each project to the SRNN with a
+Nrnn × (Nosc × Ninp) sparse and static connectivity matrix M,
+where each oscillatory network projects to the SRNN with a
+density of pinp = 0.5. The non-zero connections are drawn from
+a normal distribution N (0, σ inp), where:
+σ inp = γ inp
+√pinpNrnnNosc
+(13)
+and γ inp = 10 (a.u.) by default.
+Where stated in section 3, the SRNN projects back to the
+oscillatory networks with a (Nosc × Ninp) × Nrnn sparse and static
+connectivity matrix M′, where each SRNN unit projects to the
+oscillatory networks with a density of pfb = 0.5 and γ fb = 0.5.
+The non-zero connections are drawn from a normal distributio n
+N (0, σ fb), where:
+σ fb = γ fb√pfbNrnnNosc
+. (14)
+Frontiers in Computational Neuroscience | www.frontiersi n.org 3 September 2020 | Volume 14 | Article 78
+
+
+--- Page 4 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+2.4.2. Selection of Stable Networks
+As we were interested in regimes where the networks would
+produce reliable and repeatable oscillations to be used as an
+input to our model, we considered networks with an inter-tria l
+correlation coeﬃcient (10 trials) of their mean ﬁring-rate greater
+than 0.95 as stable. A wide range of parameter combinations
+lead to reliable oscillations, but diﬀerent random initiali zations
+of networks with the same parameters can lead to drastically
+diﬀerent behavior, both in activity type (ansynchronous and
+synchronous) and inter-trial reliability (Figure S4).
+2.5. Jitter Accumulation in Input Phase
+While a perfect sinusoidal input such as the one in Equation
+(21) allows for well-controlled simulations, it is unreali stic from
+a biological standpoint. To address this issue, we added jitt er
+to the input phase of each input unit. This was achieved by
+converting the static input phase injected into unit k φ k to a
+random walk φ k(t). First, we discretize time into non-overlapping
+bins of length )Delta1 t, such that tn = )Delta1 t∗n. From there, we iteratively
+deﬁne φ (t) (index k is dropped to alleviate the notation) as:
+φ t+ )Delta1 t = φ t + ε t ⇐ ⇒ φ n+ 1 = φ n + ε n+ 1 (15)
+with
+φ (0) = φ 0 (16)
+ε ∼ N (0, σ 2
+φ )Delta1 t) (17)
+from initial value φ 0, sampled from a uniform distribution as
+speciﬁed previously. More intuitively, φ (t) can be constructed as:
+φ (0) = φ 0
+φ 1 = φ 0 + ε 1
+φ 2 = φ 1 + ε 2 = φ 0 + ε 1
+...
+φ N = φ 0 +
+N∑
+n = 1
+ε n (18)
+On average, the resulting deviation from the deterministic signal,
+i.e., E [φ N − φ 0], is null. On the other hand, one can calculate
+its variance:
+var ( φ N − φ 0) = var
+(
+φ 0 +
+N∑
+n = 1
+ε n − φ 0
+)
+= var
+( N∑
+n = 1
+ε n
+)
+Since all ε n are i.i.d:
+N∑
+n = 1
+var ( ε n) = Nvar ( ε n)
+= Nσ 2
+φ )Delta1 t
+⇔ var ( φ N − φ 0) = tσ 2
+φ (19)
+For ease of comparison, we can express the equivalent standard
+deviation in degrees (see Figure S8):
+σ deg =
+√
+tσ 2
+φ
+180
+π (20)
+2.6. Model for Place Cells Sequence
+Formation
+2.6.1. Network Architecture and Parameters
+We employed a balanced recurrent network similar to the ones
+used for all other simulations, with a few key diﬀerences. The
+input consisted of Ninp = 20 oscillators with periods ranging
+from 7.5 to 8.5 Hz that densely projected to the SRNN ( p = 1)
+and follow:
+Iext(t) = M(sin(2π ft + φ ) + 1) (21)
+C was set to 100 pF for all neurons and γ rnn was set to
+0.5. We removed the readout unit and connections, and we
+selected 10 random excitatory cells ( Nplace) as place cells. Those
+cells had parameters identical to the other SRNN excitatory
+units, except:
+1. We set the resting potential of those cells to the mean of EL,
+to avoid higher values that could lead to high spontaneous
+activity (that in turn can lead to spurious learning).
+2. A 600 ms sine wave at 10 Hz with an amplitude of 60 pA was
+injected in each of the place cells at a given time representing
+the animal going through its place ﬁeld.
+3. The connections between the input oscillators and the place
+cells were modiﬁed following Equation (22).
+We modeled the environmental input (10 Hz depolarization of
+CA1 place cells) based on a representation of the animal’s location
+that was fully dependent on time. In order to explain phase
+precession, our model relied on an environmental input of a
+slightly higher frequency than the background theta oscill ation,
+as suggested in
+Lengyel et al. (2003).
+The learning rule seeks to optimize the connections between
+the oscillating inputs and the place cells in order to make them
+ﬁre whenever the right phase conﬁguration is reached (
+Miall,
+1989; Matell and Meck, 2004).
+We used a band-pass ﬁlter between 4 and 12 Hz to isolate the
+theta rhythm in the SRNN. We then used a Hilbert transform to
+obtain the instantaneous phase of the resulting signal.
+2.6.2. Learning Algorithm
+We developed a correlation-based learning rule (
+Kempter et al.,
+1999) inspired by the results obtained by ( Bittner et al., 2017):
+Mi,k(t + )Delta1 t) = Mi,k + α Iextk (t) (22)
+where i ∈ { 1, . . ., Nplace}, k ∈ { 1, . . ., Ninp} and α = 0.25. With
+this rule, the weight update is only applied when a burst occurs
+in the place cells. A burst is deﬁned as any spike triplets that
+occur within 50 ms. In experiments, these post-synaptic bursts
+were associated with Ca2+ plateaus in place cells (
+Bittner et al.,
+2017) that lead to a large potentiation of synaptic strength with as
+few as ﬁve pairings. The connections of M were initialized from
+Frontiers in Computational Neuroscience | www.frontiersi n.org 4 September 2020 | Volume 14 | Article 78
+
+
+--- Page 5 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+FIGURE 1 | Oscillation driven SRNN to learn complex temporal tasks. (A) Schematic of the model’ s architecture. This implementatio n has two input units that inject
+sine-waves in a subset of the SRNN’ s neurons. M denotes the connections from the input units to the SRNN neur ons. W denotes the recurrent connectivity matrix of
+the SRNN. Wout denotes the trainable connections from the excitatory SRNN neurons to the readout unit. (B) Example showing how two sine waves of different
+frequencies can be combined to generate a two-dimensional f unction with a period longer than either sine wave. (C) Sample average current per neuron, raster and
+average instantaneous ﬁring rate over one trial, respective ly. The external drive is only delivered to a subset of SRNN un its (pinp = 0.3) for each input unit. (D) Output of
+the readout unit during testing trials (learning rule turne d off) interleaved during training. The nearly constant out put without the input is due to random activity in the
+SRNN (E) Pearson correlation between the output of the network and th e target function as a function of the number of training epoc hs when driven with (blue) and
+without (red) multi-periodic input. (F) Pearson correlation between the output and the target funct ion as neurons of the SRNN are clamped.
+a half-normal distribution f (0, σ inp), where σ inp = 0.1 and the
+signal amplitude A was set to 1. M was bound between 0 and 5σ inp
+during training.
+2.7. Audio Processing for Speech Learning
+We used the numpy/python audio tools from
+Kastner (2019) ,
+adapted by Sainburg (2018) , to process the audio WA VE ﬁle.
+We used the built-in functions to convert the audio ﬁle to a
+mel-scaled spectrogram and to invert it back to a waveform.
+3. RESUL TS
+3.1. A Cortical Network Driven by
+Oscillations
+We began with a basic implementation of our model where
+artiﬁcial oscillations served as input to a SRNN ( Figure 1A)—in
+a later section, we will describe a more realistic version wh ere
+recurrent networks generate these oscillations intrinsica lly.
+In this simpliﬁed model, two input nodes, but potentially
+more ( Figure S2), generate sinusoidal functions of diﬀerent
+frequencies. These input nodes project onto a SRNN that
+is a conductance-based leaky integrate-and-ﬁre (LIF) mode l
+(
+Destexhe, 1997 ) with balanced excitation and inhibition ( van
+Vreeswijk and Sompolinsky, 1996 ). Every cell in the network
+is either strictly excitatory or inhibitory, thus respectin g
+Dale’s principle.
+The combination of Ninp input oscillators will generate a
+sequence of unique Ninp-dimensional vectors where the sequence
+lasts as long as the least common multiple of the inputs’
+individual periods (
+Vincent-Lamarre et al., 2016 ). For instance,
+two sine waves with periods of 200 and 250 ms would create a
+multi-periodic input with a period lasting 1,000 ms. This eﬀect
+can be viewed as a two-dimensional state-space where each axis
+is an individual sine wave ( Figure 1B). Using a phase reset of the
+oscillations on every trial can then evoke a repeatable pattern
+of activity in the downstream population of neurons. Thus,
+multiplexed oscillations provide the network with inputs whose
+timescale largely exceeds that of individual units.
+When a SRNN ( Nres = 2,000) was injected with oscillations,
+excitatory and inhibitory populations modulated their activ ity
+over time, while the average input currents to individual neu rons
+remained balanced ( Figure 1C, top panel). To illustrate the
+beneﬁts of oscillatory inputs on a SRNN, we designed a simple
+task where a network was trained to reproduce a target functio n
+consisting of a time-varying signal generated from low-pass
+ﬁltered noise ( Figure 1C, bottom panel). Simulations were split
+Frontiers in Computational Neuroscience | www.frontiersi n.org 5 September 2020 | Volume 14 | Article 78
+
+
+--- Page 6 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+into a training and a testing phase. During the training phase,
+the network was training when receiving a combination of two
+oscillatory inputs at 4 and 5 Hz. Synaptic weights from the
+SRNN to the read-out were adjusted using the recursive least-
+squares learning algorithm (
+Haykin, 2002 ) adapted to spiking
+units ( Nicola and Clopath, 2017 ). During the testing phase,
+synaptic weights were frozen and the network’s performance
+was assessed by computing the Pearson correlation between
+the target function and the network’s output. This correlati on
+increased to 0.9 within the ﬁrst 10 training epochs and remain ed
+stable thereafter ( Figures 1D,E). By comparison, the output of
+a similar network with no oscillatory inputs (i.e., there is n o
+external input and the SRNN is in a spontaneous chaotic regime)
+remained uncorrelated to the target function. Thus, oscilla tory
+inputs create rich and reliable dynamics in the SRNN that enabled
+the read-out to produce a target function that evolved over ti me
+in a precise manner. The network displays some tolerance to
+deviations of the input phase of the oscillations that accumul ates
+over time and Gaussian noise ( Figures S1, S8).
+Next, we investigated the resilience of the network to
+structural perturbations where a number of individual neuro ns
+from the SRNN were “clamped” (i.e., held at resting potential)
+after training (
+Vincent-Lamarre et al., 2016 ). Removing neurons
+can alter the trajectory of the SRNN upon the presentation of the
+same stimulus, and it reduces the dimensionality of the read out
+unit. We trained a network for 10 epochs, then froze the weight s
+and tested its performance on producing the target output. We
+then gradually clamped an increasing proportion of neurons
+from the SRNN. The network’s performance decreased gradually
+as the percentage of clamped units increased ( Figure 1F).
+Remarkably, the network produced an output that correlated
+strongly with the target function (correlation of 0.7) even when
+10% of neurons were clamped. Further exploration of the model
+shows a wide range of parameters that yield high performances
+(Figure S2). Oscillatory inputs thus enabled SRNN to produce
+precise and repeatable patterns of activity under a wide range
+of modeling conditions. Next, we improved upon this simple
+model by developing a more biologically-inspired network that
+generated oscillations intrinsically.
+3.2. Endogenously Generated Oscillatory
+Activity
+While our results thus far have shown the beneﬁts of input
+oscillations when training a SRNN model, we did not consider
+their neural origins. To address this issue, we developed a mo del
+that replaces this artiﬁcial input with activity generated by a n
+“oscillator” spiking network acting as a central pattern gener ator
+(
+Marder and Calabrese, 1996).
+To do so, we took advantage of computational results
+showing that sparsely connected networks can transition fro m
+FIGURE 2 | SRNN driven with intrinsically generated oscillations. (A) T op: Sample rasters from one network on ﬁve different trials. Bottom: Average and standard error
+of the excitatory (red) and inhibitory (blue) conductance o f a stable network on ﬁve different trials (see section 2). The network is asynchronous when the external drive
+is off, and becomes periodic when turned on. (B) Architecture of the augmented model. As in Figure 1A, W and Wout denote the recurrent and readout connections,
+respectively. M is the connection matrix from the input to the SRNN, except th at the input units are now replaced by networks of neurons. M′ denotes the feedback
+connections from the SRNN to the oscillatory network. Winp denotes the connections providing the tonic depolarizatio n to the oscillatory networks. (C) Connectivity
+matrix of the model. The external drive is provided solely to the oscillatory networks that project to the SRNN that in tur n projects to the readout unit. (D) External
+inputs provided to the oscillatory networks with varied inh ibitory transients associated with each excitatory input. (E) T op: Sample activity of the oscillatory networks
+(green) on two separate trials with different inputs, and th e SRNN for one trial (input #1). Bottom: PSTH of the network’ s neurons activity on ﬁve different trials with
+input #1. (F) Post-training output of the network, where input #1 was pair ed with the target, but input #2 was not.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 6 September 2020 | Volume 14 | Article 78
+
+
+--- Page 7 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+an asynchronous to a periodic synchronous regime in response
+to a step current (
+Brunel, 2000; Brunel and Hansel, 2006;
+Thivierge et al., 2014 ), thus capturing in vivo activity ( Buzsáki
+and Draguhn, 2004 ) (see section 2; Figure 2A). The periodicity
+of the synchronous events could therefore potentially be use d to
+biologically capture the eﬀects of artiﬁcially generated sine waves.
+In simulations, we found that this transition was robust to
+both synaptic noise and neuronal clamping ( Figure S3). Further,
+the frequency of synchronized events could be modulated by
+adjusting the strength of the step current injected in the ne twork,
+with stronger external inputs leading to a higher frequency o f
+events ( Figure S3). Thus, oscillator networks provide a natural
+neural substrate for input oscillations into a recurrent net work.
+From there, we formed a model where three oscillator
+networks fed their activity to a SRNN ( Figure 2B). These
+oscillator networks had the same internal parameters except
+for the inhibitory decay time constants of their recurrent
+synapses ( τ in = 70, 100, and 130 ms for each network) thus
+yielding diﬀerent oscillatory frequencies ( Figures S3, S4). In
+order to transition from an asynchronous to a synchronous
+state, the excitatory neurons of the oscillator networks re ceived
+a step current.
+The full connectivity matrix of this large model is depicted
+in Figure 2C. As shown, the oscillator networks send sparse
+projections (with a probability of 0.3 between pairs of units)
+to the SRNN units. Only the excitatory neurons of the SRNN
+project to the readout units. There is weak feedback from
+the SRNN to the oscillators—in supplementary simulations,
+we found that strong feedback projections desynchronized
+the oscillator networks ( Figures S2, S5). The feedback
+connections were included to simulate a case where the
+oscillators networks would be embedded in the SRNN
+(and therefore exhibit some degree of local connectivity),
+instead of sending eﬀerent connections from an upstream
+brain region.
+A sample of the full model’s activity is shown in Figure 2E.
+Both the oscillator and the SRNN showed asynchronous activity
+until a step current was injected into the excitatory units o f
+the oscillator networks. In response to this step current, bot h
+oscillator and SRNN transitioned to a synchronous regime. The
+FIGURE 3 | Parallel training of multiple tasks. (A) Schematic of the model’ s architecture with an additional re adout unit. An example of possible phase shifted inputs is
+shown at the bottom. (B) Trajectory of the SRNN on the ﬁrst three components of a PCA. Wi thout an external input, the network is spontaneously activ e and
+constrained in a subspace of the state-space (depicted by th e circle). Upon injection of the input, the SRNN’ s activity i s kicked into the trajectory related to the input.
+(C) Output of the two readout units after the ﬁrst and tenth traini ng epochs. The colored line of epoch #10 shows the average of 5 trials (black lines). (D) Heat map
+showing the performance of the model on tasks with different lengths and frequencies.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 7 September 2020 | Volume 14 | Article 78
+
+
+--- Page 8 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+model reverted back to an asynchronous regime once the step
+current was turned oﬀ.
+To illustrate the behavior of this model, we devised a “cued”
+task similar to the one described above, where the goal was to
+reproduce a random time-varying signal. When learning this
+signal, however, the oscillator networks received a cue (“I nput
+1”) consisting of a combination of excitatory step current a nd
+transient inhibitory input ( Figure 2D) that alters the relative
+phase of the input oscillators, but not their frequency. Follo wing
+20 epochs of training, we switched to a testing phase and showed
+that the model closely matched the target signal ( Figure 2F).
+Crucially, this behavior of the model was speciﬁc to the cue
+provided during training: when a diﬀerent, novel cue (shaped by
+inhibitory transients) was presented to the network (“Input 2”), a
+diﬀerent output was produced ( Figure 2F).
+In sum, the model was able to learn a complex time-
+varying signal by harnessing internally-generated oscilla tions
+that controlled the ongoing activity of a SRNN. In the followin g
+section, we aimed to further explore the computational capacit y
+of the model by training a SRNN on multiple tasks in parallel.
+3.3. An Artiﬁcial Network That Learns to
+Multitask
+To explore the ability of the model to learn two tasks
+concurrently, we reverted to our initial model with artiﬁci al
+oscillations, allowing for a more principled control of the in put
+injected to the SRNN. The oscillatory input consisted of three
+sine waves of diﬀerent frequencies ( Figure 3A) (more inputs
+units lead to better performances, Figure S2). We trained this
+model on two diﬀerent motor control tasks that required the
+network to combine the output of two readout units in order to
+draw either a circle or a star in two dimensions. Here, each of
+the outputs corresponded to x- and y-coordinates, respectively .
+The phase of the oscillations (“Input 1” vs. “Input 2”) were
+individually paired with only one of the two tasks in alternat ion
+(Figure 3A).
+We employed a principal component analysis (PCA) to
+visualize the activity of the SRNN before and during training
+(Figure 3B). Before injecting the oscillatory inputs, the network
+generated spontaneous activity that occupied a limited portion of
+the state space (Figure 3B, circle). During training, the oscillatory
+inputs were turned on, resulting in diﬀerent trajectories
+depending on the relative phase of the oscillations. The networ k
+thus displayed a distinct pattern of activity for each of the
+two tasks.
+Viewed in two dimensions, the outputs of the network rapidly
+converged to a circle and a star that corresponded to each of th e
+two target shapes when given each respective input separately
+(Figure 3C). These shapes were speciﬁc to the particular phase
+of the oscillatory input—in a condition where we presented a
+randomly-chosen phase conﬁguration to the network, the output
+did not match either of the trained patterns ( Figure 3C).
+Finally, we tested the ability of the model to learn a number o f
+target signals varying in duration and frequency. We genera ted
+a number of target functions consisting of ﬁltered noise (as
+described previously), and varied their duration as well as thecut-
+oﬀ frequencies of band-pass ﬁltering. The network performed
+optimally for tasks with relatively low frequency ( <30 Hz) and
+shorter duration ( <5 s), and had a decent performance for even
+longer targets (e.g., correlation of r = 0.5 for a time of 7 s and a
+frequency below 30 Hz; Figure 3D).
+In sum, the model was able to learn multiple tasks in parallel
+based on the phase conﬁguration of the oscillatory inputs to th e
+SRNN units. The range of target signals that could be learned was
+dependent upon their duration and frequency. The next section
+will investigate another aptitude of the network, where a targ et
+signal can be rescaled in time without further training.
+3.4. T emporal Rescaling of Neuronal
+Activity
+A key aspect of many behavioral tasks based on temporal
+sequences is that once learned they can be performed faster or
+slower without additional training. For example, when a new
+word is learned, it can be spoken faster or slower without havi ng
+to learn the diﬀerent speeds separately.
+We propose a straightforward mechanism to rescale a learned
+temporal sequence in the model. Because the activity of the model
+strongly depends upon the structure of its oscillatory inputs, w e
+conjectured that the model may generate a slower or faster output
+by multiplying the period of the oscillatory inputs by a common
+factor. Biologically, such a factor might arise from aﬀerent neural
+structures that modulate oscillatory activity (
+Brunel, 2000). Due
+to the highly non-linear properties of the network, it is not tri vial
+that rescaling the inputs would expand or compress its activity
+in a way that preserves key features of the output (
+Goudar and
+Buonomano, 2018).
+To test the above mechanism, we trained a SRNN receiving
+sine wave inputs to produce a temporal sequence of low-pass
+ﬁltered random activity. After the pair of input-target was trained
+for 10 epochs, we tested the network by injecting it with sine
+waves that were either compressed or expanded by a ﬁxed
+factor relative to the original inputs ( Figure 4A). To evaluate
+the network’s ability to faithfully replay the learned seque nce,
+we computed the Pearson correlation between the output of the
+network ( Figure 4B) and a compressed or expanded version of
+the target signal.
+Performance degraded gradually with inputs that were
+expanded or contracted in time relative to the target signal ( i.e.,
+as the rescaling factor moved further away from 1) ( Figure 4C).
+Further, performance degraded more slowly beyond a rescalin g
+factor of 1.5, particularly when input noise was absent, suggesting
+some capacity of the network to expand the target signal in
+time ( Figure S7). This result oﬀered a qualitative match to
+experimental ﬁndings (
+Hardy et al., 2018 ) and the performance
+of the network was tolerant to small phase deviations resultin g
+from the addition of random jitter in the phase of all the input
+oscillations (Figure S8).
+In sum, rescaling the speed of the input oscillations by
+a common factor lead to a corresponding rescaling of the
+learned task, with compressed neural activity resulting in m ore
+error than expanded activity. The next section examines some
+Frontiers in Computational Neuroscience | www.frontiersi n.org 8 September 2020 | Volume 14 | Article 78
+
+
+--- Page 9 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+FIGURE 4 | T emporal rescaling of the network’ s activity. (A) Activity of two input units with different rescaling factor s. Each phase is represented in a different color.
+The two dots shown for the different velocities are spaced at a constant proportion of the whole duration, and show that th e phase alignment of the two oscillators is
+preserved across different rescaling factors. (B) Output of the network for different rescaling factors. The t arget is represented by the gray dashed line. (C) Pearson
+correlation between the output and the target function for d ifferent rescaling factors and different input noise varia nce (σ ). (D) Spiking activity of the RNN at 0.75X, 1X,
+2X, and 3X sorted based on the peak of the activity at the origi nal scaling (1X). (E) Average excitatory (red), inhibitory (blue), and external input (green) received by each
+cell aligned on their peak ﬁring rate (at t = 0 ms). The combined inputs (black, external + excitation - in hibition) is represented at the bottom.
+of the underlying features of activity in a SRNN driven by
+oscillatory inputs.
+3.5. T emporal Selectivity of Artiﬁcial
+Neurons
+A hallmark of temporal processing in brain circuits is that som e
+subpopulations of neurons increase their ﬁring rate at speciﬁc
+times during the execution of a timed task (
+Harvey et al., 2012;
+Mello et al., 2015; Bakhurin et al., 2017 ). To see whether this
+feature was present in the model, we injected similar oscillat ory
+inputs as above (10 input units between 5 and 10 Hz for 1 s)
+for 30 trials. To match experimental analyses, we convoluted
+the ﬁring rate of each neuron from the SRNN with a Gaussian
+kernel (s.d. = 20 ms), averaged their activity over all trials,
+and converted the resulting values to a z-score. To facilitat e
+visualization, we then sorted these z-scores by the timing o f their
+peak activity. We retained only the neurons that were active
+during the simulations (71%). Results showed a clear temporal
+selectivity whereby individual neurons increased their ﬁr ing rate
+at a preferred time relative to the onset of each trial ( Figure 4D).
+These “selectivity peaks” in neural activity were maintaine d
+in the same order when we expanded or contracted the
+input oscillations by a ﬁxed factor ( Figure 4A), and sorted
+neurons based on the original input oscillations ( Figure 4D),
+thus capturing recent experimental results (
+Mello et al., 2015 ).
+To shed light on the ability of simulated neurons to exhibit
+temporal selectivity, we examined the timing of excitatory a nd
+inhibitory currents averaged across neurons of the SRNN. We
+then aligned these currents to the timing of selectivity peak s
+and found elevated activity around the time of trial-averag ed
+peaks (Figure 4E). Therefore, both the input E/I currents and the
+external inputs drive the activity of the neurons near their pe ak
+response, showing that both intrinsic and external sources d rives
+the temporal selectivity of individual neurons.
+In sum, neurons from the SRNN show sequential patterns
+of activity by leveraging a combination of external drive an d
+recurrent connections within the network. Next, we examine d
+the ability of the model to learn a naturalistic task of
+speech production.
+3.6. Learning Natural Speech, Fast, and
+Slow
+In a series of simulations, we turned to a biologically and
+behaviorally relevant task of natural speech learning. This t ask
+is of particular relevance to temporal sequence learning give n the
+precise yet ﬂexible nature of speech production: once we learn t o
+pronounce a word, it is straightforward to alter the speed at which
+this word is spoken without the need for further training. We thus
+Frontiers in Computational Neuroscience | www.frontiersi n.org 9 September 2020 | Volume 14 | Article 78
+
+
+--- Page 10 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+FIGURE 5 | Speech learning and production with temporal rescaling. (A) Workﬂow of the transformation and learning of the target audi o sequence. (B) The input
+frequencies are either sped-up or slowed-down in order to in duce temporal rescaling of the speed of execution of the task . (C) The rescaled output spectrograms are
+scaled back to the original speed in order to compare them to t he target spectrogram. (D) Average correlation between the output and target of all cha nnels of the
+spectrograms for the different rescaling factors.
+designed a task where an artiﬁcial neural network must learn to
+utter spoken words in the English language and pronounce them
+slower or faster given the appropriate input, without retrainin g.
+To train a network on this task, we began by extracting the
+waveform from an audio recording of the word “reservoir” and
+converting this waveform to a spectrogram ( Figure 5A). We
+then employed a compression algorithm to bin the full range of
+frequencies into 64 channels spanning a range from 300 Hz to 8
+kHz (see section 2). Each of these channels were mapped onto
+an individual readout unit of the model. Synaptic weights of t he
+SRNN to the readout were trained to reproduce the amplitude
+of the 64 channels over time. The output spectrogram obtained
+from the readout units was converted to an audio waveform and
+compared to the target waveform (see Movie S1).
+Following training, the network was able to produce a
+waveform that closely matched the target word ( Figure 5A). To
+examine the ability of the network to utter the same word fast er
+or slower, we employed the rescaling approach described earlie r,
+where we multiplied the input oscillations by a constant factor
+(Figure 4A).
+Our model was able to produce both faster and slower speech
+than what it had learned (Figure 5B). Scaling the outputs back to
+Frontiers in Computational Neuroscience | www.frontiersi n.org 10 September 2020 | Volume 14 | Article 78
+
+
+--- Page 11 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+the original speed showed that the features of the spectrogram
+were well replicated ( Figure 5C). The correlation between the
+rescaled outputs and target signal decreased as a function of the
+rescaling factor ( Figure 5D), in a manner similar to the above
+results on synthetic signals ( Figure 4C).
+Results thus suggest that multiplexing oscillatory inputs
+enabled a SRNN to acquire and rescale temporal sequences
+obtained from natural speech. In the ﬁnal section below, we
+employed our model to capture hippocampal activity during a
+well-studied task of spatial navigation.
+3.7. T emporal Sequence Learning During
+Spatial Navigation
+Thus far, we have modeled tasks where units downstream of the
+SRNN are learning continuous signals in time. In this section , we
+turned to a task of spatial navigation that required the model to
+learn a discrete sequence of neural activity.
+A wealth of experiments shows that subpopulations of
+neurons become selectively active for speciﬁc task-related t ime
+intervals. A prime example is seen in hippocampal theta
+sequences (
+Foster and Wilson, 2007 ) that are observed during
+FIGURE 6 | Formation of place cell sequences and replay. (A) Subpopulations of CA3 cells oscillating in the theta range a nd projecting to CA1. CA1 place cells are
+driven by a slightly faster oscillating input upon entering their place ﬁeld. (B) RC implementation of the phenomenological model. The input layer is composed of
+oscillatory units (CA3) and CA1 is modeled by a SRNN where 10 e xcitatory units (purple) are randomly selected as place cel ls. The connections from the input to the
+place cells are subject to training. (C) T op: Each of the 10 SRNN place cells were driven by a depolariz ing oscillating input in a temporal sequence analogous to a
+mouse moving along a linear track. Bottom: Resulting theta f requency of the combined oscillations (red). Each number sh ows a place cell activated at a given time
+along the ongoing theta input. The multi-periodic input fro m CA3 guarantees that each place cell is activated with a uniq ue combination of the input, following the
+sequence in which the cell is active. (D) Multiplexing CA3 inputs generates a visible theta oscillat ion in the CA1 SRNN. (E) Spike times of the ten place cells in relation
+to the phase of the population theta activity. Each dot repre sents a spike at a certain time/position. Each cell shows a shi ft toward earlier theta phase as the animal
+moves along its place ﬁelds. (F) Activity of cell #10 upon entering its place ﬁeld. T op: theta b and-passed activity of the SRNN (red) and place ﬁeld related i nput (dashed
+black). Bottom: phase of the theta oscillation (gray) and sp ike times. (G) T op shows a heatmap of the place cell activity and bottom show s the spike raster during each
+phase of training. Before training: All place cells are sile nt. During training: place cells are depolarized upon enter ing their place ﬁeld. After training: a similar sequence
+is evoked without the external stimulation used during trai ning. (H) Rescaling the input (factor of X0.15) leads to a high-freque ncy input reminiscent of ripples. A
+compressed version of the sequence learned in (G) is evoked, and a reversed sequence is evoked when a reverse “r ipple” is injected in the SRNN.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 11 September 2020 | Volume 14 | Article 78
+
+
+--- Page 12 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+spatial navigation in rodents, where individual place cells
+(
+O’Keefe, 1976 ) increase their ﬁring rate at a given location in
+space (place ﬁelds). During spatial navigation, the hippocampus
+shows oscillatory activity in the theta range (4–12 Hz), lik ely
+originating from both the medial septum (
+Dragoi et al., 1999) and
+within hippocampus (Traub et al., 1989; Goutagny et al., 2009 ).
+In a series of simulations, we examined how neurons in a
+SRNN may beneﬁt from theta oscillations to bind and replay such
+discrete place cells sequences. We designed a SRNN (associate d
+with area CA1,
+Foster and Wilson, 2007 ) that received inputs
+from multiple input oscillators (CA3, Montgomery et al., 2009 )
+(Figures 6A,B). We randomly selected 10 excitatory units within
+the SRNN and labeled them as “place cells.” To simulate the
+response of place cells to an environmental input indicating th e
+spatial location of the animal (
+Frank et al., 2000), we depolarized
+these cells by an oscillating input at 10 Hz for 600 ms with a
+speciﬁc onset that diﬀered across neurons in order to capture
+their respective place ﬁelds (assuming a ﬁxed spatiotemporal
+relation of 100 ms = 5 cm on a linear track). In this way, the
+sequential activation of place cells from the SRNN mimicked th e
+response of CA1 neurons to an animal walking along a linear
+track (Figure 6C). Although we modeled the task as a sequence
+of multiple place cells, it could also be performed with individ ual
+place cells.
+To capture the eﬀect of theta oscillations on CA1 activity,
+all neurons from the SRNN were driven by a combination of
+multiple oscillating inputs where the frequency of each input
+was drawn from a uniform distribution in the range of 7–
+9 Hz. Connections from the input units and the place cells
+within the SRNN were modiﬁed by a synaptic plasticity rule
+(see section 2).
+As expected from the input oscillators, mean population
+activity of the SRNN exhibited prominent theta activity
+(Figure 6D). To assess the baseline performance of the model, we
+ran an initial simulation with oscillatory inputs but no syna ptic
+plasticity or place ﬁelds (i.e., no environmental inputs to theplace
+cells). All place cells of the model remained silent ( Figure 6G).
+Next, we ran a training phase simulating a single lap of the virtual
+track lasting 5 s, where place cells received oscillatory input s
+(CA3) as well as a depolarizing oscillation (10 Hz) whenever
+the cell entered its place ﬁeld. During this lap, individual pla ce
+cells entered their respective ﬁeld only once. We assessed th e
+performance of the model during a testing phase where both
+synaptic plasticity and depolarizing oscillations were turne d oﬀ.
+During the testing phase, place cells yielded a clear sequence
+of activation that matched the ﬁring pattern generated durin g
+training ( Figure 6G). Thus, place cell activity was linked to the
+phase of the oscillatory inputs after a single lap of exploratio n.
+Going further, we explored two key aspects of place cell
+activity in the SRNN that are reported in hippocampus, namely
+phase precession and rapid replay. During phase precession, the
+phase of ﬁring of place cells exhibits a lag that increases with
+every consecutive cycle of the theta oscillation (
+O’Keefe and
+Recce, 1993; Foster and Wilson, 2007 ). We examined this eﬀect
+in the model by extracting the instantaneous phase of ﬁring
+relative to the global ﬁring rate ﬁltered between 4 and 12 Hz. The
+activity of individual place cells from the SRNN relative to th eta
+activity exhibited an increasing phase lag characteristic o f phase
+precession (Figures 6E,F).
+A second feature of hippocampal activity is the rapid replay of
+place cells during rest and sleep in a sequence that mirrors th eir
+order of activation during navigation (
+Lee and Wilson, 2002 ).
+This replay can arise in either a forward or reverse order from
+the original sequence of activation (
+Foster and Wilson, 2006). We
+compressed (factor of 0.15) the CA3 theta oscillations injec ted
+in the SRNN during training, resulting in rapid (50–55 Hz)
+bursts of activity ( Figure 6H). These fast oscillations mimicked
+the sharp-wave ripples that accompany hippocampal replay (
+Lee
+and Wilson, 2002). In response to these ripples, place cells of the
+SRNN exhibited a pattern of response that conserved the order
+of activation observed during training ( Figure 6H). Further, a
+reverse replay was obtained by inverting the ripples (that is,
+reversing the order of the compressed sequence) presented to t he
+SRNN (Figure 6H).
+In sum, oscillatory inputs allowed individual neurons of the
+model to respond selectively to external inputs in a way that
+captured the sequential activation and replay of hippocampal
+place cells during a task of spatial navigation.
+4. DISCUSSION
+4.1. Summary of Results
+Taken together, our results suggest that large recurrent ne tworks
+can beneﬁt from autonomously generated oscillatory inputs in
+order to learn a wide variety of artiﬁcial and naturalistic s ignals,
+and exhibit features of neural activity that closely resembl e
+neurophysiological experiments.
+One series of simulations trained the model to replicate
+simple shapes in 2D coordinates. Based upon the structure of
+its oscillatory inputs, the model ﬂexibly switched between tw o
+shapes, thus showing a simple yet clear example of multitasking
+with a recurrent network.
+When we modulated the period of input oscillations delivered
+to neurons of the SRNN, the model was able to produce an
+output that was faithful to the target signal, but sped up or
+slowed down by a constant factor (
+Mello et al., 2015; Hardy
+et al., 2018). Oscillations served to train a recurrent network that
+reproduced natural speech and generated both slower and faste r
+utterances of natural words with no additional training. Us ing
+further reﬁnements of the model, we employed this principle of
+oscillation-driven network to capture the fast replay of place c ells
+during a task of spatial navigation.
+Below we discuss the biological implications of our model as
+well as its applications and limitations.
+4.2. Biological Relevance and Predictions
+of the Model
+Despite some fundamental limitations common to most
+computational models of brain activity, our approach
+was designed with several key features of living neuronal
+networks, including spiking neurons, Dale’s principle, balanc ed
+excitation/inhibition, a heterogeneity of neuronal and sy naptic
+parameters, propagation delays, and conductance-based
+synapses (
+van Vreeswijk and Sompolinsky, 1996; Sussillo and
+Frontiers in Computational Neuroscience | www.frontiersi n.org 12 September 2020 | Volume 14 | Article 78
+
+
+--- Page 13 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+Abbott, 2009; Ingrosso and Abbott, 2019 ). We used a learning
+algorithm that isn’t biologically plausible to train the rea dout
+unit (recursive least-square). However, given that the SRNN ’s
+dynamics is independent of the readout’s output, any other
+learning algorithm would be compatible with our model. We
+used a non-biological training algorithm (RLS) in this work,
+because we are interested in the trained representation of th e
+network and not the learning itself.
+Further, and most central to this work, our model included
+neural oscillations along a range of frequencies that close ly
+matched those reported in electrophysiological studies (
+Buzsáki
+and Draguhn, 2004; Yuste et al., 2005 ). However, the optimal
+range of frequencies depends on the electrophysiological and
+synaptic time constants of the network (
+Nicola and Clopath,
+2017). Although there is an abundance of potential roles for
+neural oscillations in neuronal processing, much of their function
+remain unknown (Wang, 2010). Here, we proposed that multiple
+heterogeneous oscillations may be combined to generate an
+input whose duration greatly exceeds the time-course of any
+individual oscillation. In turn, this multiplexed input allo ws
+a large recurrent network operating in the chaotic regime to
+generate repeatable and stable patterns of activity that can be read
+out by downstream units.
+It is well-established that central pattern generators in
+lower brain regions such as the brain stem and the spinal
+cord are heavily involved in the generation of rhythmic
+movements that match the period of simpler motor actions
+(e.g., walking or swimming;
+Marder and Bucher, 2001 ). From
+an evolutionary perspective, it is compelling that higher brai n
+centers would recycle the same mechanisms ( Yuste et al., 2005 )
+to generate more complex and non-repetitive actions ( Rokni
+and Sompolinsky, 2011; Churchland et al., 2012 ). In this vein,
+Churchland et al. (2012) showed that both periodic and quasi-
+periodic activity underlie a non-periodic motor task of reach ing.
+Our model provides a framework to explain how such activity
+can be exploited by living neuronal networks to produce rich
+dynamics whose goal is to execute autonomous aperiodic tasks .
+While our model shows that oscillatory networks can generate
+input oscillations that control the activity of a SRNN ( Figure 2),
+the biological identity of these oscillatory networks is la rgely
+circuit-dependent and may originate from either intrinsic o r
+extrinsic sources. In the hippocampus, computational (
+Traub
+et al., 1989 ) and experimental ( Goutagny et al., 2009 ) ﬁndings
+suggest an intrinsic source to theta oscillations. Speciﬁcal ly,
+studies raise the possible role of CA3 in forming a multi-perio dic
+drive consisting of several interdependent theta generator s that
+activate during spatial navigation ( Montgomery et al., 2009 ).
+However the exact source of this periodic drive is still debat ed,
+where the medial septum and the entorhinal cortex could play a
+signiﬁcant role in the theta activity recorded in the hippocam pus
+(
+Buzsáki, 2002). Additionally, place cells are also found in other
+subﬁelds of the hippocampus such as CA3 ( Lee et al., 2004 ).
+Therefore, alternative architectures involving those hippo campal
+structures could be used to implement our oscillation based
+model of spatial navigation.
+Similarly, the neural origin of the tonic inputs controlling the
+activity of the oscillatory networks is not explicitly accoun ted
+for in our simulations. However, it is well-established that
+populations of neurons can exhibit bistable activity with UP-
+states lasting for several seconds (
+Wang, 2016) that could provide
+the necessary input to drive the transition from asynchronou s to
+synchronous activity in oscillatory networks.
+Going beyond an in silico replication of neurophysiological
+ﬁndings, our model makes two empirically testable prediction s.
+If one was to experimentally isolate the activity of the input
+oscillators, one could show that: (i) a key neural signature o f
+a recurrent circuit driven by multi-periodic oscillations i s the
+presence of inter-trial correlations between the phase of the se
+oscillations; and (ii) the period of the input oscillators shou ld
+appear faster or slower to match the rescaling factor of the
+network. This correspondence between the input oscillations and
+temporal rescaling is a generic mechanism behind the model’s
+ability to perform a wide variety of tasks, from spatial navigat ion
+to speech production.
+4.3. Related Models
+Our approach was inspired by predecessors in computational
+neuroscience. Multiplexing multiple oscillations as a way to
+generate long sequences of non-repeating inputs was ﬁrst
+introduced by
+Miall (1989) , with a model of interval timing
+relying on the coincident activation of multiple oscillators
+of diﬀerent frequencies. This idea served as a basis for the
+striatal beat frequency model (
+Matell and Meck, 2004 ), where
+multiple cortical regions are hypothesized to project to the
+striatum which acts as a coincidence detector that encodes
+timing intervals. A similar mechanism was also suggested for
+the representation of space by grid cells in rodents (
+Fiete
+et al., 2008 ). Grid cells have periodic activation curves spanning
+diﬀerent spatial periods ( Moser et al., 2008 ), and their activation
+may generate a combinatorial code employed by downstream
+regions to precisely encode the location of the animal in space
+(
+Fiete et al., 2008).
+Other studies have suggested that phase precession during
+spatial navigation could originate from a dual oscillator pro cess
+(O’Keefe and Recce, 1993; Burgess et al., 2007 ). Along this
+line, a recent model of the hippocampus uses the interference
+between two oscillators to model the neural dynamics related
+to spatial navigation (
+Nicola and Clopath, 2019 ). Although this
+model shares similarities with ours, a fundamental diﬀerenc e
+is that our model uses the phase of combined oscillators to
+create a unique input at every time-step of a task, whereas
+their model relies on the beat of the combined frequencies.
+Additionally, in our model, increasing the frequency of input
+oscillations by a common factor leads to compressed sequences
+of activity. By comparison, in the model of
+Nicola and Clopath
+(2019), sequences are compressed by removing an extrinsic input
+oscillator. More experimental data will be needed to support
+either model.
+4.4. Limitations and Future Directions
+In our model, periodic activity was readily observable in the
+SRNN dynamics due to the input drive (e.g., Figure 1C or
+Figure 6D). However, the architecture of our model represents a
+simpliﬁcation of biological networks where several intermed iate
+Frontiers in Computational Neuroscience | www.frontiersi n.org 13 September 2020 | Volume 14 | Article 78
+
+
+--- Page 14 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+stages of information processing occur between sensory input
+and behavioral output. Oscillatory activity resulting from a
+multi-periodic drive might occur in one, but not necessarily
+all stages of processing. Further work could examine this iss ue
+by stacking SRNN connected in a feed-forward manner; such
+a hierarchical organization may have important computationa l
+beneﬁts (
+Gallicchio et al., 2017).
+In the spatial navigation task, we ensured that the location
+of the animal was perfectly correlated with the time spent in
+the place ﬁeld of each cell. This is, of course, an idealized
+scenario that does not account for free exploration and
+variable speed of navigation along a track. These factors wou ld
+decorrelate the spatial location of the animal and the time
+elapsed in the place ﬁeld. Hence, further work would beneﬁt
+from a more ecologically-relevant version of the navigatio n
+task. This new version of the task might aim to capture
+how the time spent in a given place ﬁeld impacts the link
+between the activity of place cells and theta oscillations
+(
+Schmidt et al., 2009).
+Finally, our task of speech production was restricted to
+learning a spectrogram of the target signal. This simpliﬁed
+task did not account for the neural control of articulatory
+speech kinetics, likely involving the ventral sensory-motor cortex
+(
+Conant et al., 2018; Anumanchipalli et al., 2019 ).
+4.4.1. Applications
+Our modeling framework is poised to address a broad
+spectrum of applications in machine learning of natural and
+artiﬁcial signals. With recent advances in reservoir comput ing
+(
+Salehinejad et al., 2017 ) and its physical implementations
+(Tanaka et al., 2018 ), our approach oﬀers an alternative to using
+external arbitrary time-varying signals to control the dyn amics
+of a recurrent network. Our model may also be extended
+to neuromorphic hardware, where it may beneﬁt chaotic
+networks employed in robotic motor control (
+Folgheraiter et al.,
+2019). Finally, our model is, to our knowledge, the ﬁrst to
+produce temporal rescaling of natural speech, with implication s
+extending to conversational agents, brain-computer interf aces,
+and speech synthesis.
+Overall, our model oﬀers a compelling theory for the
+role of neural oscillations in temporal processing. Support
+from additional experimental evidence could impact our
+understanding of how brain circuits generate long sequence s of
+activity that shape both cognitive processing and behavior.
+DATA AVAILABILITY STATEMENT
+The custom python scripts replicating the main results of this
+article can be found at https://github.com/lamvin/Oscillat ion_
+multiplexing.
+AUTHOR CONTRIBUTIONS
+PV-L conceived the model and ran the simulations. PV-L and
+MC performed the data analysis. PV-L and J-PT designed
+the experiments. PV-L, MC, and J-PT wrote the manuscript.
+All authors contributed to the article and approved the
+submitted version.
+FUNDING
+This work was supported by a doctoral scholarship from the
+Natural Sciences and Engineering Research Council (NSERC)
+to PV-L, the program of scholarships of the 2nd cycle from
+the Fonds de recherche du Québec—Nature et technologies
+(FRQNT) to MC, and a Discovery grant to J-PT from NSERC
+(Grant No. 210977).
+ACKNOWLEDGMENTS
+This manuscript has been released as a pre-print at bioRxiv
+(
+Vincent-Lamarre et al., 2020).
+SUPPLEMENTARY MATERIAL
+The Supplementary Material for this article can be found
+online at: https://www.frontiersin.org/articles/10.338 9/fncom.
+2020.00078/full#supplementary-material
+REFERENCES
+Abarbanel, H. D., Creveling, D. R., and Jeanne, J. M. (2008).
+Estimation of parameters in nonlinear systems using balanced
+synchronization. Phys. Rev. E 77:016208. doi: 10.1103/PhysRevE.77.0
+16208
+Abbott, L. F., DePasquale, B., and Memmesheimer, R.-M. (2016). B uilding
+functional networks of spiking model neurons. Nat. Neurosci . 19:350.
+doi: 10.1038/nn.4241
+Anumanchipalli, G. K., Chartier, J., and Chang, E. F. (2019). Speec h
+synthesis from neural decoding of spoken sentences. Nature 568:493.
+doi: 10.1038/s41586-019-1119-1
+Bakhurin, K. I., Goudar, V., Shobe, J. L., Claar, L. D., Buonoman o,
+D. V., and Masmanidis, S. C. (2017). Diﬀerential encoding of ti me
+by prefrontal and striatal network dynamics. J. Neurosci . 37:854.
+doi: 10.1523/JNEUROSCI.1789-16.2016
+Bittner, K. C., Milstein, A. D., Grienberger, C., Romani, S., an d Magee,
+J. C. (2017). Behavioral time scale synaptic plasticity underlies
+CA1 place ﬁelds. Science 357, 1033–1036. doi: 10.1126/science.aa
+n3846
+Brunel, N. (2000). Dynamics of sparsely connected networks of exci tatory
+and inhibitory spiking neurons. J. Comput. Neurosci . 8, 183–208.
+doi: 10.1023/A:1008925309027
+Brunel, N., and Hansel, D. (2006). How noise aﬀects the synchronization properties
+of recurrent networks of inhibitory neurons. Neural Comput . 18, 1066–1110.
+doi: 10.1162/neco.2006.18.5.1066
+Buhusi, C. V., and Meck, W. H. (2005). What makes us tick? Functi onal
+and neural mechanisms of interval timing. Nat. Rev. Neurosci . 6, 755–765.
+doi: 10.1038/nrn1764
+Buonomano, D. V., and Maass, W. (2009). State-dependent computa tions:
+spatiotemporal processing in cortical networks. Nat. Rev. Neurosci . 10,
+113–125. doi: 10.1038/nrn2558
+Frontiers in Computational Neuroscience | www.frontiersi n.org 14 September 2020 | Volume 14 | Article 78
+
+
+--- Page 15 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+Burgess, N., Barry, C., and O’Keefe, J. (2007). An oscillatory int erference model of
+grid cell ﬁring. Hippocampus 17, 801–812. doi: 10.1002/hipo.20327
+Buzsáki, G. (2002). Theta oscillations in the hippocampus. Neuron 33, 325–340.
+doi: 10.1016/S0896-6273(02)00586-X
+Buzsáki, G., and Draguhn, A. (2004). Neuronal oscillations in co rtical networks.
+Science 304, 1926–1929. doi: 10.1126/science.1099745
+Churchland, M. M., Cunningham, J. P., Kaufman, M. T., Foster, J. D., Nuyujukian,
+P., Ryu, S. I., et al. (2012). Neural population dynamics during reaching. Nature
+487, 51–56. doi: 10.1038/nature11129
+Conant, D. F., Bouchard, K. E., Leonard, M. K., and Chang, E. F.
+(2018). Human sensorimotor cortex control of directly measured vocal
+tract movements during vowel production. J. Neurosci . 38, 2955–2966.
+doi: 10.1523/JNEUROSCI.2382-17.2018
+Destexhe, A. (1997). Conductance-based integrate-and-ﬁre mo dels. Neural
+Comput. 9, 503–514. doi: 10.1162/neco.1997.9.3.503
+Dragoi, G., Carpi, D., Recce, M., Csicsvari, J., and Buzsáki, G. ( 1999).
+Interactions between hippocampus and medial septum during sharp wave s
+and theta oscillation in the behaving rat. J. Neurosci . 19, 6191–6199.
+doi: 10.1523/JNEUROSCI.19-14-06191.1999
+Fiete, I. R., Burak, Y., and Brookings, T. (2008). What grid cells c onvey about rat
+location. J. Neurosci. 28, 6858–6871. doi: 10.1523/JNEUROSCI.5684-07.2008
+Folgheraiter, M., Keldibek, A., Aubakir, B., Gini, G., Franchi, A. M., and Bana, M.
+(2019). A neuromorphic control architecture for a biped robot. Robot. Auton.
+Syst. 120:103244. doi: 10.1016/j.robot.2019.07.014
+Foster, D. J., and Wilson, M. A. (2006). Reverse replay of behavio ural
+sequences in hippocampal place cells during the awake state. Nature 440:680.
+doi: 10.1038/nature04587
+Foster, D. J. and Wilson, M. A. (2007). Hippocampal theta sequences. Hippocampus
+17, 1093–1099. doi: 10.1002/hipo.20345
+Frank, L. M., Brown, E. N., and Wilson, M. (2000). Trajectory encod ing
+in the hippocampus and entorhinal cortex. Neuron 27, 169–178.
+doi: 10.1016/S0896-6273(00)00018-0
+Gallicchio, C., Micheli, A., and Pedrelli, L. (2017). Deep reservoi r
+computing: a critical experimental analysis. Neurocomputing 268, 87–99.
+doi: 10.1016/j.neucom.2016.12.089
+Goudar, V., and Buonomano, D. V. (2018). Encoding sensory and mo tor patterns
+as time-invariant trajectories in recurrent neural networks. eLife 7:e31134.
+doi: 10.7554/eLife.31134
+Goutagny, R., Jackson, J., and Williams, S. (2009). Self-generat ed theta oscillations
+in the hippocampus. Nat. Neurosci. 12, 1491–1493. doi: 10.1038/nn.2440
+Grondin, S. (2010). Timing and time perception: a review of recent be havioral and
+neuroscience ﬁndings and theoretical directions. Attent. Percept. Psychophys .
+72, 561–582. doi: 10.3758/APP.72.3.561
+Hardy, N. F., Goudar, V., Romero-Sosa, J. L., and Buonomano, D. V.
+(2018). A model of temporal scaling correctly predicts that motor timing
+improves with speed. Nat. Commun . 9:4732. doi: 10.1038/s41467-018-
+07161-6
+Harvey, C. D., Coen, P., and Tank, D. W. (2012). Choice-speciﬁ c sequences in
+parietal cortex during a virtual-navigation decision task. Nature 484, 62–68.
+doi: 10.1038/nature10918
+Haykin, S. (2002). Adaptive Filter Theory. Upper Saddle River, NJ: Prentice Hall.
+Ingrosso, A. and Abbott, L. F. (2019). Training dynamically
+balanced excitatory-inhibitory networks. PLoS ONE 14:e0220547.
+doi: 10.1371/journal.pone.0220547
+Jaeger, H. (2002). “Adaptive nonlinear system identiﬁcation w ith echo state
+networks, ” in NIPS’02: Proceedings of the 15th International Conference on
+Neural Information Processing Systems (V ancouver, BC), 593–600.
+Kastner, K. (2019). Audio Tools for Numpy/Python. Available online at: https://gist.
+github.com/kastnerkyle/179d6e9a88202ab0a2fe
+Kempter, R., Gerstner, W., and van Hemmen, J. L. (1999). Hebbian learn ing and
+spiking neurons. Phys. Rev. E 59, 4498–4514. doi: 10.1103/PhysRevE.59.4498
+Laje, R., and Buonomano, D. V. (2013). Robust timing and motor pat terns
+by taming chaos in recurrent neural networks. Nat. Neurosci . 16, 925–933.
+doi: 10.1038/nn.3405
+Lee, A. K., and Wilson, M. A. (2002). Memory of sequential experien ce
+in the hippocampus during slow wave sleep. Neuron 36, 1183–1194.
+doi: 10.1016/S0896-6273(02)01096-6
+Lee, I., Yoganarasimha, D., Rao, G., and Knierim, J. J. (2004). Co mparison of
+population coherence of place cells in hippocampal subﬁelds CA1 and CA3.
+Nature 430, 456–459. doi: 10.1038/nature02739
+Lengyel, M., Szatmáry, Z., and Erdi, P. (2003). Dynamically detuned oscillations
+account for the coupled rate and temporal code of place cell ﬁring.
+Hippocampus 13, 700–714. doi: 10.1002/hipo.10116
+Maass, W., Natschläger, T., and Markram, H. (2002). Real-time computing without
+stable states: a new framework for neural computation based on perturb ations.
+Neural Comput. 14, 2531–2560. doi: 10.1162/089976602760407955
+Marder, E. and Bucher, D. (2001). Central pattern generators and
+the control of rhythmic movements. Curr. Biol . 11, R986–R996.
+doi: 10.1016/S0960-9822(01)00581-4
+Marder, E., and Calabrese, R. L. (1996). Principles of rhythmic motor pattern
+generation. Physiol. Rev. 76, 687–717. doi: 10.1152/physrev.1996.76.3.687
+Matell, M. S., and Meck, W. H. (2004). Cortico-striatal circuits and interval timing:
+coincidence detection of oscillatory processes. Cogn. Brain Res . 21, 139–170.
+doi: 10.1016/j.cogbrainres.2004.06.012
+Mello, G. B., Soares, S., and Paton, J. J. (2015). A scalable populatio n code for time
+in the striatum. Curr. Biol. 25, 1113–1122. doi: 10.1016/j.cub.2015.02.036
+Miall, C. (1989). The storage of time intervals using oscillating ne urons. Neural
+Comput. 1, 359–371. doi: 10.1162/neco.1989.1.3.359
+Montgomery, S. M., Betancur, M. I., and Buzsáki, G. (2009). Beh avior-dependent
+coordination of multiple theta dipoles in the hippocampus. J. Neurosci . 29,
+1381–1394. doi: 10.1523/JNEUROSCI.4339-08.2009
+Moser, E. I., Kropﬀ, E., and Moser, M.-B. (2008). Place cells, grid c ells, and
+the brain’s spatial representation system. Annu. Rev. Neurosci . 31, 69–89.
+doi: 10.1146/annurev.neuro.31.061307.090723
+Nicola, W., and Clopath, C. (2017). Supervised learning in spiking neural networks
+with FORCE training. Nat. Commun. 8:2208. doi: 10.1038/s41467-017-01827-3
+Nicola, W., and Clopath, C. (2019). A diversity of interneurons an d Hebbian
+plasticity facilitate rapid compressible learning in the hippocampus. Nat.
+Neurosci. 22:1168. doi: 10.1038/s41593-019-0415-2
+O’Keefe, J. (1976). Place units in the hippocampus of the freely movin g rat. Exp.
+Neurol. 51, 78–109. doi: 10.1016/0014-4886(76)90055-8
+O’Keefe, J., and Recce, M. L. (1993). Phase relationship betwe en hippocampal
+place units and the EEG theta rhythm. Hippocampus 3, 317–330.
+doi: 10.1002/hipo.450030307
+Pascanu, R., Mikolov, T., and Bengio, Y. (2013). “On the diﬃcu lty of
+training recurrent neural networks, ” in International Conference on Machine
+Learning, 1310–1318. Available online at: https://dl.acm.org/doi/10.555 5/
+3042817.3043083
+Paton, J. J., and Buonomano, D. V. (2018). The neural basis of ti ming:
+distributed mechanisms for diverse functions. Neuron 98, 687–705.
+doi: 10.1016/j.neuron.2018.03.045
+Rokni, U., and Sompolinsky, H. (2011). How the brain generates movement .
+Neural Comput. 24, 289–331. doi: 10.1162/NECO_a_00223
+Sainburg, T. (2018). Spectrograms, MFCCs, and Inversion in Python . Available
+online at: https://timsainburg.com/python-mel-compression-inver sion.html
+Salehinejad, H., Sankar, S., Barfett, J., Colak, E., and V alaee, S. (2017). Recent
+advances in recurrent neural networks. arXiv [Preprint]. arXiv:1801.01078.
+Schmidt, R., Diba, K., Leibold, C., Schmitz, D., Buzsáki, G., and Kempter, R. (2009).
+Single-trial phase precession in the hippocampus. J. Neurosci. 29, 13232–13241.
+doi: 10.1523/JNEUROSCI.2270-09.2009
+Sussillo, D., and Abbott, L. (2009). Generating coherent patterns
+of activity from chaotic neural networks. Neuron 63, 544–557.
+doi: 10.1016/j.neuron.2009.07.018
+Tanaka, G., Y amane, T., Héroux, J. B., Nakane, R., Kanazawa, N., Takeda, S.,
+et al. (2018). Recent advances in physical reservoir computing: a review. arXiv
+preprint arXiv:1808.04962. doi: 10.1016/j.neunet.2019.03.005
+Thivierge, J.-P., Comas, R., and Longtin, A. (2014). Attracto r dynamics in local
+neuronal networks. Front. Neural Circ. 8:22. doi: 10.3389/fncir.2014.00022
+Traub, R. D., Miles, R., and Wong, R. K. S. (1989). Model of the ori gin of rhythmic
+population oscillations in the hippocampal slice. Science 243, 1319–1325.
+doi: 10.1126/science.2646715
+van Vreeswijk, C., and Sompolinsky, H. (1996). Chaos in neuronal ne tworks
+with balanced excitatory and inhibitory activity. Science 274, 1724–1726.
+doi: 10.1126/science.274.5293.1724
+van Vreeswijk, C., and Sompolinsky, H. (1998). Chaotic balanced st ate
+in a model of cortical circuits. Neural Comput . 10, 1321–1371.
+doi: 10.1162/089976698300017214
+Vincent-Lamarre, P., Calderini, M., and Thivierge, J.-P. (2020) . Learning long
+temporal sequences in spiking networks by multiplexing neural oscillati ons.
+bioRxiv [Preprint]. 766758. doi: 10.1101/766758
+Frontiers in Computational Neuroscience | www.frontiersi n.org 15 September 2020 | Volume 14 | Article 78
+
+
+--- Page 16 ---
+Vincent-Lamarre et al. Multiplexing Oscillations in Spiking Neural Networks
+Vincent-Lamarre, P., Lajoie, G., and Thivierge, J.-P. (2016). Driving
+reservoir models with oscillations: a solution to the extreme structu ral
+sensitivity of chaotic networks. J. Comput. Neurosci . 41, 305–322.
+doi: 10.1007/s10827-016-0619-3
+Wang, X.-J. (2010). Neurophysiological and computational principles
+of cortical rhythms in cognition. Physiol. Rev . 90, 1195–1268.
+doi: 10.1152/physrev.00035.2008
+Wang, X.-J. (2016). Synaptic reverberation underlying mnemonic pers istent
+activity. Trends Neurosci. 24, 455–463. doi: 10.1016/S0166-2236(00)01868-3
+Yuste, R., MacLean, J. N., Smith, J., and Lansner, A. (2005). T he cortex as a central
+pattern generator. Nat. Rev. Neurosci. 6, 477–483. doi: 10.1038/nrn1686
+Conﬂict of Interest: The authors declare that the research was conducted in the
+absence of any commercial or ﬁnancial relationships that could be c onstrued as a
+potential conﬂict of interest.
+Copyright © 2020 Vincent-Lamarre, Calderini and Thivierge. This is an open-access
+article distributed under the terms of the Creative Commons Attribution License (CC
+BY). The use, distribution or reproduction in other forums is permitted, provided
+the original author(s) and the copyright owner(s) are credit ed and that the original
+publication in this journal is cited, in accordance with acc epted academic practice.
+No use, distribution or reproduction is permitted which doe s not comply with these
+terms.
+Frontiers in Computational Neuroscience | www.frontiersi n.org 16 September 2020 | Volume 14 | Article 78

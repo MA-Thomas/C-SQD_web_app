@@ -24,8 +24,8 @@ One row per paper. This table should remain stable once a paper enters the corpu
 - `source_checked_date`: date metadata/access status was checked.
 - `notes`: free-text audit notes.
 - `sample_source`: `random_base` / `landmark`. Provenance only — records *how the paper entered the corpus*, not what it is. Not a paradigm or role label. `random_base` = drawn by the stratified within-cell random procedure in `selection_protocol.md`; `landmark` = pre-specified recognized paper used for rubric calibration and contrast, never pooled into base-rate estimates. Excluded from blind packets.
-- `selection_probability`: the article's inclusion probability under the `selection_protocol.md` §1.2 draw. Populated for `random_base` papers only; blank for `landmark`.
-- `design_weight`: inverse-probability design weight used in Stratum A (random-base) estimates. Populated for `random_base` papers only; blank for `landmark`.
+- `selection_probability`: the article's inclusion probability under the `selection_protocol.md` §1.2 within-cell draw, where **cell = field × era × source × tier** (§1.1). Populated for `random_base` papers only; blank for `landmark`.
+- `design_weight`: inverse-probability design weight used in Stratum A (random-base) estimates within the completed-cells frame. Above the cell level, field/era/tier estimates are declared weighted aggregations over cells (§1.3). Populated for `random_base` papers only; blank for `landmark`.
 
 Retired columns (legacy of the matched-control design, removed): `corpus_stratum`, `corpus_stratum_label`, `pilot_role`, `matched_to_paper_id`, `matching_notes`. The outcome-defined A/B/C/D strata no longer exist; field, year, and venue tier are the sampling-frame descriptors.
 
@@ -34,7 +34,9 @@ Observed `download_status` values in the pilot include:
 - `downloaded_verified_pdf`: a source PDF was downloaded and verified as a PDF.
 - `assembled_from_public_archive_images`: a PDF was assembled from public archive page images.
 - `generated_pdf_from_pmc_xml`: a review PDF was generated locally from public PMC full-text XML because the native PDF route did not return a verified PDF.
-- `manual_access_required`: no verified public PDF copy was acquired in the automated pass.
+- `manual_access_required`: no verified public PDF copy was acquired after the scripted/direct
+  route, publisher-page browser fallback, and documented OA alternate routes were attempted
+  or explicitly queued in the acquisition notes.
 
 ## Field-Level Reference Table
 
@@ -47,6 +49,23 @@ Observed `download_status` values in the pilot include:
 - `notes`: free text.
 
 This table feeds the **secondary** machine-learning-timing hypothesis (TS1) only. The primary temporal tier — orientation drift and conversion-rate decline (TP1–TP5) — is measured directly from the era-stratified coded cohort and never reads this table, so the primary analysis can proceed before any penetration date is settled.
+
+## Stratum B Manifest
+
+`metadata/stratum_b_manifest.csv` — one row per Stratum B (landmark) paper, recording the *written criterion* under which it entered the corpus, as required by `selection_protocol.md` §2/§2.4. It is provenance for the quarantined landmark stratum, kept separate from `papers.csv` because it can list pre-specified picks before they are acquired (i.e. before a `paper_id` exists).
+
+- `paper_id`: links to `papers.csv` once the paper is acquired; blank for a not-yet-acquired pick.
+- `doi_or_identifier`: DOI or other stable identifier, so a pick can be listed pre-acquisition.
+- `proposed_title`: title as proposed/known.
+- `field`: neutral field/subfield descriptor (for reference only; Stratum B is never weighted or pooled into Stratum A field estimates).
+- `inclusion_basis`: `recognized_landmark` / `curated_interest` (a paper may carry both, semicolon-separated). `recognized_landmark` = textbook-cited / prize-associated / named "classic papers" list; `curated_interest` = project-lead selection of interest (subjective, outcome-correlated, admissible only because Stratum B is quarantined per §2.2).
+- `criterion_detail`: optional free-text rationale (e.g. the specific list, prize, or reason).
+- `added_date`: date the pick was recorded — the audit trail proving the list was fixed before coding (§2.4).
+- `added_by`: who added the pick.
+- `locked_before_coding`: `yes` / `no` — whether the pick was recorded before the paper was coded.
+- `notes`: free text.
+
+All Stratum B papers are `sample_source=landmark` in `papers.csv` and are therefore already excluded from blind packets (§Blind Packets, `selection_protocol.md` §5). Calibration analyses should subset to `inclusion_basis=recognized_landmark`; `curated_interest` papers serve face validity and the labeled Stratum A contrast (`selection_protocol.md` §2.1 items 2-3).
 
 ## Coding Tables
 
@@ -74,7 +93,7 @@ The coding tables use `paper_id` as the join key. This lets scores change withou
 
 For final analyses, prefer the multi-judge raw tables plus a declared aggregation set over the one-row-per-paper pilot summary files.
 
-The primary temporal analysis aggregates the dependence and commitment scores and the classification mix by `field × era`, where `era` is derived from `papers.csv` `year`. Use `era` as a standard grouping key over `score_aggregates_long.csv` with a declared aggregation set, so the primary temporal tier is a reproducible query rather than an ad hoc cut. No per-paper paradigm-orientation column is added: orientation stays an outcome of blinded coding.
+The primary temporal analysis aggregates the dependence and commitment scores and the classification mix by `field × era`, where `era` is derived from `papers.csv` `year`. Use `era` as a standard grouping key over `score_aggregates_long.csv` with a declared aggregation set, so the primary temporal tier is a reproducible query rather than an ad hoc cut. Within that aggregation set, combine sources and tiers per `selection_protocol.md` §1.3 (within-cell design weights, equal-source weighting within a tier, cross-tier collapse only via a declared tier weight) rather than pooling raw paper counts. No per-paper paradigm-orientation column is added: orientation stays an outcome of blinded coding.
 
 ## Blind Packets
 

@@ -202,7 +202,7 @@ export default function ComponentGalleryPage() {
         <CrweCoverageMatrix
           facts={DEMO_FACTS}
           nodes={DEMO_NODES}
-          reviewHrefBase="/scholarly-objects/demo/review"
+          reviewHrefBase="/works/demo/review"
         />
         <h3>Empty state</h3>
         <CrweCoverageMatrix facts={[]} nodes={[]} />
@@ -237,14 +237,14 @@ export default function ComponentGalleryPage() {
         <div className="pill-row">
           <GatedAction
             explain="Sign in to submit an ElementReview"
-            href="/scholarly-objects/demo/review"
+            href="/works/demo/review"
           >
             Submit ElementReview
           </GatedAction>
           <GatedAction
             className="primary-action"
             explain="Sign in to start a public episode"
-            href="/scholarly-objects/demo"
+            href="/works/demo"
           >
             Start public episode
           </GatedAction>

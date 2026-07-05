@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Check a scored v0.3 paradigm-marker calibration round against the expected key.
+"""Check a scored paradigm-marker calibration round against the expected key.
 
 The calibration set (``coding/calibration/calibration_items.csv``) declares, for each
-synthetic item C01-C10, the expected score on the dimension(s) the item is built to probe,
+synthetic item, the expected score on the dimension(s) the item is built to probe,
 plus a decision boundary describing the trap. This script compares a judge's actual scores
 in ``coding/multi_judge/paradigm_marker_ratings.csv`` (filtered to the calibration round)
 against that key.
@@ -41,6 +41,7 @@ DIMENSIONS = [
     "cp_generative_structure",
     "cp_counterfactual_intervention",
     "cp_assumption_vulnerability",
+    "cp_theory_relative_contrast",
     "si_terminal_certification",
     "si_association_framing",
     "si_accumulation_progress",
@@ -137,7 +138,7 @@ def main() -> int:
     if failures:
         print("\n".join(failures))
         print(
-            "\nRevise the anchor(s) that failed in coding_guide_v0.3_paradigm_markers.md "
+            "\nRevise the anchor(s) that failed in coding_guide.md "
             "before scoring real papers."
         )
         return 1

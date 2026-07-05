@@ -85,6 +85,7 @@ will be tested by blinded coding:
 | Statistically-oriented physics (precision cosmology, exclusion-limit searches, ML-for-physics) | Within-physics contrast to the structure-driven subfields |
 | Mechanistic molecular / cell / developmental biology | Within-biology contrast to computational biology |
 | Structure-driven condensed matter / chemistry | Fills the lower-statistics, structure-driven part of the gradient |
+| Clinical medicine / epidemiology / evidence-based medicine | High-stakes human-outcomes field with strong within-field variance: trials, causal inference, and evidence-based medicine alongside observational epidemiology, diagnostic/prognostic prediction, clinical ML, biomarkers, and health-services outcomes |
 
 ---
 
@@ -184,6 +185,23 @@ selection.
 **Mid/specialist venue anchors:** for each field, add representative non-flagship papers
 from the same years to break the top-tier-only bias.
 
+**Clinical medicine / epidemiology / evidence-based medicine (Field 9, v1 candidate):**
+- Top clinical/translational venues: NEJM, The Lancet, JAMA, The BMJ, Nature Medicine.
+- OA-heavy broad clinical venues: JAMA Network Open, PLOS Medicine, BMC Medicine, BMJ Open,
+  eClinicalMedicine, The Lancet Global Health, The Lancet Digital Health, Communications
+  Medicine.
+- Specialist variance venues: Trials, Diagnostic and Prognostic Research, Implementation
+  Science, Journal of Clinical Epidemiology, Medical Decision Making, Clinical Epidemiology.
+- Boundary: include human clinical evidence, trials, epidemiology, diagnostics/prognosis,
+  public/global health, health-services research, and clinical decision studies. Exclude
+  animal-only, in-vitro-only, basic biomedical, and purely molecular-mechanism papers by
+  default; those belong to mechanistic biology unless a predeclared translational-clinical
+  subcell requires both preclinical and human clinical evidence.
+- Acquisition: use the drawn journal/official article batch as the sampling frame. PubMed,
+  PMC, Crossref, DOI resolvers, and repositories are access/metadata routes only. For top
+  clinical journals, attempt publisher-page browser PDF/full-text download before declaring
+  a source acquisition-limited, then use documented legal OA alternates.
+
 ---
 
 ## 6. Schema changes to `papers.csv`
@@ -223,15 +241,24 @@ Retire (legacy of the matched-control design):
 - **Phase 3 (within-discipline contrast + tiers):** statistically-oriented physics; add
   mid/specialist-tier papers to each field.
 - **Phase 4 (scale-up):** move from convenience anchors to **stratified probability
-  sampling** within field x era x venue-tier cells, with design weights for any enriched
-  cell. No citation-weighting (citation is an outcome).
+  sampling** within cells (cell = field × era × source × tier, per `selection_protocol.md`
+  §1.1), with design weights for any enriched cell. No citation-weighting (citation is an
+  outcome).
+- **Phase 5 (v1 field expansion):** add clinical medicine through the predeclared
+  `journal_list_v1.md` source-block schedule. Do this only with explicit balancing targets
+  against the existing fields, so medicine does not become a convenience path for growing
+  the corpus while lower-coverage fields remain underfilled.
 
 ---
 
 ## 8. Open decisions
 
-- Final field list and how finely to split subfields.
-- Pilot target N per field x era cell (suggest ~4-6 for occupied cells).
+- Further field additions and how finely to split subfields, especially Field 9 clinical
+  subcells such as trials, diagnostics/prognosis, epidemiology, and health services.
+- Coverage target per cell is set in `selection_protocol.md` §1.1: the sampling unit is the
+  cell = [field × era × source × tier], with a documented breadth-first target of N ≥ 10 per
+  eligible cell (not a cap) and a hard field-level tier-coverage requirement. (This supersedes
+  the earlier ~4-6 per field × era suggestion.)
 - Whether to re-ID the re-absorbed former-B papers or keep IDs with retired columns.
 - Per-field ML-penetration years (for the field-level reference table).
 - How far to pursue representative sampling now vs after the fields are populated.

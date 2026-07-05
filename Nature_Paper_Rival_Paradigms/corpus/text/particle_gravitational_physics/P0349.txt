@@ -1,0 +1,4527 @@
+--- Page 1 ---
+Eur. Phys. J. C (2018) 78:70
+https://doi.org/10.1140/epjc/s10052-018-5562-1
+Regular Article - Theoretical Physics
+On-the-ﬂy reduction of open loops
+Federico Buccionia, Stefano Pozzorinib, Max Zollerc
+Physik-Institut, Universität Zürich, 8057 Zurich, Switzerland
+Received: 12 December 2017 / Accepted: 13 January 2018 / Published online: 25 January 2018
+© The Author(s) 2018. This article is an open access publication
+Abstract Building on the open-loop algorithm we intro-
+duce a new method for the automated construction of one-
+loop amplitudes and their reduction to scalar integrals. The
+key idea is that the factorisation of one-loop integrands in a
+product of loop segments makes it possible to perform var-
+ious operations on-the-ﬂy while constructing the integrand.
+Reducing the integrand on-the-ﬂy, after each segment multi-
+plication, the construction of loop diagrams and their reduc-
+tion are uniﬁed in a single numerical recursion. In this way we
+entirely avoid objects with high tensor rank, thereby reducing
+the complexity of the calculations in a drastic way. Thanks to
+the on-the-ﬂy approach, which is applied also to helicity sum-
+mation and for the merging of different diagrams, the speed of
+the original open-loop algorithm can be further augmented in
+a very signiﬁcant way. Moreover, addressing spurious singu-
+larities of the employed reduction identities by means of sim-
+ple expansions in rank-two Gram determinants, we achieve a
+remarkably high level of numerical stability. These features
+of the new algorithm, which will be made publicly available
+in a forthcoming release of theOpenLoops program, are par-
+ticularly attractive for NLO multi-leg and NNLO real–virtual
+calculations.
+Contents
+1 Introduction ..................... 1
+2 The open-loop method ................ 2
+2.1 Helicity and colour bookkeeping ........ 3
+2.2 Tree amplitudes ................. 4
+2.3 One-loop amplitudes .............. 4
+2.4 Parent–child relations and cutting rule ..... 6
+2.5 Helicity treatment and reduction to scalar integrals 7
+3 Summing helicities and diagrams on-the-ﬂy ..... 8
+a e-mail: buccioni@physik.uzh.ch
+b e-mail: pozzorin@physik.uzh.ch
+c e-mail: zoller@physik.uzh.ch
+3.1 On-the-ﬂy helicity summation ......... 8
+3.2 On-the-ﬂy merging of topologically equivalent
+open loops .................... 9
+4 On-the-ﬂy reduction of open loops .......... 1 1
+4.1 On-the-ﬂy integrand reduction ......... 1 2
+4.2 Merging pinched topologies .......... 1 4
+4.3 Cutting rule ................... 1 9
+4.4 Rational terms of type R1 ............ 2 0
+5 Reduction identities and numerical stability ..... 2 0
+5.1 The reduction basis ............... 2 0
+5.2 On-the-ﬂy box reduction ............ 2 1
+5.3 On-the-ﬂy triangle reduction .......... 2 2
+5.4 Treatment of Gram-determinant instabilities .. 2 3
+6 Implementation and performance .......... 2 5
+6.1 Structure and implementation of the new algorithm .. 2 5
+6.2 Technical performance ............. 2 6
+7 Conclusions and outlook ............... 3 2
+Appendix A: Reduction of the remaining tensor integrals32
+A.1: Five- and higher-point integrals with R = 0, 1 .3 2
+A.2: Four-point functions with R = 1 ........ 3 3
+A.3: Three-point integrals with R = 1 ........ 3 3
+A.4: Two-point integrals with R = 1, 2 ....... 3 3
+References ........................ 3 4
+1 Introduction
+The continuous improvement of statistics and experimental
+systematics at the Large Hadron Collider (LHC) permits to
+challenge the Standard Model of particle physics at steadily
+increasing levels of energy and precision. In this context, the
+uncertainty of theoretical predictions starts playing a criti-
+cal role in many areas of the physics program of the LHC,
+providing strong motivation for developing new techniques
+that make it possible to push theoretical calculations towards
+more complex processes and higher perturbative orders.
+In the last decade, the advent of new powerful methods
+for the calculation of one-loop scattering amplitudes [ 1–9]
+123
+
+
+--- Page 2 ---
+70 Page 2 of 35 Eur. Phys. J. C (2018) 78 :70
+has opened the door to the automation of next-to-leading
+order (NLO) calculations. Nowadays, one-loop calculations
+are supported by a number of highly automated tools [ 10–
+20] that provide the key to achieve NLO precision in the
+context of multi-purpose Monte Carlo generators [ 21–27].
+This recent progress has enabled NLO calculations for a huge
+number of processes and has extended their reach up to multi-
+particle ﬁnal states of unprecedented complexity [ 28–32].
+Nevertheless, in various cases the technical limitations of
+one-loop generators still represent a serious bottleneck or
+even a show stopper. These issues can be encountered in
+processes with many ﬁnal-state particles and for kinematic
+conﬁgurations with two or more widely separated scales. An
+important example is given by the real–virtual contributions
+to next-to-next-to leading order (NNLO) calculations, which
+require very fast and highly stable one-loop amplitudes in
+deeply infrared regions of phase space.
+Motivated by these considerations, in this paper we intro-
+duce a new method that leads to very signiﬁcant efﬁciency
+and stability improvements in the construction of one-loop
+amplitudes. This new method builds on OpenLoops [9,16],
+a fully automated framework for the automated generation
+of scattering amplitudes in the Standard Model. The original
+implementation of the open-loop approach [ 9,16] supports
+NLO QCD [31,33–39]a sw e l la sN L OE W[40–44] calcula-
+tions and is interfaced to various multi-purpose Monte Carlo
+tools. The OpenLoops program is also part of Matrix [45]
+and has already been applied to several NNLO calcula-
+tions [46–55]. The essence of the open-loop method [9] con-
+sists of a numerical recursion that generates cut-open loop
+diagrams, called open loops, by multiplying, one after the
+other, the various building blocks that are connected through
+loop propagators. More precisely, the construction of N-
+point loop integrands is organised through the factorisation
+of N loop segments, which consist each of a loop propagator
+and a corresponding external subtree. Segment multiplica-
+tions are implemented through process-independent numer-
+ical routines that correspond to the Feynman rules of the
+model at hand. This type of recursion was ﬁrst proposed in the
+context of off-shell recurrence relations for colour-ordered
+gluon-scattering amplitudes [8]. Thanks to a tensorial repre-
+sentation that retains the loop-momentum dependence of all
+building blocks, this approach can be used in combination
+with reduction techniques based on tensor integrals [ 4]o r
+with the OPP reduction method [ 5], resulting in both cases
+in very fast computer code [9].
+The new method presented in this paper exploits the fac-
+torised structure of the open-loop representation in a com-
+pletely new way. The key idea is that certain operations,
+which are usually done when all building blocks of Feyn-
+man diagrams have been assembled, can be anticipated and
+performed on-the-ﬂy during the construction of the diagrams.
+Exploiting the factorised structure of the integrands, this on-
+the-ﬂy approach permits to perform various types of oper-
+ations at a much lower level of complexity, thereby boost-
+ing their efﬁciency. As we will show, it can be exploited in
+order to factorise helicity summations as well as the sums
+over different Feynman diagrams that share the same one-
+loop topology. Moreover, based on the integrand reduction
+method by del Aguila and Pittau [ 2], we will introduce an
+on-the-ﬂy technique for the reduction of open loops. In this
+way, we will promoteOpenLoops to an algorithm that com-
+bines the construction and the reduction of loop amplitudes
+in a uniﬁed numerical recursion. A notable feature of this
+approach is that it permits to avoid high-rank objects at any
+stage of the calculations. More precisely, tensor integrals are
+always kept at rank two or lower, thereby reducing the com-
+putational complexity in a dramatic way.
+The on-the-ﬂy technique leads to very signiﬁcant improve-
+ments of CPU efﬁciency. For what concerns numerical sta-
+bility, in order to avoid severe instabilities that result from
+squared inverse Gram determinants in the reduction identi-
+t i e so f[2], we present a method that isolates such instabilities
+in certain triangle topologies and circumvents them via ana-
+lytic expansions in the limit of small Gram determinants. In
+this way we obtain the ﬁrst integrand-reduction algorithm
+that is essentially free from Gram-determinant instabilities.
+The achieved level of stability in double precision is compet-
+itive with the most sophisticated tools on the market [19] and
+with public implementations of OPP reduction in quadruple
+precision.
+The paper is organized as follows. In Sect. 2 we review
+the original open-loop method. The on-the-ﬂy approach is
+introduced in Sect. 3 for the case of helicity sums and for the
+merging of topologically equivalent open loops. In Sect.4 the
+on-the-ﬂy approach is generalised to the reduction of open
+loops. Details on the employed integrand-reduction identi-
+ties and our treatment of Gram-determinant instabilities are
+discussed in Sect. 5. The entire algorithm and its implemen-
+tation are outlined in Sect.6, where we also present technical
+studies on the CPU performance and numerical stability. Our
+conclusions are presented in Sects. 7, and Appendix A deals
+with low-rank integrals that remain to be solved at the end of
+the on-the-ﬂy recursion.
+2 The open-loop method
+In this section we review the original open-loop method [9],
+which is implemented in the publicly availableOpenLoops 1
+program [16]. At variance with the original publication [ 9],
+here we reﬁne various aspects of the notation and we adopt a
+particular perspective that sets the stage for the new methods
+introduced in Sects. 3–5. These new techniques are going to
+become publicly available in the OpenLoops 2 release.
+123
+
+
+--- Page 3 ---
+Eur. Phys. J. C (2018) 78 :70 Page 3 of 35 70
+2.1 Helicity and colour bookkeeping
+The task carried out by the open-loop algorithm is the cal-
+culation of the tree-level and one-loop contributions to the
+scattering probability density,
+Wtree =
+∑
+h
+∑
+col
+|M0(h)|2,
+W1−loop =
+∑
+h
+∑
+col
+2R e
+[
+M∗
+0(h)M1(h)
+]
+, (1)
+or the squared one-loop contribution
+W1−loop2 =
+∑
+h
+∑
+col
+|M1(h)|2, (2)
+for loop-induced processes. The polarised matrix elements
+M0(h) and M1(h) should be understood as generic tree
+and one-loop amplitudes, in the sense that the techniques
+presented in this paper are applicable to any renormalisable
+theory, including the QCD and electroweak sectors of the
+Standard Model, as well as BSM theories. The sums in (1)–
+(2) run over all helicity and colour degrees of freedom of the
+scattering particles. While colour indices are kept implicit,
+the helicity dependence is characterised by a single index h,
+which corresponds to the global helicity conﬁguration of the
+event, as described below.
+Scattering amplitudes are computed as sums of Feynman
+diagrams,
+M
+0(h) =
+∑
+I∈Ω tree
+M0(I, h),
+M1(h) =
+∑
+I∈Ω 1−loop
+M1(I, h), (3)
+where Ω tree and Ω 1−loop stand for the sets of tree and one-
+loop diagrams. Each tree and one-loop diagram can be fac-
+tored into a colour factorC(I) and a colour-stripped diagram
+amplitude,
+1
+ML(I, h) = C(I) AL(I, h), (4)
+for L = 0, 1. The colour-stripped amplitudes AL(I, h) are
+the main source of complexity. In the open-loop approach,
+their calculation is addressed with numerical recursions as
+described in Sects.2.2–2.4. For what concerns colour factors,
+exploiting the factorisation properties (4), all relevant oper-
+ations can be reduced to the calculation of colour-summed
+interference terms of the form
+K(I
+a, Ib) =
+∑
+col
+C(Ia)∗ C(Ib), (5)
+1 Quartic gluon couplings involve three independent colour structures.
+Thus each diagram involving k quartic couplings needs to be split into
+3k contributions of type ( 4) that are effectively handled as separate
+diagrams.
+which appear in the calculation of the scattering probabili-
+ties (1)–(2). This task must be addressed only once per pro-
+cess. It is handled by algebraically reducing all C(I) to a
+standard basis {Ci} and relating the terms (5) to the interfer-
+ence matrix [9,56]
+Kij =
+∑
+col
+Ci∗ C j. (6)
+In OpenLoops we use a basis where all colour factors are
+expressed through products and traces of the SU(3) genera-
+tors T
+a
+ij in the fundamental representation.
+For the bookkeeping of external momenta and helicities
+in a process with Np scattering particles we introduce the set
+of particle indices
+E ={ 1, 2,..., Np}. (7)
+To characterise the helicity conﬁgurations s of individual
+particles we use labels
+λi =
+⎧
+⎪⎨
+⎪⎩
+1, 3 for fermions with s =− 1/2, 1/2
+1, 2, 3 for gauge bosons with s =− 1, 0, 1
+0 for scalars with s = 0
+(8)
+∀ i ∈ E. The conﬁguration λi = 0 will also be used to char-
+acterise unpolarised particles, i.e. fermions or gauge bosons
+whose helicity is still unassigned or has already been summed
+over. Since a particle can have up to four different helicity
+states, it is convenient to adopt a helicity numbering scheme
+based on the labels
+¯h
+i = λi 4i−1, (9)
+which correspond to a quaternary number with λi ∈
+{0, 1, 2, 3} as ith-last digit and all other digits equal to zero.
+In this way, the helicity conﬁgurations (λ1,...,λ Np ) of the
+full event can be uniquely identiﬁed with the label
+h = ¯h1 +···+ ¯h Np, (10)
+which corresponds to a quaternary number ofNp digits, each
+of which describes the helicity of a particular external parti-
+cle. Let us also introduce the single-particle helicity spaces,
+¯H
+i ∋ ¯hi , deﬁned as
+¯Hi =
+⎧
+⎪⎪
+⎪
+⎪⎪⎪
+⎨
+⎪⎪
+⎪⎪⎪
+⎪
+⎩
+{λ
+i 4i−1|λi = 1, 3} for fermions or mass-
+less gauge bosons,
+{λi 4i−1|λi = 1, 2, 3} for massive
+gauge bosons,
+{0} for scalars,
+(11)
+where we do not include unpolarised states. Finally, the
+global helicity space for the full set of scattering particles,
+H ∋ h, is deﬁned as
+H = ¯H1 ⊗···⊗ ¯HNp, (12)
+123
+
+
+--- Page 4 ---
+70 Page 4 of 35 Eur. Phys. J. C (2018) 78 :70
+where the product is understood as A ⊗ B ={ a + b|a ∈
+A, b ∈ B}.
+2.2 Tree amplitudes
+At tree level, each colour-stripped Feynman diagram is con-
+structed by contracting two so-called subtrees, which arise
+by cutting the diagram in two pieces in correspondence of an
+internal propagator,
+(13)
+A generic subtree wa corresponds to the part of a certain
+Feynman diagram that connects an internal off-shell line with
+outgoing momentum ka to a subset of external particles,
+Ea ={ αa1,...,α ana }⊂ E. (14)
+In the numbering scheme ( 9)–(10), the helicity conﬁgura-
+tions of a subtree are labeled
+ha = ¯hαa1 +···+ ¯hαana , (15)
+and the corresponding helicity space, Ha ∋ ha, is deﬁned as
+Ha = ¯Hαa1 ⊗···⊗ ¯Hαana . (16)
+Subtrees are represented as complex n-tuples, wσa
+a (ka, ha),
+where σa is the spinor or Lorentz index of the cut line. With
+this notation, the contraction (13) takes the form
+A0(I, h) = wσa
+a (ka, ha)δσaσb ˜wσb
+b (kb, hb), (17)
+where kb =− ka, h = ha +hb, and summation over repeated
+indices is implicitly understood. The propagator associated
+with the cut line is included only in the subtree w
+a and not
+in ˜wb.
+Subtrees are constructed by means of a numerical recur-
+sion that starts from the external wave functions and recur-
+sively merges subtrees by attaching their off-shell lines to the
+vertices that occur in the various tree diagrams. A recursion
+step for the case of a generic three-particle vertex is depicted
+2
+in Fig. 1. Its algebraic form reads
+wσa
+a (ka, ha) = Xσa
+σbσc (kb, kc)
+k2a − m2a
+wσb
+b (kb, hb)wσc
+c (kc, hc), (18)
+where the tensor Xσa
+σbσc describes the vertex that connectswb
+and wc to wa, as well as the numerator of the propagator that
+connects towa. The related denominator,(k2
+a − m2
+a), appears
+explicitly in (18).
+The momentum of the resulting subtree is ka = kb + kc
+and its helicity is ha = hb + hc. Each recursion step must
+2 To draw Feynman diagrams we use Axodraw [57].
+Fig. 1 Diagrammatic representation of a subtree and its numerical con-
+struction through the recurrence relation (18). The outgoing momentum
+ka and the spin or Lorentz indexσa are associated with the off-shell inter-
+nal line, which is shown explicitly, while the on-shell external particles
+with helicity h
+a are implicitly understood
+be repeated for all independent helicity conﬁguration ha ∈
+Ha = Hb⊗ Hc. The corresponding recursion step for quartic
+vertices reads
+wσa
+a (ka, ha) = Xσa
+σbσcσd (kb, kc, kd)
+k2a − m2a
+wσb
+b (kb, hb)
+×wσc
+c (kc, hc)w σd
+d (kd, hd). (19)
+The recursion ends when all off-shell propagators that
+have been cut in the beginning can be reconnected, such as
+to obtain the colour-stripped amplitudes (17) for the full set
+of tree diagrams.
+Note that (18)–(19) are analogous to Berends–Giele recur-
+rence relations for off-shell currents [ 58]. However, while
+each subtree corresponds to a single topology, off-shell cur-
+rents incorporate all possible subtrees associated with a cer-
+tain internal line. The inefﬁciency due to the usage of indi-
+vidual subtrees is compensated, especially at one-loop level,
+by the optimisation opportunities that result from the colour-
+factorisation identities (4) and from the fact that each subtree
+can occur in multiple Feynman diagrams at tree and loop
+level.
+2.3 One-loop amplitudes
+The amplitude of a colour-stripped N-point one-loop dia-
+gram, I
+N , has the general form
+(20)
+123
+
+
+--- Page 5 ---
+Eur. Phys. J. C (2018) 78 :70 Page 5 of 35 70
+Symbols carrying a bar denote quantities in D = 4 − 2ε
+dimensions, and for the loop momentum ¯q we adopt the
+decomposition
+¯q = q +˜q, (21)
+where q and ˜q denote its four-dimensional and (D − 4)-
+dimensional parts, respectively. The denominators read
+¯Di = (¯q + pi)2 − m2
+i , pi =
+i∑
+j=1
+k j, (22)
+where k j is the external momentum ﬂowing into the loop
+at the jth loop vertex. Internal momenta are chosen such
+that p0 = pN = 0, i.e. the momentum ﬂowing through the
+¯D0 = ¯DN propagator is ¯q. The one-loop diagram IN in (20)
+can be regarded as a sequence of loop segments,
+IN ={ S1, S2,..., SN }, (23)
+where the segment Si consists of a subtreewi that involves a
+certain set Ei of external particles and is connected to the ith
+loop vertex, vi , and to the adjacent loop propagator associ-
+ated with ¯Di . Segments associated to a quartic vertex involve
+two subtrees, wi1 and wi2 . The helicity conﬁgurations of the
+whole diagram are related to the ones of individual segments,
+hi ∈ Hi ,v i a
+h = h1 +···+ h N . (24)
+The trace in ( 20) stands for the full contraction of the
+spinor and Lorentz indices of propagators and vertices along
+the loop. In general, the numerator ¯N(¯q) consists of a 4-
+dimensional part N(q) and an ε-dependent remnant ˜N(¯q),
+Tr
+[
+¯N(¯q)
+]
+= Tr
+[
+N(q)
+]
++ Tr
+[
+˜N(¯q)
+]
+. (25)
+The terms that result from ˜N(¯q) are known as rational terms
+of type R
+2 and can be reconstructed separately as countert-
+erms using appropriate Feynman rules [59–62]. Thus, the full
+amplitude can be decomposed as
+¯A1(h) = A1(h) + A1,R2 (h), (26)
+and in the following we focus on the nontrivial part
+A1(IN , h) =
+∫
+dD¯q
+Tr
+[
+N(IN , q, h)
+]
+¯D0 ¯D1 ··· ¯DN−1
+, (27)
+which stems from the four-dimensional part of the numerator
+but involves the D-dimensional denominators (22).
+In the open-loop approach, loop diagrams are cut-open in
+correspondence of the ¯D0 propagator, in the sense that the
+loop numerator is constructed as a tensor,
+(28)
+where β0 and βN are the spinor or Lorentz indices associ-
+ated with the cut propagator. We use the Feynman gauge,
+which means that the numerator of the gluon propagator is
+simply −igβ
+α. Once
+[
+N(IN , q, h)
+]βN
+β0
+is determined, we take
+its trace,
+Tr
+[
+N(IN , q, h)
+]
+= δβ0
+βN
+[
+N(IN , q, h)
+]βN
+β0
+, (29)
+where summation over repeated indices is implicitly under-
+stood.
+A key feature of the open-loop approach is that, similarly
+to the product of loop denominators ¯D0 ··· ¯DN−1 in (27), the
+loop numerator (28) is factored into a product of segments,
+N(IN , q, h) = S1(q, h1)··· SN (q, h N ). (30)
+Here and in the following, the matrix structure is implicitly
+understood, i.e. (30) should be interpreted as
+[
+N(IN , q, h)
+]βN
+β0
+=
+[
+S1(q, h1)
+]β1
+β0
+[
+S2(q, h2)
+]β2
+β1
+···
+[
+SN (q, h N )
+]βN
+βN−1
+. (31)
+Segments involving a triple vertex have the generic form
+[
+Si(q, hi)
+]βi
+βi−1
+= Xβi
+βi−1σi (q + pi−1, ki)w σi
+i (ki, hi), (32)
+where wσi
+i (ki, hi) is the corresponding external subtree. The
+tensor Xβi
+βi−1σi (q + pi−1, ki) corresponds to the interaction
+term in ( 18) and embodies the q-dependent contributions
+of the loop vertex vi and of the numerator of the adja-
+cent Di propagator. In renormalisable theories, each segment
+Si(q, hi) is a q-polynomial of rank R ≤ 1. In the SM, the
+structure of three-point vertices is
+(33)
+123
+
+
+--- Page 6 ---
+70 Page 6 of 35 Eur. Phys. J. C (2018) 78 :70
+β0
+w1
+D1
+w2
+D2
+wk
+Dk
+βk
+wk+1
+Dk+1
+wN −1
+DN −1
+wN
+D0
+βN
+Fig. 2 Diagrammatic representation of an N-point open loop with k
+dressed and N − k undressed segments. The segment containing the
+last subtree, wN ≡ w0, is associated with the propagator ¯DN ≡ ¯D0 =
+¯q2 − m2
+0
+while four-point vertices have rank zero,
+(34)
+with hi = hi1 + hi2 and ki = ki1 + ki2 .
+The numerator ( 30) is built as a sequence of N segment
+multiplications, and we refer to such a multiplication as the
+dressing of a segment. In the following, we will represent the
+state of the numerator after k dressing steps as,
+N(IN , q, h) = NN (IN , q, h)
+= Nk(IN , q, ˆhk)Sk+1(q, hk+1)··· SN (q, h N ), (35)
+where Sk+1,..., SN are the still undressed segments, and
+Nk(IN , q, ˆhk) = S1(q, h1)··· Sk(q, hk) (36)
+is a q-polynomial of rank R ≤ k that incorporates the k
+dressed segments. The symbol ˆhk and its counterpart ˇhk =
+h − ˆhk denote, respectively, the helicity conﬁgurations of
+the dressed and undressed parts of a diagram with k dressed
+segments andN− k undressed ones. They are deﬁned through
+h1 +···+ hk  
+ˆhk
++ hk+1 +···+ h N  
+ˇhk
+= h, (37)
+where h is the global helicity state.
+The corresponding helicity spaces, ˆHk and ˇHk , are deﬁned
+by
+H1 ⊗···⊗ Hk  
+ˆHk
+⊗ Hk+1 ⊗···⊗ HN  
+ˇHk
+= H. (38)
+The q-dependent polynomials ( 36) are denoted open
+loops, and this notion implicitly includes also the correspond-
+ing undressed segments Sk+1,..., SN and loop denomina-
+tors ¯D0,..., ¯DN . A graphical representation of a generic
+open loop with k dressed segments is depicted in Fig. 2.
+The dressing of open loops is implemented through a
+numerical recursion
+Nk(IN , q, ˆhk) = Nk−1(IN , q, ˆhk−1)Sk(q, hk), (39)
+where ˆhk = ˆhk−1 + hk . This operation needs to be per-
+formed separately for all relevant helicity conﬁgurations
+ˆhk ∈ ˆHk = ˆHk−1 ⊗ Hk and iterated for k = 1,..., N.
+The initial condition is
+N0(IN , q, ˆh0) = 11, (40)
+where ˆh0 ∈ ˆH0 ={ 0}, and the identity operator is understood
+as [11]β′
+β = δβ′
+β .
+In order to capture the full q-dependence of open-loop
+polynomials we use the tensorial representation
+Nk(IN , q, ˆhk) =
+R∑
+r=0
+Nk;μ1...μr (IN , ˆhk) qμ1 ··· qμr , (41)
+and numerical operations are always performed at the level
+of the tensor coefﬁcients Nk;μ1···μr (IN , ˆhk). In particular,
+the explicit form of a step of the dressing recursion (39)i s
+[
+Nk;μ1···μr (IN , ˆhk)
+]βk
+β0
+=
+{ [
+Nk−1;μ1···μr (IN , ˆhk−1)
+]βk−1
+β0
+[
+Y k
+σk
+]βk
+βk−1
++
+[
+Nk;μ2···μr (IN , ˆhk−1)
+]βk−1
+β0
+[
+Z k
+μ1;σk
+]βk
+βk−1
+}
+×wσk
+k (kk, hk) (42)
+for a three-point vertex as deﬁned in ( 33). For an efﬁcient
+implementation the μ1 ··· μr indices shall be symmetrised
+throughout.
+2.4 Parent–child relations and cutting rule
+The original open-loop algorithm can be boosted by using
+parts of pre-computed (N − 1)-point diagrams as a start-
+ing point for the construction of more involved N-point dia-
+grams. This approach is based on so-called parent–child rela-
+tions, which connect open loops of type
+(43)
+123
+
+
+--- Page 7 ---
+Eur. Phys. J. C (2018) 78 :70 Page 7 of 35 70
+and
+(44)
+that start with identical segments S1,..., Sk . Since open
+loops are colour-stripped, i.e. they do not depend on the dif-
+ferent colour factors of the loop diagrams
+IN ={ S1,... Sk, Sk+1,..., SN } and
+˜IN−1 ={ S1,... Sk, ˜Sk+1,..., ˜SN−1}, (45)
+it is clear that the dressed parts of (43) and (44) remain iden-
+tical up to step k of the recursion, i.e.
+Nk(IN , q, ˆhk) = Nk( ˜IN−1, q, ˆhk). (46)
+This allows one to construct the more involved N-point
+parent diagram ( 43) using a building block of the simpler
+(N − 1)-point child diagram (44). In general, such relations
+can be applied for any k with 2 ≤ k ≤ N − 2, and the maxi-
+mum gain in efﬁciency is obtained when k = N − 2, so that
+only the last two segments of the parent diagram remain to
+be dressed.
+The availability of child diagrams of type (44)i sa no b v i -
+ous prerequisite for the applicability of the parent–child
+approach, and in QCD most one-loop diagrams turn out to
+be the parent of a corresponding child. Moreover, the corre-
+spondence between the ﬁrst k dressed segments in (43) and
+(44) requires an appropriate cutting rule, i.e. a prescription
+that determines the cut propagator and the dressing direction
+in a similar way as in (43)–(44).
+To this end, for each segment S
+i with external particles
+Ei ={ αi1,...,α in i } we introduce a binary weight deﬁned
+as the sum of the weights 2α−1 for each particle α, i.e.
+F(Si) =
+∑
+α∈Ei
+2α−1. (47)
+For example, F(Si) = 20 + 21 + 23 = 11 for a segment
+connected to the external legsEi ={ 1, 2, 4}. For the merging
+of subtrees Si and S j into a single segment Si ⊕ S j with
+external legs Ei ∪ E j , the weight function obeys the useful
+distributive property
+F(Si ⊕ S j) = F(Si) + F(S j). (48)
+This implies that merged segments always outweigh the orig-
+inal segments. Based on this feature, for N-point diagrams
+we adopt the cutting rule [9]
+F(Sk)> F(S1) ∀ k > 1, (selection rule) (49)
+F(SN )> F(S2). (direction rule) (50)
+The fact that the ﬁrst segment is identiﬁed as the one with low-
+est weight guarantees its stability with respect to the merging
+of S
+k+1⊕ Sk+2 in (43)–(44), while (50) guarantees the stabil-
+ity of the dressing direction for all conﬁgurations withk ≥ 2.
+In this way, the parent–child approach permits to recycle the
+longest possible open loops.
+Note that relations of type ( 46) can be exploited also for
+diagrams that involve the same numberN of loop propagators
+and identical dressed segments, but different undressed ones.
+2.5 Helicity treatment and reduction to scalar integrals
+In the following we discuss the operations that are required
+in order to determine the contribution of a loop diagram I
+N
+to the scattering probability density ( 1), starting form the
+output of the open-loop recursion, i.e. from an open-loop
+numerator (35) with k = N dressed segments.
+Instead of proceeding via a direct construction of the one-
+loop amplitude A
+1(IN , h) deﬁned in (27), we start with the
+associated colour structureC(IN ) deﬁned in (4), and we pro-
+ceed by building the colour-summed interference with the
+Born amplitude,
+U0(IN , h) = 2
+( ∑
+col
+M∗
+0(h) C(IN )
+)
+∀ h ∈ H, (51)
+combining it with the trace of the colour-stripped loop numer-
+ator,
+U(IN , q, h) = U0(IN , h)Tr
+[
+N(IN , q, h)
+]
+, (52)
+and performing helicity sums,
+U(IN , q, 0) =
+∑
+h
+U(IN , q, h). (53)
+Here we use h = 0 for the conﬁguration where all particles
+are unpolarised, in the sense that their helicities have been
+summed over. The above operations are performed at the
+level of q-coefﬁcients in the tensorial representation ( 41),
+i.e. in practice we compute
+U
+μ1···μr (IN , 0) =
+∑
+h
+Uμ1···μr (IN , h)
+=
+∑
+h
+U0(IN , h) Tr
+[
+Nμ1···μr (IN , h)
+]
+. (54)
+After the summation over colours and helicities it is possi-
+ble to combine all diagrams with the same one-loop topology,
+i.e. diagrams of type
+Iα1...αN
+N ={ Sα1
+1 ,..., SαN
+N } (55)
+with all possible combinations of segments,
+Si ≡
+{
+Sαi
+i
+⏐⏐αi = 1,..., mi
+}
+, (56)
+123
+
+
+--- Page 8 ---
+70 Page 8 of 35 Eur. Phys. J. C (2018) 78 :70
+Fig. 3 Schematic
+representation of the on-the-ﬂy
+helicity sums in (62). Taking the
+interference with the Born
+amplitude makes it possible to
+sum over the helicities
+h
+1,..., hk of the ﬁrst k dressed
+segments of an open loop, while
+the remaining segments are still
+undressed
+that have the same external legs Ei and loop propagators ¯Di
+but different external subtrees wαi
+i and/or loop vertices vαi
+i .
+To ﬁlter out combinations of segments that are not allowed
+by the Feynman rules we introduce the tensor
+δα1...αN =
+⎧
+⎪⎨
+⎪⎩
+1i f Sα1
+1 ,..., SαN
+N form a
+valid one-loop diagram
+0e l s e .
+(57)
+In this way, the full set of topologically equivalent one-loop
+diagrams can be deﬁned as
+Ω N =
+{
+Iα1···αN
+N
+⏐⏐
+⏐α
+i = 1,..., mi with δα1...αN ̸= 0
+}
+, (58)
+and their sum yields
+Vμ1...μr (Ω N , 0)
+=
+∑
+α1...αN
+∑
+h
+δα1...αN Uμ1...μr (Iα1...αN
+N , h). (59)
+The contribution of the diagrams ( 58) to the scattering
+probability (1) reads
+W1−loop = Re
+{ ∫
+dD¯q V(Ω N , q, 0)
+¯D0 ··· ¯DN−1
+}
+= Re
+{ R∑
+r=0
+Vμ1···μr (Ω N , 0)
+∫
+dD¯q qμ1 ··· qμr
+¯D0 ··· ¯DN−1
+}
+.
+(60)
+In OpenLoops 1, the calculation of the coefﬁcients ( 59)i s
+entirely based on the open-loop approach, but the reduction
+of the loop integrals ( 60) to scalar integrals, as well as the
+numerical evaluation of the latter, are performed by means
+of external libraries.
+By default, OpenLoops 1 adopts the tensor representation
+on the rhs of (60) and computes the relevant tensor integrals
+with the Collier library [19], which implements the reduc-
+tion techniques of [4,63] and the scalar integrals of [64]. One
+of the powerful features ofCollier lies in sophisticated ana-
+lytic expansions [4] that avoid dangerous numerical instabil-
+ities in phase space regions with small Gram determinants.
+Alternatively, the reduction to scalar integrals is per-
+formed with Cuttools [10], and scalar integrals are com-
+puted with OneLoop [65]. The Cuttools program imple-
+ments the OPP reduction method [5], which is based on dou-
+ble, triple and quadruple cuts of the integrand on the lhs of (1).
+This requires a large number of evaluations of V(Ω
+N , q, 0),
+and the high efﬁciency of the open-loop representation,
+V(Ω
+N , q, 0) = ∑R
+r=0 Vμ1···μr (Ω N , 0) qμ1 ··· qμr , results in
+a dramatic boost of the OPP method.
+Another key feature behind the high speed of the open-
+loop method is the fact that, irrespectively of the reduction
+method, the time-consuming reduction to scalar integrals is
+performed after summing over colour and helicity degrees of
+freedom.
+3 Summing helicities and diagrams on-the-ﬂy
+In this section we introduce a new technique that makes it
+possible to sum helicities and to merge different one-loop dia-
+grams on-the-ﬂy, i.e. after each step of the open-loop dress-
+ing recursion. Besides boosting the open-loop algorithm in
+a signiﬁcant way, this approach is also a key aspect of the
+on-the-ﬂy reduction technique introduced in the Sect. 4.
+3.1 On-the-ﬂy helicity summation
+In the original formulation of the open-loop method, helicity
+sums (53) are performed at the end of the dressing recur-
+sion. This implies that the kth dressing step (39) needs to be
+performed for all helicity conﬁgurations of the dressed seg-
+ments S
+1,..., Sk . This feature, combined with the fact that
+the number of relevant helicity states and the cost of a single
+dressing step scale exponentially withk, result in a very rapid
+growth of the CPU cost of dressing operations in the course of
+the open-loop recursion. To avoid this negative trend, in this
+section we introduce a method that exploits the factorisation
+properties of the open-loop representation (30) in a way that
+makes it possible to perform helicity sums on-the-ﬂy,a f t e r
+the dressing of each new segment.
+The idea, sketched in Fig.3, is that, upon taking the inter-
+ference of open loops with the Born amplitude, it is possible
+to sum over the helicities of all dressed segments, irrespec-
+123
+
+
+--- Page 9 ---
+Eur. Phys. J. C (2018) 78 :70 Page 9 of 35 70
+tively of the presence of still undressed segments. To intro-
+duce the technical aspects of this approach, let us rewrite
+the interference (53) between the colour-summed Born term
+U
+0(IN , h) and the one-loop numerator as
+U(IN , q, 0) =
+∑
+h
+U0(IN , h)Tr
+[
+N(IN , q, h)
+]
+=
+∑
+h
+U0(IN , h)Tr
+[
+Nk(IN , q, ˆhk)
+× Sk+1(q, hk+1)··· SN (q, h N )
+]
+. (61)
+To take advantage of the factorisation of loop segments on
+the rhs of ( 61), we then postpone the trace operation and
+generalise (61) by deﬁning
+Uk(IN , q, ˇhk) =
+∑
+ˆhk
+U0(IN , h) Nk(IN , q, ˆhk)
+=
+∑
+h1,...,hk
+U0(IN , h)S1(q, h1)··· Sk(q, hk),
+(62)
+where the interference with U0(IN , h) is restricted to the
+ﬁrst k dressed segments of the open loop, and the corre-
+sponding helicities, ˆhk = h1 +···+ hk , are summed over.
+As a result, the ﬁrst k segments become effectively unpo-
+larised, and (62) depends only on the helicities of the remain-
+ing N − k undressed segments, ˇhk = hk+1 +···+ h N .D u e
+to this dependence, which is induced by the fact that the Born
+term (51) depends on the helicities h = ˆh
+k + ˇhk of all exter-
+nal particles (37), the sums overh1,..., hk in (62) cannot be
+entirely factorised. However, they can be cast in the nested
+form
+U
+k(IN , q, ˇhk) =
+∑
+hk
+[
+···
+∑
+h2
+[ ∑
+h1
+U0(IN , h)S1(q, h1)
+]
+× S2(q, h2)···
+]
+Sk(q, hk), (63)
+which highlights the fact that each segment becomes effec-
+tively unpolarised after its dressing.
+In practice, in analogy with the standard open-loop recur-
+sion ( 39), the helicity-summed open loops ( 62) are con-
+structed with the recurrence relation
+Uk(IN , q, ˇhk) =
+∑
+hk
+Uk−1(IN , q, ˇhk−1)Sk(q, hk), (64)
+where the helicities hk ∈ Hk of the dressed segment are
+summed on-the-ﬂy. To this end, the dressing operation needs
+to be performed for all ˇhk−1 = ˇhk + hk ∈ ˇHk−1. The initial
+condition reads
+U0(IN , q, h) = U0(IN , h) · 11
+= 2
+∑
+col
+M∗
+0(h) C(IN ) · 11, (65)
+i.e. a fully undressed open loop is given by the interference of
+its colour structure with the Born amplitude, whose helicity
+states h live in the global helicity space H. At each dressing
+step, helicity degrees of freedom are reduced by a factor equal
+to the number of helicity states of the dressed segment, i.e. by
+factor two for each external fermion or massless vector boson
+and a factor three for each external massive vector boson in
+the segment.
+At the end of the recursion, when all N segments are
+dressed, no helicity dependence is left over ( ˇh
+N ≡ 0), and
+the unpolarised loop numerator ( 53) is obtained by taking
+the trace
+U(IN , q, 0) = Tr
+[
+UN (IN , q, ˇh N )
+]
+. (66)
+The recursion (64) is understood as matrix multiplication,
+[
+Uk(IN , q, ˇhk)
+]βk
+β0
+=
+∑
+hk
+[
+Uk−1(IN , q, ˇhk−1)
+]βk−1
+β0
+[
+Sk(q, hk)
+]βk
+βk−1
+, (67)
+in the tensor representation
+Uk(IN , q, ˇhk) =
+R∑
+r=0
+Uk;μ1···μr (IN , ˇhk) qμ1 ··· qμr , (68)
+which leads to the same tensorial recursion as in (42).
+In summary, performing helicity sums on-the-ﬂy leads to
+a decreasing number of helicity degrees of freedom when
+the number k of dressed segments increases. In this way,
+the effect of the growing CPU cost of dressing operations
+at large k can be strongly attenuated. The price to pay is
+that the parent–child approach ( 43)–(46) is not applicable
+anymore, due to the fact that ( 65) incorporates the colour
+structure C(I
+N ) of the whole one-loop diagram. However,
+as we will see in Sect. 3.2, the parent–child relations can be
+replaced by a similarly efﬁcient method based on the merging
+of topologically equivalent one-loop diagrams. Finally, let us
+note that the recursion (64)–(65) is not applicable to squared
+one-loop amplitudes. For this case we still rely on the original
+open-loop algorithm.
+3.2 On-the-ﬂy merging of topologically equivalent open
+loops
+The key idea behind the recursion ( 64)–(65) is that, taking
+the interference between the Born amplitude and the one-loop
+colour structure C(I
+N ) as initial condition makes it possible
+to anticipate operations that are usually performed after com-
+pletion of the construction of a one-loop diagram. In partic-
+ular, such operations become applicable on-the-ﬂy after the
+dressing of individual loop segments. This technique will
+be denoted as on-the-ﬂy approach, and its applicability goes
+well beyond helicity sums.
+123
+
+
+--- Page 10 ---
+70 Page 10 of 35 Eur. Phys. J. C (2018) 78 :70
+Fig. 4 Diagrammatic representation of helicity sums and diagram
+merging. Upon taking the interference with the Born amplitude, the
+helicities of the k dressed segments are summed, and the full set of
+topologically equivalent diagrams with the same undressed segments
+{
+Sαk+1
+k+1 ,..., SαN
+N } is merged in a single open loop. See (70)a n d(72)
+As sketched in Fig. 4, the on-the-ﬂy technique can be
+extended to the double sums over helicity states and topo-
+logically equivalent loop diagrams in (59). The idea is that,
+rather than being constructed one by one, the topologically
+equivalent diagrams
+I
+α1...αN
+N ={ Sα1
+1 ,..., SαN
+N }∈ Ω N , (69)
+deﬁned in ( 55)–(58), can be merged in a recursive way by
+summing over the various subtrees Sαi
+i as soon as they get
+dressed.
+To this end, let us deﬁne subsets of diagrams,Ω k
+N ⊂ Ω N ,
+that share the same undressed segments, {Sαk+1
+k+1 ,..., SαN
+N },
+after k dressing steps,
+Ω k
+N ≡ Ω k
+N (αk+1,...,α N )
+=
+{
+Iρ1...ρkαk+1···αN
+N
+⏐⏐
+⏐ 1 ≤ ρ
+j ≤ m j
+with δρ1···ρkαk+1···αN ̸= 0
+}
+, (70)
+where the tensor δ, deﬁned in (57), ﬁlters out one-loop dia-
+grams that are not allowed by the Feynman rules. By con-
+struction, all diagrams in the set (70) must undergo identical
+future dressing steps, which can be performed only once after
+merging the ﬁrst k segments. This operation can be organ-
+ised in a very similar way as helicity summations in Sect.3.1.
+Technically, taking as a starting point the nested helicity sums
+in (63), it is sufﬁcient to generalise the loop segments and
+the Born term (65) by replacing
+S
+i(q, hi) → Sαi
+i (q, hi),
+U0(IN , h) → δα1···αN U0(Iα1···αN
+N , h), (71)
+and to extend the summation over the helicitiesh1,..., hk of
+the dressed segments to the corresponding “diagrammatic”
+degrees of freedom α
+1,...,α k . This leads to the identity
+Vαk+1...αN
+k (Ω k
+N , q, ˇhk)
+=
+∑
+αk,hk
+[
+···
+∑
+α2,h2
+[ ∑
+α1,h1
+δα1···αN U0(Iα1···αN
+N , h)
+× Sα1
+1 (q, h1)
+]
+Sα2
+2 (q, h2)
+]
+···
+]
+Sαk
+k (q, hk), (72)
+which deﬁnes an open-loop object with ﬁxed undressed seg-
+ments {Sαk+1
+k+1 ,... SαN
+N } and helicities ˇhk = hk+1 +···+ h N
+that incorporates all possible chains of dressed segments
+{Sα1
+1 ,..., Sαk
+k } forming a valid Feynman diagram, summed
+over the corresponding helicities h1,..., hk .
+Note that the dependence of ( 72) on the helicities
+hk+1,..., h N and diagrammatic indicesαk+1,...,α N of the
+undressed segments is due to the fact that the Born term
+deﬁned in (65) and (71) retains the full helicity dependence
+of the Born amplitude as well as the tensor (57) and the colour
+structure of the whole one-loop diagram.
+In analogy with (39) and (64), the open-loop objects (72)
+can be constructed with the recurrence relation
+Vαk+1...αN
+k (Ω k
+N , q, ˇhk)
+=
+∑
+αk
+∑
+hk
+Vαk···αN
+k−1 (Ω k−1
+N , q, ˇhk−1)Sαk
+k (q, hk), (73)
+where helicity sums and diagram merging are performed on-
+the-ﬂy. An explicit example of an on-the-ﬂy merging step is
+illustrated in Fig. 5. Similarly as for (64), the recursion (73)
+is implemented in the form of tensorial relations ( 42). The
+123
+
+
+--- Page 11 ---
+Eur. Phys. J. C (2018) 78 :70 Page 11 of 35 70
+Fig. 5 Example of a step of the diagram merging recursion (73). After dressing the second segment and summing over its helicity conﬁgurations
+h2, all diagrams with equivalent one-loop topology and identical undressed segments Sα3
+3 ,..., SαN
+N are merged into a single open loop
+relevant initial conditions at k = 0a r e
+Vα1···αN
+0 (Ω 0
+N , h) = δα1···αN U0(Iα1···αN
+N , h) · 11
+= 2 δα1···αN
+∑
+col
+M0(h)∗C(Iα1···αN ) · 11,
+(74)
+where each fully undressed contribution corresponds to an
+individual diagram,
+Ω 0
+N ≡ Ω 0
+N (α1,...,α N ) =
+{
+Iα1···αN
+N
+}
+, (75)
+with helicities h that live in the full helicity space H. Let us
+point out that, thanks to the absorption of the colour factors
+C(Iα1···αN
+N ) in the Born interference term ( 74), in ( 73)i ti s
+possible to merge parts of diagrams that carry different colour
+structures in a single object, while respecting the exact colour
+dependence.
+After N recursion steps one obtains a single open-loop
+object VN (Ω N
+N , q, ˇh N ), which merges the full set of topo-
+logically equivalent diagrams ( Ω N
+N ≡ Ω N ) and is entirely
+unpolarised ( ˇh N ≡ 0). At this stage, taking the trace that
+closes the loop one arrives at
+V(Ω N , q, 0) = Tr
+[
+VN (Ω N
+N , q, ˇh N )
+]
+, (76)
+which is equivalent to (59).
+As demonstrated in Sect. 6.2, performing helicity sums
+and merging diagrams on-the-ﬂy yields a very signiﬁcant efﬁ-
+ciency improvement with respect to the original open-loop
+algorithm. More precisely, if helicity sums are performed at
+the end of the recursion as in (53), the merging approach and
+the parent–child relations ( 46) permit to achieve a similar
+speed-up factor of the order of two. However, contrary to the
+parent–child technique, the on-the-the-ﬂy approach is appli-
+cable both to diagram merging and helicity sums. This leads
+to a further speed-up factor that can vary from two to three,
+depending on the process.
+As we will see in Sect. 4, the on-the-ﬂy approach will
+be a crucial ingredient in order to arrive at a new efﬁcient
+algorithm that combines the operations of open-loop dressing
+and tensor reduction at the level of each individual step of
+the open-loop recursion.
+4 On-the-ﬂy reduction of open loops
+In the original version of the OpenLoops program, the
+construction of integrand numerators and the reduction to
+scalar integrals are performed independently of one another
+using different tools. Open-loop numerators of N-point dia-
+grams are constructed by recursively dressing N segments
+as described in Sect. 2.3. Each step of the recursion can
+increase the tensor rank by one, and, upon symmetrisation of
+all q
+μ1 ··· qμr monomials with r ≤ R, open-loop polynomi-
+als of rank R involve
+(R+4
+4
+)
+independent tensor coefﬁcients.
+Thus their complexity grows exponentially with the number
+of recursion steps. For instance, open loops with R = 6 and
+R = 7 involve, respectively, 210 and 330 components, while
+only 5 components are present for R = 1. As illustrated in
+the left plot of Fig. 6, in the original open-loop algorithm
+tensorial complexity keeps growing until the maximum rank
+R ≤ N is reached at the end of the dressing recursion. At this
+stage, upon summation of helicity conﬁgurations and loop
+diagrams with equivalent one-loop topology, tensor integrals
+are reduced to scalar integrals using external libraries, such
+as Collier [66]o r Cuttools [10], as described in Sect.2.5.
+Dealing with intermediate results with a large number of
+tensor components requires a considerable amount of com-
+puting power, both for the reduction of high-rank objects and
+at the level of the tensorial structure of the open-loop recur-
+sion ( 42), which needs to be performed for each relevant
+helicity conﬁguration and each [... ]
+βk
+β0 component. These
+operations can be signiﬁcantly accelerated by means of the
+123
+
+
+--- Page 12 ---
+70 Page 12 of 35 Eur. Phys. J. C (2018) 78 :70
+(a) (b)
+Fig. 6 Evolution of the tensor rank R and the number Ntcoeff (R) =(R+4
+4
+)
+of open-loop tensor coefﬁcients (right vertical axis) as a function
+of the number k of dressed segments during the open-loop recursion.
+Each dressing step is assumed to increase the rank by one. The origi-
+nal open-loop algorithm, where tensor reduction is applied a posteriori
+(left), is compared to the on-the-ﬂy reduction approach (right). The red
+diagonal lines illustrate the dressing steps and the blue vertical lines the
+reduction steps
+techniques introduced in Sect. 3. Nevertheless, they remain
+the most CPU intensive aspect of multi-particle one-loop cal-
+culations in OpenLoops.
+Motivated by the above considerations, in this section we
+introduce a new approach that avoids the appearance of high-
+rank objects at any stage of the calculation. This is achieved
+by extending the on-the-ﬂy approach introduced in Sect. 3
+to the reduction of open loops. In this way, interleaving the
+operations of open-loop dressing and tensor reduction, we
+build a single recursive algorithm, where each increase of
+tensorial rank caused by a dressing step is compensated by
+an integrand-reduction step.
+As illustrated in the right plot of Fig. 6, the on-the-ﬂy
+reduction approach avoids the appearance of any intermedi-
+ate object with rank higher than two. Besides the CPU cost
+needed for the processing of high-rank objects, this alleviates
+also possible memory issues due to their storage.
+4.1 On-the-ﬂy integrand reduction
+For the on-the-ﬂy reduction of open-loop polynomials we are
+going to use the method of [2], which permits to reduce rank-
+two monomials of the loop momentum through identities of
+the form
+q
+μqν =
+[
+Aμν
+−1 + Aμν
+0 D0
+]
++
+⎡
+⎣ Bμν
+−1,λ +
+3∑
+j=0
+Bμν
+j,λD j
+⎤
+⎦ qλ.
+(77)
+The rank-one polynomial on the rhs is a linear combination
+of four loop denominators, D0,..., D3, and the correspond-
+ing tensor coefﬁcients, Aμν
+j and Bμν
+j,λ, depend only on the
+three external momenta p1, p2, p3. The coefﬁcients of loop
+denominators are labeled with indices j = 0,..., 3, while
+j =− 1 is used for the constant parts. Their explicit expres-
+sions are presented in Sect. 5.2.
+The identity (77) provides an exact reconstruction ofqμqν
+in terms of four-dimensional loop denominators, but can be
+easily generalised toD-dimensional denominators by replac-
+ing
+D j → ¯D j −˜q2 for j = 0, 1, 2, 3. (78)
+Note that ˜q2 contributions resulting from the terms Bμν
+j,λD j
+with j = 0, 1, 2, 3 must cancel among each other in ( 77)
+since they generate rank-three terms of type qλ ˜q2 that are
+not consistent with the rank-two structure on the lhs. Thus
+the substitutions ( 78) generate only an extra term −˜q2 Aμν
+0
+on the rhs of (77).
+The integrand reduction (77) holds at the integrand level,
+irrespectively of the presence of extra loop denominators
+D4,..., DN−1 or additional q-dependent factors that may
+multiply the qμqν monomial. These properties, in combi-
+nation with the factorisation of open loops into segments,
+make it possible to apply the reduction ( 77) at any interme-
+diate stage of the recursion ( 73). This on-the-ﬂy reduction
+approach is illustrated in Fig.7, and the corresponding reduc-
+tion identities for N-point integrands at stepk of the dressing
+recursion have the form
+123
+
+
+--- Page 13 ---
+Eur. Phys. J. C (2018) 78 :70 Page 13 of 35 70
+Fig. 7 Diagrammatic representation of the on-the-ﬂy reduction
+step ( 79)f o ra n N-point open loop at step k = 2 of the dressing
+recursion. The symbols Vk(Ω k
+N ) and Vk(Ω k
+N [ j]) correspond, respec-
+tively, to the rank-two polynomial on the lhs of ( 79) and its reduced
+rank-one counterparts on the rhs. The red crosses indicate the pinch-
+ing of the ¯D j propagators in the Vk(Ω k
+N [ j]) terms with j = 0,..., 3.
+Since ¯D0 = ¯DN , in our graphical representation the ¯D0 denominator
+is located on the Nth segment
+Vk(Ω k
+N , ¯q) Sk+1(q)··· SN (q)
+¯D0 ··· ¯D3 ··· ¯DN−1
+=
+3∑
+j=−1
+Vk(Ω k
+N [ j], ¯q) Sk+1(q)··· SN (q)
+¯D0 ··· /¯D j ··· ¯D3 ··· ¯DN−1
+, (79)
+where Ω k
+N [ j] for 0 ≤ j ≤ 3 denote the (N − 1)-point
+subtopologies that arise from Ω k
+N by pinching the ¯D j prop-
+agator, while terms with j =− 1 on the rhs correspond
+to the original topology, Ω k
+N [−1]= Ω k
+N . Note that the
+denominators ¯D j can be pinched irrespectively of whether
+the related S j(q) segments are already dressed or not. In (79)
+we adopt the approach of Sect.3.2, where open-loop polyno-
+mials incorporate the colour-summed interference with the
+Born amplitude as well as helicity sums and merging of all
+dressed segments. However, for simplicity, the bookkeeping
+of helicities, merged diagrams, and [... ]
+βk
+β0 indices is kept
+implicit.
+The partially dressed open loops on the lhs and rhs of (79)
+have the general form
+Vk(Ω, ¯q) =
+S∑
+s=0
+R∑
+r=0
+Vs
+k;μ1···μr (Ω) qμ1 ··· qμr ˜q2s, (80)
+where four-dimensional loop-momentum components are
+accompanied by ˜q2 terms that arise from (77)t o( 78). As dis-
+cussed in Sect.4.4, only a small fraction of the˜q2-dependent
+terms can lead to non-vanishing contributions at the end of
+the recursion. Thus, in order to avoid the proliferation of
+tensor coefﬁcients, all ˜q2 terms that are expected to vanish
+are identiﬁed and discarded in advance at each dressing and
+reduction step.
+In general, the relation (79) allows one to reduce any poly-
+nomial V
+k(Ω k
+N , ¯q) of rank R ≥ 2 to rank R − 1 polynomials
+Vk(Ω k
+N [ j], ¯q). But, in practice, the reduction ( 79) can be
+interleaved with the open-loop dressing recursion in a way
+that the tensor rank never exceeds two. ForR = 2 the coefﬁ-
+cients of the rank-one open-loop polynomials that arise from
+the reduction (79) read
+Vs
+k;(Ω k
+N [ j]) = Vs
+k;ν1ν2 (Ω k
+N )Aν1ν2
+j + δ−1 j
+[
+Vs
+k;(Ω k
+N )
+− Vs−1
+k;ν1ν2 (Ω k
+N )Aν1ν2
+0
+]
+,
+Vs
+k;μ1 (Ω k
+N [ j]) = Vs
+k;ν1ν2 (Ω k
+N )Bν1ν2
+j,μ1 + δ−1 j Vs
+k;μ1 (Ω k
+N ).
+(81)
+The transformations ( 79)–(81) can be used to reduce any
+rank-two open loop with N ≥ 4 propagators to a rank-one
+N-point object and four (N − 1)-point pinched objects of
+rank one.
+Rank-two open loops with only N = 3 loop propagators
+can be reduced to rank one in a very similar way [ 2]. The
+relevant identities (see Sect. 5.3) have the same structure as
+123
+
+
+--- Page 14 ---
+70 Page 14 of 35 Eur. Phys. J. C (2018) 78 :70
+(77) but involve only three reconstructed propagators,¯D0, ¯D1
+and ¯D2. Moreover, they do not hold at the integrand level, but
+only upon integration over the loop momentum. The tensors
+Aμν
+j and Bμν
+j,λ for the case N = 3 depend only on p1 and p2.
+They are obtained from the ones forN = 4 by simply setting
+to zero the terms involving p3 (see Sect. 5.3).
+The on-the-ﬂy reduction formula for N = 3 has the form
+∫
+dD¯q Vk(Ω k
+3 , ¯q) Srem(q)
+¯D0 ··· ¯D2
+=
+2∑
+j=−1
+∫
+dD¯q Vk(Ω k
+3 [ j], ¯q) Srem(q)
+¯D0 ··· /¯D j ··· ¯D2
+, (82)
+where Vk(Ω k
+3 , ¯q) is an open loop of rank R = 2 that results
+from a certain numberk ≥ 2 of dressing steps andk− 2o rl e s s
+reduction steps. Possible undressed segments are denoted as
+Srem(q), and ( 82) is valid only for terms Srem(q) of rank
+zero or one. In general this allows for only Nrem ≤ 1e x t r a
+segments, i.e.
+Srem(q) =
+{
+Sk+1(q) for Nrem = 1
+1f o r Nrem = 0, (83)
+and these two cases are sufﬁcient to cover all relevant N =
+3 topologies and pinched subtopologies in renormalisable
+theories.3 The relations between the rank-two polynomial
+Vk(Ω k
+3 , ¯q) and its reduced counterparts Vk(Ω k
+3 [ j], ¯q) have
+the same form as in (81).
+Although the above three-point reduction holds only at the
+integral level, the fact that the termSrem(q) can be factorised
+makes it possible to apply ( 82) as soon as the dressed open
+loop Vk(Ω k
+3 , ¯q) has reached rank two, independently of the
+remaining part of the numerator.
+In summary, exploiting the fact that open loops are fac-
+torised into segments, the identities ( 77) and ( 82) can be
+applied on-the-ﬂy during the dressing recursion, while an
+arbitrary number of segments is still undressed.4 Thus, dress-
+ing and reduction steps can be interleaved in a way that the
+increase of tensorial rank resulting from dressing is promptly
+compensated through an on-the-ﬂy reduction. More pre-
+cisely, on-the-ﬂy reduction steps are applied to diagrams
+and pinched sub-diagrams with N ≥ 3 at those stages of
+the recursion where the next dressing step would generate
+3 The fact that Nrem ≤ 1 follows from the inequality Nrem + R −
+Nunpinched ≤ 0, where R = 2 is the rank ofVk(Ω k
+3 , ¯q),a n dNunpinched =
+3 is the number of unpinched propagators in (82). The above inequality
+is obviously fulﬁlled at the beginning of the open-loop recursion, where
+k = R = N
+rem − Nunpinched = 0, and its validity is guaranteed by the
+fact that, in renormalisable theories, dressing and reduction steps cannot
+increase N
+rem + R − Nunpinched.
+4 Note that the fact that the technique of [2] can be applied on-the-ﬂy
+is not a general feature of integrand reduction methods. For instance,
+the OPP method [5] is not applicable on-the-ﬂy since it is based on the
+multiple poles of the entire integrand.
+a rank-three object.5 The reduced rank-one objects with N
+and N − 1 loop propagators are further dressed and possibly
+reduced until one arrives at fully dressed open loops of rank
+R ≤ 2 for all two- and higher-point contributions. An this
+stage, the open-loop matrix structure can be eliminated by
+taking the trace ( 76), and all rank-two objects with N ≥ 3
+can be reduced to rank one with a ﬁnal reduction step of
+type (77)o r( 82).
+After the above dressing and on-the-ﬂy reduction steps,
+the following types of integrals remain to be reduced:
+(i) integrals with N ≥ 5 loop propagators
+and rank R = 1, 0;
+(ii) integrals with N = 4, 3 loop propagators
+and rank R = 1;
+(iii) integrals with N = 2 loop propagators
+and rank R = 2, 1.
+(84)
+For their reduction to scalar integrals with N ≤ 4w eu s ea
+combination of integral reduction and OPP reduction identi-
+ties as described in Appendix A.
+4.2 Merging pinched topologies
+Since it allows one to keep the tensor rank low at any stage
+of the calculations, the on-the-ﬂy reduction approach has
+the potential to accelerate one-loop calculations in a signiﬁ-
+cant way. However, some aspects of the on-the-ﬂy reduction
+approach could lead to a dramatic increase of the computa-
+tional cost. First, the fact that the reduction is performed when
+the loop is still open, i.e. before taking the trace (76), implies
+that the entries of the [... ]
+βk
+β0 matrix have to be processed
+as 16 independent objects. Second, the reduction has to be
+performed for all not yet summed helicity conﬁgurations of
+the undressed segments. Third, each reduction step (79) gen-
+erates four pinched topologies that need to be processed as
+independent contributions in subsequent dressing and reduc-
+tion steps.
+Due to the proliferation of pinched subtopologies, the
+naive iteration of on-the-ﬂy reduction steps would lead to
+a dramatic increase of the CPU cost. Fortunately, this can
+be avoided by means of the merging technique introduced
+in Sect. 3.2, which makes it possible to absorb pinched N-
+point open loops into unpinched (N − 1)-point open loops,
+in such a way that they do not need to be processed as sep-
+arate objects. As explained in the following, the merging of
+pinched subtopologies requires a different implementation
+depending on whether the pinch belongs to the dressed part
+5 This means that, before performing an on-the-ﬂy reduction, rank-two
+open loops are ﬁrst dressed with all possible adjacent segments of rank
+zero. Delaying the reduction step in this way reduces the additional
+CPU cost that results from the appearance of new pinched objects.
+123
+
+
+--- Page 15 ---
+Eur. Phys. J. C (2018) 78 :70 Page 15 of 35 70
+of the open loop or not, as well as for the special case of a
+¯D0 pinch.
+4.2.1 Pinching a dressed propagator
+Let us consider the on-the-ﬂy reduction of an N-point open
+loop with k dressed segments, focusing on contributions that
+result from the pinching of a ¯D j denominator with j < k,
+(85)
+Here, consistently with the notation of Sect. 3.2,w eh a v e
+restored the indices αi of the various undressed segments,
+while helicity indices are kept implicit. The pinched prop-
+agator in ( 85) is entirely dressed and merged, in the sense
+that both adjacent segments, S j and S j+1, are dressed and
+merged. Thus, for what concerns all future dressing and
+reduction steps, apart from the disappearance of the ¯D j
+denominator, the pinch has no effect. Consequently, the
+above contribution can beabsorbed into unpinched(N − 1)-
+point open loops that involve the same loop denominators,
+¯D0 ··· ¯D j−1 ¯D j+1 ··· ¯DN−1, and the same undressed seg-
+ments, Sαk+1
+k+1 ,..., SαN−1
+N−1 . To this end, it is sufﬁcient to bring
+the pinched open loop (85) in the standard form
+(86)
+which corresponds to an unpinched(N − 1)-point open loop
+with k − 1 dressed segments. The crossed vertex on the lhs
+of (86) indicates that the two original segments that are con-
+nected by the pinched propagator should be regarded as a
+single effective segment. This symbolic contraction of seg-
+ments does not change anything in the numerics of the open-
+loop numerator, and the transformation (86) is nothing but a
+trivial relabeling of the denominators and of the undressed
+segments that lie on the right side of the pinch,
+˜D
+i(q) = ¯Di(q) for i < j,
+˜Di(q) = ¯Di+1(q) and ˜Sαi
+i (q) = Sαi+1
+i+1 (q) for i ≥ j. (87)
+The pinched open loop ( 86) can be merged with corre-
+sponding unpinched open loops to form a single (N − 1)-
+point object withk − 1 dressed segments. The corresponding
+formula reads
+˜Vαk···αN−1
+k−1 ( ˜Ω k−1
+N−1, ¯q) ˜Sαk
+k (q)··· ˜SαN−1
+N−1 (q)
+˜D0 ··· ˜D3 ··· ˜DN−2
+= Vαk···αN−1
+k−1 (Ω k−1
+N−1, ¯q) ˜Sαk
+k (q)··· ˜SαN−1
+N−1 (q)
+˜D0 ··· ˜D3 ··· ˜DN−2
++
+∑
+Ω k
+N [ j]
+˜Vαk···αN−1
+k (Ω k
+N [ j], ¯q) Sαk
+k+1(q)··· SαN−1
+N (q)
+¯D0 ··· /¯D j ··· ¯D3 ··· ¯DN−1
+.
+(88)
+A diagrammatic representation of this identity is given in
+Fig. 8. The resulting object, for which we introduce the sym-
+bol ˜Vαk···αN−1
+k−1 , is a combination of unpinched and pinched
+open loops, which enter, respectively, through the ﬁrst and
+second term on the rhs of ( 88). By construction, the cor-
+responding set of diagrams ( ˜Ω
+k−1
+N−1) includes all unpinched
+(Ω k−1
+N−1) and pinched (Ω k
+N [ j]) diagrams with loop propaga-
+tors ˜D0 ··· ˜DN−2 and undressed segmentsSαk+1
+k+1 ,..., SαN−1
+N−1 .
+The set of pinched diagrams Ω k
+N [ j] corresponds to an N-
+point topology that results from Ω N−1
+k−1 by undoing a ¯D j
+pinch, and ( 88) involves all possible Ω k
+N [ j] contributions
+with 1 ≤ j ≤ k.
+As a necessary condition for the merging operation ( 88)
+to be applicable, the different open loops on the rhs of ( 88)
+have to feature the same undressed segments. This implies
+that they must be at the same stage of the dressing recur-
+sion, and, most importantly, that the starting position and
+the directions of the respective dressing recursions should
+be equivalent to each other. With other words, ˜D
+0 ··· ˜DN−2
+and ¯D0 ··· /¯D j ··· ¯DN−1 should be two identicalorderedsets
+of propagators. In particular they should start from the same
+cut propagator, ˜D0 = ¯D0. As discussed in Sect. 4.3 this can
+be guaranteed, to some extent, by means of an appropriate
+cutting rule.
+Another obvious prerequisite for the absorption of pinched
+N-point open loops is the existence of corresponding
+unpinched (N − 1)-point Feynman diagrams. With other
+words, the crossed vertex in ( 86) should have a physical
+counterpart consisting of a triple or quartic vertex, which
+can directly connect the ¯D
+j−1 and ¯D j+1 propagators to sub-
+trees involving the external legs attached to ˆw j and ˆw j+1
+(see Fig. 8). In QCD, this turns out to be the case for most
+pinched conﬁgurations.
+Moreover, pinchedN-point conﬁgurations of the form (86)
+can also be merged with other pinched higher-point diagrams
+that get the relevant pinches in past or future reduction steps.
+Thus, pinched objects of type (86) will always be denoted as
+123
+
+
+--- Page 16 ---
+70 Page 16 of 35 Eur. Phys. J. C (2018) 78 :70
+Fig. 8 Diagrammatic representation of formula ( 88) for the merging
+of pinched open loops. The ﬁrst two unpinched diagrams on the rhs,
+where the generic subtreesw
+αj
+j and w
+αj+1
+j+1 are directly connected to the
+loop propagators ˜D j−1 and ˜D j , correspond to the ﬁrst term on the rhs
+of ( 88). The corresponding triple or quartic vertices of the Feynman
+rules play an analogous role as the crossed vertex in the pinched open
+loop (last diagram on the rhs). Besides merging all relevant unpinched
+combinationsα
+j ,α j+1, also possible unpinched topologies where some
+of the external legs inw j and w j+1 are interchanged (not shown) should
+be included
+absorbable, irrespective of whether corresponding unpinched
+(N − 1)-point Feynman diagrams exist or not.
+The merging procedure (88) needs to be applied after any
+on-the-ﬂy reduction step that creates new pinched objects.
+Thus merging operations have to be interleaved with iterated
+dressing and reduction steps. Since pinched N-point objects
+are absorbed into lower-point objects, the algorithm should
+start with the dressing and on-the-ﬂy reduction of open loops
+with N = N
+max, and continue towards lowerN.T h em e r g i n g
+operation ( 88) starts at stage N − 1 = Nmax − 1 and is
+applied after every dressing step, together with the merging
+of unpinched open loops (see Sect.3.2). Note that, due to the
+iterative nature of the algorithm, the term ˜V
+αk...αN−1
+k on the
+rhs of (88) can be the result of multiple pinching and merging
+steps.
+4.2.2 Pinching an undressed propagator
+The possibility to absorb pinched open loops as in Fig. 8
+is based on the fact that all future dressing and reduction
+operations can be performed only once at the level of a
+merged object. Thus, the undressed segments of pinched and
+unpinched open loops should be identical.
+However, the segments connected to the ˜D
+j−1 and ˜D j
+propagators are different for pinched and unpinched terms.
+In the pinched case there are two separate segments, which
+involve w
+j and w j+1 and require two subsequent dressing
+steps. In contrast, unpinched open loops require a single
+dressing step, since w j and w j+1 are combined in a single
+segment.
+It is thus clear that pinched open loops can be absorbed
+only after the dressing of the segments that lie on the two
+sides of the pinch. If this is not the case, i.e. when a¯D
+j pinch
+is applied to an open loop with k ≤ j dressed segments, its
+absorption becomes possible only after(k− j +1) additional
+dressing steps, which result in
+˜V
+αj+1...αN−1
+j+1 (Ω j+1
+N [ j], ¯q)
+=
+∑
+α′
+k+1···α′
+j+1
+˜V
+α′
+k+1···α′
+j+1αj+1···αN−1
+k (Ω k
+N [ j], ¯q)
+=
+∑
+α′
+k+1···α′
+j+1
+× S
+α′
+k+1
+k+1 (q)··· S
+α′
+j+1
+j+1 (q), (89)
+where Sk+1 ··· S j+1 are dressed. Note that in ( 89)w ea l s o
+sum over all possible α′
+i , and use indices αj+1,...,α N−1
+with shifted labels for the undressed segmentsS j+2,..., SN
+on the right side of the pinch.
+As illustrated in Fig. 9, the dressing operation (89) com-
+bined with the relabeling (87) brings the pinched open loops
+in a conﬁguration that can be absorbed with the merging for-
+mula ( 88). However, the absorption of undressed pinched
+propagators is more involved than the simpliﬁed picture
+of Fig. 9. Pinched open loops can require more than one
+dressing step to become absorbable, in which case, in gen-
+eral, also new reduction steps are needed in order to keep the
+tensor rank below three. Such new reductions generate addi-
+tional pinches, and their iteration can lead to a proliferation
+of multi-pinched conﬁgurations.
+Thus, to avoid dramatic inefﬁciencies, it is crucial to
+minimise the number of required dressing steps by keep-
+ing pinchable propagators as close as possible to the dressed
+part of the numerator. This is why we choose to perform the
+on-the-ﬂy reduction using the denominators ¯D
+0,..., ¯D3.6
+6 The on-the-ﬂy reduction (79) can be performed using any set of four
+propagators, ¯Di0 ,..., ¯Di3 .
+123
+
+
+--- Page 17 ---
+Eur. Phys. J. C (2018) 78 :70 Page 17 of 35 70
+Fig. 9 Required dressing (89) and relabeling (87) operations before merging open loops with an undressed pinched propagator ¯D j
+In this way, when the ﬁrst two segments are dressed and the
+ﬁrst reduction step is applied (see Fig.7), the various pinched
+propagators are located at most one left-dressing step ( ¯D0)
+and two right-dressing steps (¯D3) away from the dressed part.
+In order to identify pinches that cannot be directly
+absorbed and to anticipate how they propagate through the
+recursion, let us consider generic open-loop conﬁgurations
+before the creation of a new pinch through a reduction step. At
+this stage the rank R must be equal to two. We ﬁrst consider
+the very ﬁrst reduction step, which can occur afterk ≥ R = 2
+dressing steps, and we focus on a ¯D
+2 pinch in the case where
+only k = 2 segments are dressed. In this case, an on-the-ﬂy
+reduction step and a subsequent dressing step yield
+(90)
+i.e. the ¯D2 pinch can be brought in the standard form ( 86)
+and can thus be absorbed into unpinched contributions. The
+same considerations apply also to ¯D1 and ¯D0 pinches (see
+Sect. 4.2.3) and can be generalised to any step of the recur-
+sion, since the structure of the dressed parts on the lhs and
+rhs of (90)i st h es a m e .
+Also ¯D3 pinches can be absorbed in a similar way in case
+there are at least three dressed segments before the reduction
+step. Otherwise, when only two segments are dressed, the
+combination of an on-the-ﬂy reduction step with a subsequent
+dressing step leads to
+(91)
+where the pinch is applied on the last dressed segment. Unless
+another dressing step can be applied before reaching rank
+three, this kind of pinch cannot be absorbed without a fur-
+ther reduction and dressing step. Dressing one more segment
+allows one to absorb the originalD
+3 pinch as well as new ¯D0,
+¯D1, and ¯D2 pinches that arise from the new reduction step.
+However, the new reduction leads again to a conﬁguration
+with a ˜D
+3 pinch on the last dressed segment,
+(92)
+Again, the dressed parts on the lhs and rhs of ( 92)h a v et h e
+same structure, which implies that such ¯D3-pinched conﬁg-
+123
+
+
+--- Page 18 ---
+70 Page 18 of 35 Eur. Phys. J. C (2018) 78 :70
+Fig. 10 Required dressing, loop-momentum shift and relabeling operations (94)–(96) before merging an open loop with a pinched¯D0 propagator
+urations are stable with respect to further reduction steps.
+Thus, open loops with multiple non-absorbable pinches do
+not occur, and the only type of conﬁguration with a single
+non-absorbable pinch is the one in (92).
+4.2.3 Pinching the ¯D
+0 propagator
+Finally, we consider open loops withk dressed segments and
+a pinched ¯D0 denominator,
+(93)
+For convenience, here and in the following we put ¯D0 at
+the end of the chain of denominators. Similarly as for the
+cases discussed in Sect. 4.2.2, the above pinched conﬁgura-
+tion becomes absorbable only when the segments connected
+to the ¯D
+0 propagator, i.e.SN (q) and S1(q), are dressed. How-
+ever, this happens only at the end of the standard dressing
+recursion.
+In order to anticipate the absorption of the most advanced
+pinch one could replace the denominators ¯D0,..., ¯D3 used
+for the on-the-ﬂy reduction by ¯D1,..., ¯D4, which lie all
+directly on the right side of the cut. However, the absorp-
+tion of each ¯D
+4 pinch would require up to three extra dressing
+steps and two related reduction steps, resulting in the creation
+of multiple new pinches. This problem can be circumvented
+by observing that the ¯D
+0 propagator lies only one step away
+from the dressed part of the open loop, if one reverts the
+dressing direction. Therefore, as illustrated in Fig. 10,t h e
+pinched ¯D0 propagator can be entirely dressed by means of
+a single left-dressing step. This operation results in
+˜Vαk+1···αN−1
+k+1 (Ω k+1
+N [0], ¯q)
+=
+∑
+αN
+SαN
+N (q) ˜Vαk+1···αN−1αN
+k (Ω k
+N [0], ¯q), (94)
+where the left multiplication of the Nth segment should be
+understood as
+[
+SN (q) ˜Vk(Ω, ¯q)
+]βk+1
+β0
+=
+∑
+βN
+[
+SN (q)
+]βN
+β0
+×
+[
+˜Vk(Ω, ¯q)
+]βk+1
+βN
+=
+[ ( [
+˜Vk(Ω, ¯q)
+] T [
+SN (q)
+] T) T ] βk+1
+β0
+. (95)
+Technically, as indicated on the rhs, this operation can be eas-
+ily implemented through a standard right-dressing step upon
+transposition of the input matrices and back-transposition of
+the result.7
+As usual, before merging with unpinched open loops, the
+propagators and undressed segments that lie on the right side
+of the pinch need to be brought back in standard form. In
+case of a ¯D
+0 pinch, all remaining N − 1 denominators and
+segments preserve their relative position along the open loop.
+Thus, only ¯DN−1 needs to be relabeled, since it assumes
+the role of the new ˜D0. Moreover, the standard form ˜D0 =
+q2 − ˜m2
+0 requires a loop momentum shiftq → q − pN−1 for
+7 Note that in a three-gluon vertex this transposition leads to a ﬂip of the
+colour indices of the two gluons in the loop and hence a minus sign in
+the colour factor. Since the colour factor has been ﬁxed in the beginning
+this minus sign has to be taken into account in the colour-stripped open
+loop.
+123
+
+
+--- Page 19 ---
+Eur. Phys. J. C (2018) 78 :70 Page 19 of 35 70
+the entire open loop. The corresponding reparametrisations
+for the various denominators and segments read
+˜D0(q) = ¯DN−1(q − pN−1),
+˜Di(q) = ¯Di(q − pN−1) for 1 ≤ i ≤ N − 2,
+˜Sαi
+i (q) = Sαi
+i (q − pN−1) for k + 1 ≤ i ≤ N − 1.
+(96)
+In terms of masses and momenta this corresponds to ˜m0 =
+m N−1, ˜mi = mi and ˜pi = pi + pN−1 for 1 ≤ i ≤ N−2. With
+these transformations the left-dressed ¯D0-pinched open loop
+(94) can be merged with related unpinched objects according
+to
+˜Vαk+1...αN−1
+k ( ˜Ω k
+N−1, ¯q)˜Sαk+1
+k+1 (q)··· ˜SαN−1
+N−1 (q)
+¯D1 ··· ˜D3 ··· ˜DN−2 ˜D0
+≡ Vαk+1...αN−1
+k (Ω k
+N−1, ¯q)˜Sαk+1
+k+1 (q)··· ˜SαN−1
+N−1 (q)
+¯D1 ··· ˜D3 ··· ˜DN−2 ˜D0
++
+∑
+Ω k
+N [0]
+˜Vαk+1...αN−1
+k+1 (Ω k+1
+N [0], ¯q)
+¯D1 ··· ¯D3 ··· ¯DN−1 /¯D0
+× Sαk+1
+k+1 (q)··· SαN−1
+N−1 (q)
+⏐⏐
+⏐⏐
+q→ q− pN−1
+. (97)
+Apart from the loop momentum shift, q → q − pN−1,t h i s
+formula is entirely analogous to (88). Let us note that, since
+the shift is applied to a single term, the identity ( 97) holds
+only upon loop momentum integration. Nevertheless, as far
+as the correctness of ﬁnal results at integral level is concerned,
+it can be safely applied at the integrand level.
+As demonstrated in Sect. 6.2, using the on-the ﬂy reduc-
+tion with pinch absorption in combination with the on-the-
+ﬂy techniques of Sect. 3 results in a very fast and numeri-
+cally stable one-loop algorithm. In particular, as compared to
+the original version of OpenLoops, we ﬁnd very signiﬁcant
+improvements, both in terms of speed and numerical stability.
+Actually, using only the new techniques of Sect. 3 without
+on-the-ﬂy reduction yields even higher CPU efﬁciency. How-
+ever, as we will see, the moderate extra CPU cost that results
+from the on-the-ﬂy reduction approach is counterbalanced by
+a very signiﬁcant gain in numerical stability, which implies a
+reduced usage of quadruple precision for exceptional phase
+space points.
+4.3 Cutting rule
+As pointed out in Sect.4.2.1, the possibility to merge pinched
+N-point open loops and corresponding unpinched (N − 1)-
+point open loops depends on the way they are cut. In order
+to identify the relevant requirements, let us consider the cut-
+open topology deﬁned by the following ordered set of loop
+segments,
+I
+N ={ S1, S2,..., SN }. (98)
+Here we have applied our standard labeling scheme, where
+the cut is located betweenSN and S1, i.e. on the ¯D0 propaga-
+tor, while the dressing recursion starts withS1 and is directed
+towards S2. This conﬁguration will be referred to as aSN /S1
+ordered cut. Since the labeling scheme is a consequence of
+the position of the cut, and not vice versa, we have to deﬁne a
+cutting rule that selects S
+N /S1 out of all possible Si /S j cuts.
+The cutting rule should enable the merging of pinched
+subtopologies that arise from (98) by pinching certain prop-
+agators ¯D j , i.e. by combining S j and S j+1 i nas i n g l es e g -
+ment S j ⊕ S j+1. To this end, unless the cut propagator ¯D0
+is pinched, the cutting rule should guarantee that the posi-
+tion of the cut and its direction remain unchanged after a
+pinch. More explicitly, the desired cut conﬁgurations after a
+¯D j pinch with j > 0a r e
+IN [1]={ S1 ⊕ S2, S3,..., SN }, (99)
+IN [ j]={ S1,..., S j−1, S j ⊕ S j+1, S j+2,..., SN }
+for 2 ≤ j ≤ N − 2, (100)
+IN [N − 1]={ S1, S2,..., SN−1 ⊕ SN }. (101)
+In this way, as required for the merging operations described
+in Sects. 4.2.1–4.2.2, the dressing of pinched and unpinched
+objects always starts and ends with segments that contain
+the external legs attached to S1 and SN , respectively. In the
+case of a ¯D0 pinch, where the original cut propagator disap-
+pears, in order to enable the merging of left-dressed pinched
+subtopologies described in Sect. 4.2.3, the cut should be
+moved to the left of SN ⊕ S1, so that
+IN [0]={ SN ⊕ S1, S2,..., SN−1}. (102)
+In order to ensure, at least in part, that pinched topologies are
+cut as in (99)–(102), we replace the original cutting rule (49)–
+(50) by the new prescriptions
+F(S1)> F(Sk) ∀ k > 1, (selection rule) (103)
+F(SN )> F(S2), (direction rule) (104)
+where the weights F(Sa) are deﬁned in (47). The key prop-
+erty of the above cutting rule is the pinch-invariance of the
+selection rule, which determines the ﬁrst segmentS1. In fact,
+if this condition is realised for ( 98), then it is guaranteed
+to hold also for all pinched conﬁgurations ( 99)–(102). For
+j = 0, 1 this is an obvious consequence of the fact that
+F(S1 ⊕ Sa)> F(S1) for any a ̸= 1. In the other cases,
+the fact that S1 remains the ﬁrst subtree in spite of the
+appearance of a new pinched subtreeS j ⊕ S j+1 with weight
+F(S j) + F(S j+1), is guaranteed by
+F(S1)>
+N∑
+i=2
+F(Si). (105)
+123
+
+
+--- Page 20 ---
+70 Page 20 of 35 Eur. Phys. J. C (2018) 78 :70
+This inequality is an automatic consequence of (103) and of
+the binary nature of the weights ( 47). This is easily under-
+stood by observing that, due to 2 Np−1 = 1 + ∑Np−1
+α=1 2α−1,
+the last external particle (α = Np) outweighs the ensemble
+of all other particles. Therefore the last external particle must
+belong to the leading-weight subtree S1, which implies that
+F(S1) ≥ 2Np−1 and leads to (105).
+Unfortunately, the direction rule (104) is not sufﬁcient in
+order to preserve the direction of the cut. For instance, in case
+of a ¯D1 pinch, the desired cut (99) requires F(SN )> F(S3),
+which does not automatically follow from F(SN )> F(S2).
+More generally, apart from the case of aD3 pinch, where the
+second and last subtree do not change, there is no guarantee
+that the condition (104) preserves the direction of the cut.
+Thus the above cutting rule does not allow one to absorb
+all pinched open loops. Nevertheless, as demonstrated in
+Sect. 6.2, it is sufﬁcient to obtain a very fast on-the-ﬂy reduc-
+tion algorithm. Moreover, it should be possible to further
+increase CPU efﬁciency, either by means of an improved cut-
+ting rule or by inverting the dressing direction after certain
+pinches.
+4.4 Rational terms of type R
+1
+As discussed in Sect. 4.1, each reduction step of type ( 79)
+and (82) generates terms ¯Di − Di =˜q2 that account for the
+mismatch between the D-dimensional and four-dimensional
+parts of loop denominators. The resulting tensor integrals
+with (D− 4)-dimensional ˜q
+2 terms in the numerator can give
+rise to ﬁnite terms. As is well known [2,59], these so-called
+rational terms of type R1 can arise only in the presence of
+1/(D− 4) poles of ultraviolet type. Thus, vanishing integrals
+of type R1 can be easily identiﬁed by means of the simple
+power counting criterion
+∫
+dD¯q qμ1 qμ2 ··· qμr ˜q2s
+¯D0 ¯D1 ··· ¯DN−1
+= O(D − 4)
+if s ≥ 1 and r + 2s + 4 < 2N. (106)
+In a renormalisable theory, where each loop segment
+increases the rank at most by one,r+2s ≤ N and all integrals
+with N ≥ 5 and s ≥ 1 vanish. Thus, the only non-vanishing
+integrals of type R1 that remain at the end of the on-the-ﬂy
+reductions of Sect. 4.1 are [2]
+∫
+dD¯q ˜q2
+¯D0 ¯D1
+= −iπ2
+2
+(
+m2
+0 + m2
+1 − p2
+1
+3
+)
++ O(D − 4), (107)∫
+dD¯q qμ ˜q2
+¯D0 ¯D1 ¯D2
+= iπ2
+6 ( p1 + p2)μ
++ O(D − 4), (108)∫
+dD¯q ˜q2
+¯D0 ¯D1 ¯D2
+= −iπ2
+2 + O(D − 4), (109)
+∫
+dD¯q ˜q4
+¯D0 ¯D1 ¯D2 ¯D3
+= −iπ2
+6 + O(D − 4). (110)
+The power counting criterion (106) can be exploited in a
+way that makes it possible to discard irrelevant terms of type
+R1 at any intermediate step of the open-loop recursion. To this
+end, for each number k of dressing steps we anticipate the
+maximum rank Rmax
+k of the segments Sk+1(q) ,..., SN (q)
+that remain to be dressed. Given this information, it is clear
+that monomials of type qμ1 qμ2 ... qμr ˜q2s in the dressed
+open loop cannot give rise to terms of D-dimensional rank
+higher than r + 2s + Rmax
+k at the end of the recursion. Thus,
+we can anticipate that,
+∫
+dD¯q qμ1 ··· qμr ˜q2s Sk+1(q)··· SN (q)
+¯D0 ¯D1 ··· ¯DN−1
+= O(D − 4)
+if s ≥ 1 and r + 2s + 4 + Rmax
+k < 2N. (111)
+The systematic application of this condition allows one to
+ﬁlter out a very large number of˜q2 terms, thereby improving
+the efﬁciency of the algorithm.
+Note also that the unpinched contributionsVk(Ω k
+N [−1]) in
+the reduction identities (81) involve terms that reducer+2s−
+2N, and thus the degree of ultraviolet divergence, by one and
+two. Depending on the values of N and Rmax
+k , this can result
+in vanishing R1 contributions that can also be immediately
+discarded. For instance, in the reduction of
+∫
+dDq qμ1 qμ2 ˜q2
+¯D0 ¯D1 ¯D2 ¯D3
+all unpinched contributions apart from those of type ( 110)
+can be neglected.
+5 Reduction identities and numerical stability
+This section deals with the reduction method of [ 2], which
+provides the basis of the on-the-ﬂy reduction approach of
+Sect. 4.1. In Sects. 5.1–5.3 we outline the derivation of the
+tensor coefﬁcients Aμν
+j and Bμν
+j,λ in the reduction identities
+(77) and ( 82). In doing so we set the stage for Sect. 5.4,
+where we discuss numerical instability problems and present
+a systematic approach for their solution.
+5.1 The reduction basis
+The reduction identities of [2] are based on a decomposition
+of the four-dimensional loop momentum,
+qμ =
+4∑
+i=1
+ci lμ
+i , (112)
+in a basis l1,..., l4, formed by massless momenta in two
+orthogonal planes,
+l2
+i = 0, l1,2 · l3,4 = 0. (113)
+123
+
+
+--- Page 21 ---
+Eur. Phys. J. C (2018) 78 :70 Page 21 of 35 70
+This reduction basis is deﬁned in terms of the external
+momenta p1, p2, which enter the propagators D1,D2.T h e
+basis momenta l1,2 are chosen in the plane spanned by p1
+and p2,
+lμ
+1 = pμ
+1 − α1 pμ
+2 , lμ
+2 = pμ
+2 − α2 pμ
+1 , (114)
+while l3,4 lie in the plane orthogonal top1, p2 and are deﬁned
+as
+lμ
+3 =¯v(l1)γμ
+(
+1 − γ5
+2
+)
+u(l2),
+lμ
+4 =¯v(l2)γμ
+(
+1 − γ5
+2
+)
+u(l1), (115)
+where u and ¯v are massless spinors. This deﬁnition of l3,4
+implies l∗
+3 = eiχl4, where χ is twice the phase difference
+between the u and v spinors. The normalization of the basis
+is chosen such that
+γ = 2(l1 · l2) =− 1
+2(l3 · l4), (116)
+and the α1,2 coefﬁcients in (114) read8
+αi = p2
+i
+( p1 · p2) ±
+√
+Δ
+, (117)
+where Δ is related to the rank-two Gram determinantΔ 12 =
+det( pi · p j) via
+Δ =− Δ 12 = ( p1 · p2)2 − p2
+1 p2
+2. (118)
+The Gram determinant is related to the normalisation fac-
+tor γ via
+γ = 4Δ
+( p1 · p2) ±
+√
+Δ
+, (119)
+and these two parameters play a critical role for the stability of
+the reduction. In fact, in the limit of vanishing Gram determi-
+nant, (116) and (119) imply that(l1 · l2) ∝ (l3 · l4) ∝ γ ∝ Δ .
+Thus
+lim
+Δ→ 0
+(li · l j) = 0 ∀ i, j, (120)
+which implies that all light-like basis momenta li become
+parallel to each other9 leading to severe numerical instabili-
+ties in the decomposition (112).
+8 The sign of the square root is chosen such that ±
+√
+Δ = sign( p1 ·
+p2)
+√
+Δ . This guarantees that the limits lim
+p2
+i → 0
+αi = 0 are approached in
+a smooth way.
+9 As a consequence oflμ
+1,2 ∈ R and(l1·l2) = E1 E2(1− cos(θ12)) → 0,
+the ﬁrst two basis vectors become parallel to each other, i.e. lμ
+1,2 →
+ξ1,2 ημ with ξ1,2 ∈ R and ημ ∈ R.A sf o rt h eC-valued basis vectors
+l3,4,u s i n gl∗
+3 = eiχl4 one can deﬁne their real and imaginary parts
+Note that in [2] the basis momentali contain an additional
+normalisation factor10
+β = 1
+1 − α1α2
+=± ( p1 · p2) ±
+√
+Δ
+2
+√
+Δ
+, (121)
+which diverges like 1/
+√
+Δ when Δ → 0. As a consequence,
+in [2] numerical instabilities are in part visible as factors β
+in the reduction formulas and in part hidden in the deﬁni-
+tion of the basis vectors. Instead, the basis momenta deﬁned
+in (114)–(115) are stable in the Δ → 0 limit. Thus, in the
+reduction formulas presented in Sects. 5.2 and 5.3, instabil-
+ities related to the Gram determinant ( 118) are fully mani-
+fest in the form of inverse powers of the parameter γ ∝ Δ .
+More precisely, for p
+2
+1 = 0 and p2
+2 ̸= 0, Gram-determinant
+instabilities arise also from α2 =± p2
+2/(2
+√
+Δ) . However,
+the parametrisation adopted in Sect. 5.3 ensures that α2 is
+always regular.
+5.2 On-the-ﬂy box reduction
+In the following we discuss the reduction identity (77), which
+can be rewritten in a slightly more compact form as
+qμqν =
+3∑
+j=−1
+[
+Aμν
+j + Bμν
+j,λ qλ
+]
+D j, (122)
+with D−1 = 1. Since qμqν is reconstructed in terms of
+D0, D1, D2, D3, we denote (122) as box reduction identity,
+although it is applicable to any integrand with N ≥ 4 loop
+propagators. The starting point for its derivation is given by
+the decomposition (112). Since the basis momenta l1,2 and
+l3,4 lie in mutually orthogonal planes, it is natural to split the
+loop momentum into corresponding components,
+qμ = qμ
+∥ + qμ
+⊥ , (123)
+with qμ
+∥ = c1lμ
+1 +c2lμ
+2 and qμ
+⊥ = c3lμ
+3 +c4lμ
+4 . The respective
+ci coefﬁcients can be easily related to scalar products(q · li)
+using (113) and (116). This leads to,11
+qμ
+∥ = 2
+γ
+[
+(q · l1) lμ
+2 + (q · l2) lμ
+1
+]
+and
+Footnote 9 continued
+as l3(4),+ =[ l3(4) + eiχl4(3)]/2, l3(4),− =[ l3(4) − eiχl4(3)]/(2i),a n d
+show that (120) leads to (˜li · ˜l j ) → 0 for all real-valued vectors ˜li , ˜l j ∈
+{l1, l2, l3,±, l4,±}. Thus, similarly as for l1,2 we have ˜li → ˜ξi ημ ∀ i,
+and we arrive at lμ
+3,4 → z3,4ημ with z3 = z∗
+4 ∈ C, i.e. also the basis
+vectors l3,4 become parallel to l1,2.
+10 More explicitly, the basis momenta of [ 2] correspond to ˜li = βli
+and the various li -dependent quantities are related in a similar way,
+e.g. ˜γ = β2γ, while li -independent quantities such as Δ and αi are
+identical.
+11 This decomposition of q corresponds to qμ
+∥ = Dμ/γ and qμ
+⊥ =
+− Qμ/(2γ) in [2].
+123
+
+
+--- Page 22 ---
+70 Page 22 of 35 Eur. Phys. J. C (2018) 78 :70
+qμ
+⊥ =− 1
+2γ
+[
+(q · l3)lμ
+4 + (q · l4)lμ
+3
+]
+. (124)
+The qμ
+∥ component can be directly reduced to rank zero
+by reconstructing the scalar products (q · l1,2) in terms of
+D0, D1, D2 using
+pi · q = 1
+2 (Di − D0 + fi0) , fi0 = m2
+i − m2
+0 − p2
+i .
+(125)
+This yields
+qμ
+∥ = 1
+γ
+[
+f10rμ
+2 + f20rμ
+1 + D1rμ
+2 + D2rμ
+1 − D0
+(
+rμ
+1 + rμ
+2
+)]
+,
+(126)
+with
+rμ
+1 = lμ
+1 − α1lμ
+2 and rμ
+2 = lμ
+2 − α2lμ
+1 . (127)
+In order to obtain an identity that reduces also q⊥ to a linear
+combination of D0,..., D3 one has to move to rank two by
+squaring (123) in a way that does not generate qμ
+∥ qν
+∥ terms.
+To this end one can write
+qμqν = 1
+2
+[ (
+qμ − qμ
+⊥
+)(
+qν + qν
+⊥
+)
++ qμ
+⊥ qν
+⊥
+]
++ (μ ↔ ν)
+= 1
+2
+[
+qμ
+∥
+(
+qν + qν
+⊥
+)
++ qμ
+⊥ qν
+⊥
+]
++ (μ ↔ ν). (128)
+Applying (126)t ot h er h so f(128) reduces qμ
+∥ qν and qμ
+∥ qν
+⊥
+to rank one, such that only
+qμ
+⊥ qν
+⊥ = 1
+4γ2
+4∑
+i, j=3
+(q · ˆli)(q · ˆl j) lμ
+i lν
+j , (129)
+with ˆl3,4 = l4,3, remains to be reduced. This is achieved by
+means of the relations [2]
+(q · l3)(q · l4) = γ
+(
+qλ
+∥ qλ − D0 + m2
+0
+)
+, (130)
+(q · l3(4))2 = γ
+( p3 · l4(3))
+×
+[(
+D0 + m2
+0 − qλ
+∥ qλ
+)
+( p3 · l3(4))
+−
+(
+D3 − D0 + f30 − 2 p3,αqα
+∥
+)
+(l3(4),λqλ)
+]
+, (131)
+where the quadratic terms (q · li)(q · l j) with i, j = 3, 4a r e
+reconstructed in terms of D0 and D3 using also the external
+momentum p3.
+Combining ( 126)–(131) leads to the reduction iden-
+tity (122) with
+Aμν
+−1 = m2
+0 Aμν
+0 , Aμν
+1,2,3 = 0,
+Aμν
+0 = 1
+4γ
+(
+αLμν
+33 + 1
+α Lμν
+44 − Lμν
+34
+)
+,
+Bμν
+−1,λ =
+3∑
+i=1
+fi0 Bμν
+i,λ, Bμν
+0,λ =−
+3∑
+i=1
+Bμν
+i,λ,
+Bμν
+1,λ = 1
+4γ2
+[ 2( p3 · r2)
+( p3 · l3)
+(
+Lμν
+33 l4,λ + 1
+α Lμν
+44 l3,λ
+)
+−
+(
+rμ
+2 Lν
+34,λ + rν
+2 Lμ
+34,λ
+)]
++ 1
+γ
+(
+rμ
+2 δν
+λ − Aμν
+0 r2,λ
+)
+,
+Bμν
+2,λ = Bμν
+1,λ
+⏐⏐
+r1↔ r2
+,
+Bμν
+3,λ =− 1
+4γ( p3 · l3)
+(
+Lμν
+33 l4,λ + 1
+α Lμν
+44 l3,λ
+)
+, (132)
+where we have introduced
+Lμν
+33 = lμ
+3 lν
+3, Lμν
+44 = lμ
+4 lν
+4,
+Lμν
+34 = lμ
+3 lν
+4 + lμ
+4 lν
+3,α = p3 · l4
+p3 · l3
+. (133)
+The relations between the Aμν
+j and Bμν
+j,λ tensors in the ﬁrst
+two lines of (132) follow from the requirement that terms of
+rank different from two vanish on the rhs of (122). Note also
+that the tensor Lμν
+34 can be rewritten in terms ofl1, l2 and gμν
+as
+Lμν
+34 = 4
+(
+lμ
+1 lν
+2 + lμ
+2 lν
+1 − γ
+2 gμν
+)
+. (134)
+5.3 On-the-ﬂy triangle reduction
+The identity ( 82), which reconstructs qμqν in terms of
+D0, D1, D2 at the integral level, will be denoted as trian-
+gle reduction. Its derivation is based on the observation that
+the only terms that involve D3 and p3 in Sect. 5.2, i.e. the
+squared scalar products (q · l3)2 and (q · l4)2 in (131), do
+not contribute in three-point integrals of rank R ≤ 3. More
+precisely [2], for i = 3, 4,
+∫
+dD ¯q (q · li)2
+¯D0 ¯D1 ¯D2
+=
+∫
+dD ¯q (q · li)2 qρ
+¯D0 ¯D1 ¯D2
+= 0. (135)
+As a consequence, the derivations of Sect. 5.2 are also
+applicable to three-point functions at the integral level upon
+replacing (129)b y
+q
+μ
+⊥ qν
+⊥ → 1
+4γ2 (q · l3)(q · l4) Lμν
+34 . (136)
+In this way one arrives at the reduction identities
+∫
+dD¯q qμqνS(q)
+¯D0 ··· ¯D2
+=
+2∑
+j=−1
+∫
+dD¯q
+(
+Aμν
+j + Bμν
+j,λ qλ
+)
+S(q)
+¯D0 ··· /¯D j ··· ¯D2
+, (137)
+where S(q) = S+ Sρqρ is an arbitrary rank-one polynomial,
+and the tensorsAμν
+j and Bμν
+j,λ are obtained from (132) through
+123
+
+
+--- Page 23 ---
+Eur. Phys. J. C (2018) 78 :70 Page 23 of 35 70
+q
+p1
+q + p1
+p2 − p1
+q + p2
+− p2
+Fig. 11 Triangle t-channel (sub)topology that gives rise to Δ 12 → 0
+numerical instabilities when ( p2 − p1)2 = 0a n d p2
+1 → p2
+2
+the trivial replacements
+Lμν
+33 → 0, Lμν
+44 → 0. (138)
+5.4 Treatment of Gram-determinant instabilities
+As pointed out in Sect. 5.1, when the rank-two Gram deter-
+minant Δ 12 tends to zero the reduction basis ( 114)–(115)
+becomes degenerate. This leads to spurious singularities that
+manifest themselves as factors γ− k ∝ Δ− k
+12 in the reduction
+identities. In practice, the residues of Δ− k
+12 poles are sup-
+pressed at O(Δ k
+12) as a result of subtle numerical cancel-
+lations between various contributions. Thus, for Δ 12 → 0
+the results of the reduction are ﬁnite but suffer from severe
+numerical instabilities. As can be seen from ( 132), spuri-
+ous singularities reach the maximum power k = 2, i.e. each
+reduction step results in a numerical instability that scales
+quadratically in the inverse Gram determinant Δ
+12.
+The reduction ( 132) involves also spurious singularities
+related to the rank-three Gram determinant, Δ 123, which
+enter through the terms (l3 · p3)−1 ∝| Δ 123|−1/2 [2]. How-
+ever, as compared to theΔ 123 → 0 case, Δ 12 → 0 instabili-
+ties are statistically more likely and are also more enhanced
+due to their Δ−2
+12 scaling behaviour. In fact, studying high
+statistics samples for various representative processes, we
+have found that the numerical instabilities of the on-the-ﬂy
+reductions of Sects. 5.2–5.3 are very strongly correlated to
+the parameter γ ∝ Δ 12. Therefore, as we will see in the
+following, avoidingΔ 12 → 0 spurious singularities in a sys-
+tematic way makes it possible to reach excellent numerical
+stability.
+5.4.1 Box reduction
+In the case of the on-the-ﬂy box reduction (122), poles inΔ
+12
+arise only through the factors 1/γ2 and 1/γ in (132), which
+are a direct consequence of the choice of the momentap1, p2
+for the construction of the reduction basis (114)–(115). Since
+rank-two Gram-determinant instabilities depend on only two
+of the three available momenta, they can be easily avoided by
+constructing the basis withp1, p3 or p2, p3 instead of p1, p2,
+depending on the values of the respective Gram determinants
+Δ 13,Δ 23,Δ 12.
+In practice, in order to avoid small rank-two Gram deter-
+minants we perform the box reduction upon a permutation,
+{D1, D2, D3}− →{ Di1, Di2 , Di3 }, (139)
+which orders loop denominators with related momenta and
+masses in such a way that
+|Δ i1i2 |
+Q4
+i1i2
+= max
+{
+|Δ 12|
+Q4
+12
+, |Δ 13|
+Q4
+13
+, |Δ 23|
+Q4
+23
+}
+. (140)
+The scales Q2
+ij , which render the above ratios dimensionless,
+are deﬁned as the largest element of the respective Gram
+matrices, i.e.
+Q2
+ij = max{| pi · pi|,| p2
+i |,| p2
+j |}. (141)
+Note that the permutation ( 139) can be applied without
+changing the order of the corresponding segmentsSi(q), i.e.
+without any modiﬁcation of the open-loop dressing recur-
+sion. Moreover, the choice of the optimal permutation (139)–
+(140) can be done in a fully ﬂexible way at runtime and
+locally in individual reduction steps, depending on the kine-
+matics of the actual phase space point. In practice ( 139)i s
+applied only to compute the reduction basis and the coefﬁ-
+cients (132), which are then converted back to the original
+ordering.
+Avoiding a spurious Δ
+12 → 0 singularity with ( 139)–
+(140) does not guarantee its disappearance in future reduction
+steps. In fact, all reduced contributions where D1 and D2
+remain unpinched will still involve the same small Gram
+determinant. However, the permutation trick ( 139) can be
+iterated as long as N ≥ 4 loop denominators are available.
+In this way, rank-two Gram-determinant instabilities can be
+isolated in triangle contributions, which arise only at later
+steps of the open-loop recursion for loop diagrams withN >
+3.
+5.4.2 Triangle reduction
+For the case of triangle topologies one can show that, exclud-
+ing regions where the external particles become soft or
+collinear, vanishing Δ
+12 Gram determinants can arise only
+from the t-channel topology depicted in Fig. 11, where the
+triangle exhibits two space-like external momenta, p1 and
+p2, and a time-like external momentum, p2 − p1. Since the
+Gram determinant vanishes when p2
+1 → p2
+2, we adopt the
+parametrisation
+p2
+1 =− p2 < 0, p2
+2 =− p2(1 + δ), ( p2 − p1)2 = 0,
+(142)
+123
+
+
+--- Page 24 ---
+70 Page 24 of 35 Eur. Phys. J. C (2018) 78 :70
+where p1 and p2 can be ordered such thatδ> 0. The param-
+eters Δ and γ are related to δvia
+√
+Δ = p2
+2 δ and γ =− p2δ2, (143)
+i.e. the Δ → 0 limit corresponds to δ→ 0.
+In kinematic regions with smallδ, the numerical reduction
+of rank-r triangles via iterated on-the-ﬂy reductions ( 132)
+and subsequent rank-one reductions (A.12)–(A.14) can lead
+to spurious singularities up to order 1 /δ4r−2. In order to
+avoid numerical instabilities, we ﬁrst perform a full alge-
+braic reduction of 3-point tensor integrals,
+Cμ1···μr = (2πμ)2ε
+iπ2
+∫
+dD¯q qμ
+1 ··· qμr
+¯D0 ¯D1 ¯D2
+, (144)
+to scalar integrals. This leads to a cancellation of the leading
+spurious singularites, and the resulting analytic expressions
+for rank-r triangles involve only poles up to order 1 /δ
+r+1.
+For instance, for the case of triangles with massless internal
+lines, m0 = m1 = m2 = 0, reducing tensor integrals of rank
+r = 1, 2, 3 to scalar integrals we obtain
+Cμ = 2
+δ2 p2
+{
+B0(− p2, 0, 0)
+[
+− pμ
+1
+(
+1 + δ
+2
+)
++ pμ
+2
+]
++ B0
+(
+− p2(1 + δ),0, 0
+)[
+pμ
+1 (1 + δ)− pμ
+2
+(
+1 + δ
+2
+)]}
++ 1
+δC0
+(
+− p2,− p2(1 + δ),0, 0, 0
+)[
+− pμ
+1 (1 + δ)+ pμ
+2
+]
++ 1
+δp2 B0(0, 0, 0)
+[
+pμ
+2 − pμ
+1
+]
+, (145)
+Cμν = B0(− p2, 0, 0)
+[
+− gμν
+4δ + pμν
+11
+p2
+( 3
+δ3 + 5
+δ2 + 3
+2δ
+)
+− pμν
+12
+p2
+( 3
+δ3 + 5
+2δ2
+)
++ pμν
+22
+p2
+3
+δ3
+]
++ B0
+(
+− p2(1 + δ),0, 0
+)
+×
+[ gμν
+4δ + 1
+4 gμν − pμν
+11
+p2
+( 3
+δ3 + 6
+δ2 + 3
+δ
+)
++ pμν
+12
+p2
+( 3
+δ3
++ 7
+2δ2 + 1
+2δ
+)
++ pμν
+22
+p2
+(
+− 3
+δ3 − 1
+δ2 + 1
+2δ
+)]
++ B0(0, 0, 0)
+×
+[ pμν
+11
+p2
+( 1
+δ2 + 3
+2δ
+)
+− pμν
+12
+p2
+( 1
+δ2 + 1
+2δ
+)
++ pμν
+22
+p2
+( 1
+δ2
+− 1
+2δ
+)]
++ C0
+(
+− p2,− p2(1 + δ),0, 0, 0
+)[
+pμν
+11
+( 1
+δ2
++ 2
+δ + 1
+)
+− pμν
+12
+( 1
+δ2 + 1
+δ
+)
++ pμν
+22
+δ2
+]
+− 1
+2
+[
+− 1
+2 gμν
++ pμν
+11
+p2
+( 2
+δ2 + 2
+δ
+)
+− pμν
+12
+p2
+( 2
+δ2 + 1
+δ
+)
++ 2 pμν
+22
+δ2 p2
+]
+, (146)
+Cμνρ = B0(− p2, 0, 0)
+[
+pμνρ
+111
+(
+− 11
+3δ4 p2 − 10
+δ3 p2
+− 17
+2δ2 p2 − 11
+6δp2
+)
++ pμνρ
+112
+( 11
+3δ4 p2 + 20
+3δ3 p2 + 17
+6δ2 p2
+)
++ pμνρ
+122
+(
+− 11
+3δ4 p2 − 10
+3δ3 p2
+)
++ pμνρ
+222
+11
+3δ4 p2 + p{μ
+1 gνρ}
+×
+( 1
+12δ2 + 1
+6δ
+)
+− p{μ
+2 gνρ}
+12δ2
+]
++ B0
+(
+− p2(1 + δ),0, 0
+)
+×
+[
+pμνρ
+111
+( 11
+3δ4 p2 + 11
+δ3 p2 + 11
+δ2 p2 + 11
+3δp2
+)
++ pμνρ
+112
+×
+(
+− 11
+3δ4 p2 − 23
+3δ3 p2 − 13
+3δ2 p2 − 1
+3δp2
+)
++ pμνρ
+122
+( 11
+3δ4 p2
++ 13
+3δ3 p2 + 1
+2δ2 p2 − 1
+6δp2
+)
++ pμνρ
+222
+(
+− 11
+3δ4 p2 − 1
+δ3 p2
++ 1
+2δ2 p2 − 1
+3δp2
+)
++ p{μ
+1 gνρ}
+(
+− 1
+12δ2 − 1
+6δ − 1
+12
+)
++ p{μ
+2 gνρ}
+( 1
+12δ2 − 1
+12
+)]
++ B0(0, 0, 0)
+[
+pμνρ
+111
+(
+− 1
+δ3 p2
+− 5
+2δ2 p2 − 11
+6δp2
+)
++ pμνρ
+112
+( 1
+δ3 p2 + 3
+2δ2 p2 + 1
+3δp2
+)
++ pμνρ
+122
+(
+− 1
+δ3 p2 − 1
+2δ2 p2 + 1
+6δp2
+)
++ pμνρ
+222
+( 1
+δ3 p2
+− 1
+2δ2 p2 + 1
+3δp2
+)]
++ C0
+(
+− p2, − p2(1 + δ),0, 0, 0
+)
+×
+[
+pμνρ
+111
+(
+− 1
+δ3 − 3
+δ2 − 3
+δ − 1
+)
++ pμνρ
+112
+( 1
+δ3 + 2
+δ2 + 1
+δ
+)
++ pμνρ
+122
+(
+− 1
+δ3 − 1
+δ2
+)
++ pμνρ
+222
+δ3
+]
+− 1
+2
+[
+pμνρ
+111
+(
+− 10
+3δ3 p2
+− 22
+3δ2 p2 − 37
+9δp2
+)
++ pμνρ
+112
+( 10
+3δ3 p2 + 14
+3δ2 p2 + 10
+9δp2
+)
++ pμνρ
+122
+(
+− 10
+3δ3 p2 − 2
+δ2 p2 + 2
+9δp2
+)
++ pμνρ
+222
+( 10
+3δ3 p2
+− 2
+3δ2 p2 + 1
+9δp2
+)
++ p{μ
+1 gνρ}
+( 1
+6δ + 5
+18
+)
++ p{μ
+2 gνρ}
+×
+( 1
+9 − 1
+6δ
+)]
+, (147)
+with the tensors
+pμν
+ij =
+∑
+π(i, j)
+pμ
+i pν
+j , pμνρ
+ijk =
+∑
+π(i, j,k)
+pμ
+i pν
+j pρ
+k ,
+p{μ
+i gνρ} = pμ
+i gνρ+ pν
+i gμρ + pρ
+i gμν, (148)
+where i, j, k = 1, 2, and the sums are restricted to inequiv-
+alent permutations, e.g. pμν
+11 = pμ
+1 pν
+1 , pμν
+112 = pμ
+1 pν
+1 pρ
+2 +
+pμ
+1 pν
+2 pρ
+1 + pμ
+2 pν
+1 pρ
+1 ,e t c .
+Analytic expression of type ( 145)–(147) guarantee a
+reduced sensitivity to Gram-determinant instabilities. Thus
+they are used as default for the reduction of triangles conﬁg-
+urations of type ( 142) with δ>δ
+thr. The freely adjustable
+threshold parameter δthr is set to δthr = 10−3. To avoid
+numerical instabilities in regions with δ<δ thr we perform
+systematic expansions inδ. In particular, for a complete can-
+cellation of the 1 /δ poles also the δ-dependent C0 and B0
+scalar integrals have to be expanded inδ. To this end we use
+LiteRed [67], and expanding the residues ofδ− k poles up to
+order δk+m we obtain regular Taylor series including terms
+up to order δm.
+123
+
+
+--- Page 25 ---
+Eur. Phys. J. C (2018) 78 :70 Page 25 of 35 70
+For the case m1 = m2 = m3 = 0, expanding up to order
+δ2 yields
+Cμ = pμ
+1 + pμ
+2
+2 p2 (1 − Δ B0) + δ pμ
+1 + 2 pμ
+2
+6 p2 Δ B0
+− δ2 pμ
+1 + 3 pμ
+2
+12 p2
+(
+Δ B0 + 1
+2
+)
++ O(δ3), (149)
+Cμν = 2 pμν
+11 + pμν
+12 + 2 pμν
+22
+6 p2
+(
+Δ B0 − 1
+2
+)
++ 1
+4 gμνB0
+− δ
+[ pμν
+11 + pμν
+12 + 3 pμν
+22
+12 p2
+(
+Δ B0 + 1
+2
+)
+− 1
+8 gμν
+]
++δ2
+[ 2 pμν
+11 + 3 pμν
+12 + 12 pμν
+22
+60 p2 (Δ B0 + 1)
++ 1
+24 gμν
+]
++ O(δ3), (150)
+Cμνρ = 3 pμνρ
+111 + pμνρ
+112 + pμνρ
+122 + 3 pμνρ
+222
+12 p2
+( 1
+6 − Δ B0
+)
+− p{μ
+1 gνρ} + p2 p{μ
+2 gνρ}
+72 (6B0 + 1)
++δ
+[ 3 pμνρ
+111 + 2 pμνρ
+112 + 3 pμνρ
+122 + 12 pμνρ
+222
+60 p2
+×
+(
+Δ B0 + 5
+6
+)
++ 1
+36 p{μ
+1 gνρ} + 1
+18 p{μ
+2 gνρ}
+]
+− δ2
+[ pμνρ
+111 + pμνρ
+112 + 2 pμνρ
+122 + 10 pμνρ
+222
+60 p2
+×
+(
+Δ B0 + 4
+3
+)
+− 1
+144 p{μ
+1 gνρ} − 1
+48 p{μ
+2 gνρ}
+]
++ O(δ3), (151)
+where
+B0 = B0(− p2, 0, 0),
+Δ B0 = B0(− p2, 0, 0) − B0(0, 0, 0). (152)
+Similar results have been obtained for the case of mas-
+sive internal propagators. More precisely, we have imple-
+mented all needed mass conﬁgurations for NLO QCD calcu-
+lations, i.e. (m
+0, m1, m2) = (0, 0, 0), (m, m, m), (0, m, m)
+and (m, 0, 0), with m > 0, including terms up to order δ2
+in the expansions. The extra cases needed for NLO EW cal-
+culations, i.e. (0, m1, m2), (m1, m2, m2) and (m1, m2, m3),
+with mi > 0, will be implemented soon.
+Since the analytic expressions ( 145)–(147) and their
+expansions (149)–(151) reduce triangles of rank r to rank
+zero in a single step, in order to be able to apply them in a fully
+ﬂexible way, the on-the-ﬂy reduction of triangles (82) has to
+be postponed at the end of the open-loop recursion, where
+triangle contributions have reached the maximum rank. This
+means that, in addition to the contributions listed in (84), we
+also generate N = 3 terms with R = 3. After taking the
+trace (76), depending on the actual value of δ, the reduction
+Fig. 12 Evolution of the total number N of loop segments and the
+number n of dressed segments during the open-loop recursion. Hori-
+zontal and diagonal arrows describe, respectively, dressing steps and the
+generation of pinched subtopologies in the on-the-ﬂy reduction. Corre-
+sponding unpinched contributions, where the rank is reduced but(N, n)
+remains unchanged are not shown. The algorithm starts at(N
+max, 0) and
+ﬁrst proceeds towards the highest possible n before moving one step
+lower in N
+of triangles is done either using the expansion formulas or
+the on-the-ﬂy reduction (82) followed by Passarino–Veltman
+reduction steps (A.12)–(A.14).
+6 Implementation and performance
+This section summarises the key structure of the new algo-
+rithm, outlines some aspects of its implementation, and
+presents technical performance studies.
+6.1 Structure and implementation of the new algorithm
+Similarly as for the original open-loop method, given a cer-
+tain scattering process the algorithm starts with the genera-
+tion of all tree and one-loop diagrams. This is done in sym-
+bolic form, including only topological information and par-
+ticle content. One-loop diagrams are colour stripped and cut-
+open, and the interference of their colour structure with the
+Born amplitude is taken as initial condition for the open-loop
+recursion.
+The recursion is organised by grouping open loops accord-
+ing to the total number N of segments and the number n of
+dressed segments. Dressing steps increase n and reduction
+steps reduce N or keep it constant. Thus, as illustrated in
+Fig. 12,t h e (N, n) groups are dressed through a series of
+iterations with N = N
+max, Nmax − 1, Nmax − 2,... , where
+N is kept ﬁxed while all segments n = 0, 1, 2,..., N are
+123
+
+
+--- Page 26 ---
+70 Page 26 of 35 Eur. Phys. J. C (2018) 78 :70
+processed. A step of the open-loop recursion, to be applied
+to all objects in an (N, n)-group, consists of the following
+operations:
+1. Merge all open loops with the same one-loop topology,
+the same cut and the same undressed segments into a
+single object. Note that one can merge open loops of
+different rank.
+2. For each open loop with n < N and rank R determine
+the rank R
+next that would be reached by performing the
+subsequent dressing step.
+2(a) If Rnext = 3o ri f n = N and R = 2 avoid the
+dressing step and perform an on-the-ﬂy reduction,
+which generates unpinched and pinched terms with
+R = 1. The unpinched terms remain in the (N, n)
+group. As for the pinched terms, if the adjacent seg-
+ments of a pinched propagator are dressed they can be
+reduced to a single effective segment, thereby turning
+(N, n) → (N − 1, n − 1). Otherwise, contributions
+with an undressed pinch stay in the (N, n) group.
+2(b) If n < N and R
+next ≤ 2 perform a dressing step,
+which turns (N, n) → (N, n + 1). If this step dresses
+a pinched propagator that was previously undressed,
+the corresponding segments can be reduced to a single
+effective segment turning (N, n + 1) → (N − 1, n).
+3. Sort all open loops into the proper group and repeat
+steps 1–3 for all open loops in the (N, n)-group until
+the group is empty or n = N and all open loops in the
+group have rank R ≤ R
+last (see below).
+Topologies with N = 2 are dressed without reduc-
+tion, and, in order to enable Gram-determinant expansions
+(see Sect. 5.4.2), also N = 3 contributions are dressed with-
+out on-the-ﬂy reduction. Thus R
+last = N for N = 2, 3,
+while open loops with N ≥ 4 are reduced on-the-ﬂy down
+to Rlast = 1. The algorithm starts at (N, n) = (Nmax, 0)
+and terminates with the dressing of two-point contributions
+at (N, n) = (2, 2). At this point all open loops are closed
+with the trace operation ( 76), and the last reduction steps
+described in Appendix A are applied.
+The above on-the-ﬂy algorithm has been implemented in
+the framework of the original OpenLoops program [ 16],
+which consists of a computer-algebraic code generator writ-
+ten in Mathematica and a numerical part written in For-
+tran 90. Given an arbitrary Standard Model process, the
+Mathematica generator simulates the full chain of recur-
+sion steps in symbolic form and translates it intoFortran 90
+code for the calculation of the actual scattering amplitude.
+The only external tools that need to be interfaced to the
+new OpenLoops program are Feynarts [68], for the gen-
+eration of tree and one-loop diagrams, and Collier [19],
+for the calculation of scalar integrals. All other aspects of
+the open-loop method are directly implemented as process-
+independent Mathematica and Fortran routines. This
+includes the management of colour algebra, the kernels of the
+dressing recursion at tree and one-loop level, the on-the-ﬂy
+and integral reductions, the helicity bookkeeping system,R
+2
+rational terms, UV counterterms, and several other aspects.
+The entire program is fully automated, the new on-the-ﬂy
+methods are implemented and widely tested at NLO QCD
+and they will soon be extended to NLO EW. These methods
+will be made publicly available with the upcoming release
+of OpenLoops 2. Similarly as for OpenLoops 1, numerical
+routines generated with the new on-the-ﬂy techniques will be
+accessible through an automated download and installation
+system and the standard OpenLoops interfaces to a variety
+of public Monte Carlo programs. In addition to the on-the-ﬂy
+approach, OpenLoops 2 will support also the original open-
+loop method, which requires additional third-party tools such
+as Collier or Cuttools [10] and OneLOop [65]f o rt h e
+reduction to scalar integrals.
+6.2 Technical performance
+In this section we study the technical performance of the
+new algorithm. Similarly as in [ 9], we present speed and
+stability benchmarks for the one-loop QCD corrections to
+four families of partonic processes,
+(a) u¯u → t¯t + n g,
+(b) gg → t¯t + n g,
+(c) u¯d → W
++g + n g,
+(d) u¯u → W+W− + n g,
+(153)
+with n = 0, 1, 2, 3 additional gluons, i.e. including processes
+with up to 7 scattering particles. Top quarks andW bosons are
+not decayed, and sums over the colour and helicity degrees
+of freedom of the external particles are included throughout.
+Benchmarks obtained with the new open-loop algorithm,
+denoted as OpenLoops 2, are based on Collier for the cal-
+culation of scalar integrals. In order to highlight the effect
+of the new on-the-ﬂy methods of Sects. 3–4, we also con-
+sider variants of the OpenLoops program where these new
+methods are not used. Speciﬁcally, as detailed in Table1,w e
+restrict the on-the-ﬂy approach to helicity sums and diagram
+merging, using Collier for tensor reduction. This approach
+is denoted as OpenLoops 2+Collier . Alternatively, we
+apply the original open-loop method in combination with
+tensor integrals (denoted as OpenLoops 1+Collier)o r
+OPP reduction (denoted as OpenLoops 1+Cuttools). The
+OpenLoops 1+Cuttools mode relies on OneLOop for the
+scalar integrals and is used also to generate benchmarks in
+quadruple precision.
+By default, OpenLoops calculations are monitored
+through a built-in stability system that estimates the level
+of instability of one-loop results and automatically triggers
+re-evaluations in double or quadruple precision for critical
+123
+
+
+--- Page 27 ---
+Eur. Phys. J. C (2018) 78 :70 Page 27 of 35 70
+Table 1 List of the different variants of theOpenLoops program that are compared in Sects.6.2.1–6.2.2. As third-party tools we useCollier1.2 [19],
+Cuttools1.9.5 [10]a n dOneLOop3.6.1 [65]
+Method Tensor reduction Scalar integrals Diagram merging Helicity summation
+OpenLoops 2 On-the-ﬂy Collier On-the-ﬂy On-the-ﬂy
+OpenLoops 2+Collier Collier Collier On-the-ﬂy On-the-ﬂy
+OpenLoops 1+Collier Collier Collier Parent–child Standard
+OpenLoops 1+Cuttools Cuttools OneLOop Parent–child Standard
+Quad Precision Cuttools OneLOop Parent–child Standard
+Fig. 13 Runtimes per phase
+space point for the calculation of
+the one-loop scattering
+probability (1) on a single Intel
+i7-4790K core with
+gfortran-4.8.5. Results for the
+processes in (153) are plotted
+versus the number of one-loop
+diagrams. Timings of
+OpenLoops 2 with on-the-ﬂy
+reduction (t
+OL2
+on-the-ﬂy) are shown
+in the upper frame. The lower
+frame presents a comparison to
+OpenLoops 2+Collier and
+OpenLoops 1+Collier
+(see Table 1)
+100
+101
+102
+103
+104
+tOL2
+on−the−ﬂy [ms]
+uu → tt + n g
+gg → tt + n g
+ud → W+g+ n g
+uu → W+W− + n g
+101 102 103 104 105
+number of loop diagrams
+0.2
+0.4
+0.6
+0.8
+1.0
+ratio
+tOL2
+on−the−ﬂy/tOL1
+Collier
+tOL2
+Collier/tOL1
+Collier
+phase space points. In the following, in order to avoid any
+bias in the comparisons, the stability system is switched off.
+In this way, one-loop amplitudes are computed only once per
+phase space point in double precision. Unless stated other-
+wise, Gram-determinant expansions are always kept active,
+both in the on-the-ﬂy reduction ofOpenLoops2 and in Col-
+lier.
+6.2.1 Speed benchmarks
+To illustrate the speed of the new algorithm, in Fig. 13 we
+plot runtimes per phase space point for the calculation of
+the one-loop scattering probability (1). The processes listed
+in (153) involve a number of one-loop Feynman diagrams
+that ranges from the order of 1 to 10
+5. The corresponding
+runtimes, measured on a single Intel i7-4790K core with
+gfortran-4.8.5, vary from the order of 10
+−1 to 104 ms. In this
+range, we conﬁrm that runtimes tend to grow linearly with
+the number of one-loop diagrams up to 2→ 4 processes [9],
+and we ﬁnd that this scaling behaviour persists up to 2 → 5
+processes. As compared toOpenLoops 1+Collier, the new
+algorithm with on-the-ﬂy reduction is up to a factor 2–3
+faster for multi-particle processes. Depending on the process,
+using OpenLoops 2+Collier, i.e. restricting the on-the-ﬂy
+approach to helicity sums plus diagram merging and reduc-
+ing tensor integrals withCollier, can result in a further sig-
+niﬁcant speed-up. However, the moderate slowdown caused
+by the on-the-ﬂy reduction can be counterbalanced by the
+improved numerical stability, which implies a reduced need
+of re-evaluations in quadruple precision (see Sect. 6.2.2).
+6.2.2 Stability benchmarks
+In this section we study the numerical stability of the new
+open-loop algorithm. To this end, one-loop scattering prob-
+ability densities computed in double precision ( W
+DP
+1−loop)
+are compared against benchmarks in quadruple precision
+(WQP
+1−loop). More precisely, deﬁning the relative difference
+between two results as
+123
+
+
+--- Page 28 ---
+70 Page 28 of 35 Eur. Phys. J. C (2018) 78 :70
+−16 −14 −12 −10 −8 −6 −4 −2 0 2 4 6 8 10
+instability
+10−6
+10−5
+10−4
+10−3
+10−2
+10−1
+100
+fraction of events
+gg → t¯tgg
+Quad Precision
+on-the-ﬂy
+on-the-ﬂy+perm
+analytic
+analytic+perm
+analytic+exp+perm
+Fig. 14 Probability of ﬁnding events with instability A > Amin as a
+function of Amin in a sample of 106 gg → t¯tgg events. The stability of
+quad-precision benchmarks (blue) is compared to different variants of
+the OpenLoops 2 algorithm in double precision. Unstable results with-
+out special treatment of Gram determinants (“on-the-ﬂy”) are stabilised
+using the permutation trick (139) for boxes (“perm”), exact analytic for-
+mulas for triangles (“analytic”) and Gram-determinant expansions for
+δ<δ
+thr (“exp”). See Sect. 5.4.2
+A(Wa, Wb) = log10
+⏐⏐
+⏐
+⏐
+W
+a − Wb
+Wmin
+⏐⏐
+⏐
+⏐ with
+W
+min = min {|Wa|,|Wb|} , (154)
+we estimate the instability of double-precision results as12
+ADP = A
+(
+WDP
+1−loop, WQP,R
+1−loop
+)
+. (155)
+This quantity can be regarded, up to a minus sign, as the
+number of correct digits of the double-precision evaluation.
+To estimate the intrinsic accuracy of quad-precision
+benchmarks, computed using OpenLoops 1+Cuttools and
+OneLoop, we use a so-called rescaling test [ 9,69], where
+scattering amplitudes are computed with rescaled masses and
+momenta and scaled back according to their mass dimension-
+ality. Thus for a given phase space point the accuracy of the
+quadruple precision benchmarks is assessed as
+A
+QP = A
+(
+WQP
+1−loop, WQP,R
+1−loop
+)
+, (156)
+where WQP
+1−loop and WQP,R
+1−loop are the original and rescaled
+quad-precision evaluations. This quantity represents the
+ﬁnite resolution of the instability estimate (155). As we will
+12 Note that, in order to avoid possible sources of bias, the quad-
+precision benchmark WQP,R
+1−loop is computed with rescaled kinematics
+as detailed below.
+see, quad-precision benchmarks can become more unstable
+than double-precision results obtained with OpenLoops 2.
+In this case, the instability estimate (155) yields ADP ∼ AQP
+but should be interpreted as ADP < AQP.
+To assess the stability of OpenLoops 2, for each process
+in (153) we have studied a sample of 10 6 homogeneously
+distributed phase space points at √ s = 1 TeV . To exclude
+soft and collinear regions we have required pi,T > 50 GeV
+and Δ Rij > 0.5 for all massless ﬁnal-state QCD partons.
+Figure 14 illustrates the effect of Gram-determinant
+instabilities and the goodness of the solutions introduced
+in Sect. 5.4 in the case of gg → t¯tgg. For this challeng-
+ing multi-particle process, using the OpenLoops 2 on-the-
+ﬂy reductions without any special treatment of Gram deter-
+minants we observe an extremely high level of numerical
+instability in double precision. The probabilities to obtain
+one-loop results with less than four or zero correct digits are
+around 10
+−1 and 10−2, respectively, and the tail of the stabil-
+ity distribution extends up to a level of instability of ten orders
+of magnitude and more. Applying the permutation trick (139)
+(“perm”) and using analytic expressions for three-point inte-
+grals (“analytic”) result in a dramatic stability improvement
+for the box and triangle reductions, respectively. Combining
+these two improvements (“analytic+perm”) reduces the prob-
+ability of ﬁnding points with only few correct digits by three
+orders of magnitude, and yields a maximum level of instabil-
+ity around 10
+2. Finally, switching on the Gram-determinant
+123
+
+
+--- Page 29 ---
+Eur. Phys. J. C (2018) 78 :70 Page 29 of 35 70
+Fig. 15 Correlation between the instabilityA of OpenLoops 2 in dou-
+ble precision and the largest (Q4/Δ)2 in the event, where Δ is any
+rank-two Gram determinant and Q2 is the maximum scale in the corre-
+sponding Gram matrix. See ( 141). Probability densities correspond to
+106 events. Unstable results without special treatment of Gram deter-
+minants (left) are stabilised using the permutation trick ( 139) for box
+reduction and analytic expressions for triangle reduction (middle) plus
+Gram-determinant expansions for δ<δ
+thr (right)
+expansions for δ<δthr leads to a further very drastic reduc-
+tion of the probability of ﬁnding results with less than 3–4
+correct digits. In this range, we observe an overlap with the
+tail of the quad-precision distribution. As discussed above,
+this indicates that OpenLoops 2 in double precision is more
+stable than the quad-precision benchmarks, and its estimated
+instability represents only an upper bound. Most likely, the
+tail of the true OpenLoops 2 stability distribution ends at
+10
+−3.
+To gain more insights into the origin of numerical insta-
+bilities in the on-the-ﬂy reduction of OpenLoops 2, let us
+investigate the correlation between the instability (155) and
+rank-two Gram determinants Δ in the gg → t¯tgg sample
+of Fig. 14. More precisely, in Fig. 15 we consider the min-
+imal value of the dimensionless parameter Δ ij /Q4
+ij in the
+event, where Q2
+ij is the largest | pi · p j| in the corresponding
+Gram matrix (see Sect. 5.4.1). As demonstrated by the left
+plot in Fig. 15, the instability of the entire scattering ampli-
+tude features a remarkably strong correlation with rank-two
+Gram determinants over twenty orders of magnitude. More-
+over we observe a quadratic or faster scaling in Q
+4/Δ, con-
+sistent with the form of the γ−2 ∼ Δ−2 poles in (132). The
+middle plot shows the combined effect of the permutation
+trick (139), which avoids the smallest Gram determinant of
+the event in all reductions with N ≥ 4 loop denominators,
+and the attenuation of spurious singularites through analytic
+expressions for three-point conﬁgurations of type ( 142). In
+this way the probability of having less than four correct digits
+is reduced to 0.1 permil. Finally, in the right plot we see that
+points with less than 3–4 correct digits disappear completely
+when Gram-determinant expansions are switched on.
+13 As
+one can clearly recognise in the right plot, the threshold for
+13 Points with unreliable quad-precision benchmarks (AQP ∼ ADP)a r e
+not considered in Fig. 15.
+the activation of Gram-determinant expansions corresponds
+to (Q4/Δ)2 ∼ δ−4
+thr = 1012.
+Finally, in Figs. 16 and 17 we compare the stability of
+OpenLoops 2 against OpenLoops 1+Collier and Open-
+Loops 1+Cuttools for the 2 → 3 and 2 → 4p r o -
+cesses in (153). In OpenLoops 2 the stability improvements
+of Sect. 5.4 are applied throughout. The results of Open-
+Loops 1+Cuttools feature the highest instability tails for
+all considered processes. The probability of ﬁnding less than
+four correct digits can exceed 10
+−3 in 2 → 3 and 10−2 in
+2 → 4 processes, while the fraction of fully unstable points
+with A ≥ 0 can reach 10−3 in 2 → 4 processes. Switching
+to OpenLoops 1+Collier we ﬁnd that, depending on the
+process, the probability of ﬁnding only a few correct dig-
+its goes down by one to three orders of magnitude, while in
+eight samples of 10
+6 points we do not ﬁnd a single result with
+A > 0.14
+Using OpenLoops 2 can lead to a further signiﬁcant sta-
+bility improvement. This is especially evident for 2 → 3
+processes, where the stability of the on-the-ﬂy reduction
+in OpenLoops 2 is remarkably close to the quad-precision
+benchmarks and even superior than quad precision for the
+case of t¯tg production. When quad precision is sufﬁciently
+accurate to resolve the instabilities of OpenLoops 2 we
+observe improvements of one–two orders of magnitude with
+respect to OpenLoops 1+Collier. In the case of 2 → 4
+processes, depending on the process and the considered num-
+ber of digits, OpenLoops 2 can perform somewhat better or
+slightly worse than OpenLoops 1+Collier, like in the case
+of u ¯d → W
++ggg or u ¯u → W+W−gg, respectively. How-
+14 As discussed above, due to the insufﬁcient quality of quad-precision
+benchmarks, instability estimates in the tail of gg → t¯tgg are not sig-
+niﬁcant.
+123
+
+
+--- Page 30 ---
+70 Page 30 of 35 Eur. Phys. J. C (2018) 78 :70
+Fig. 16 Stability distributions
+for 2 → 3 processes deﬁned as
+in Fig. 14. The stability of
+OpenLoops 2 with on-the-ﬂy
+reduction is compared to
+OpenLoops 1 with Collier or
+Cuttools. The instability of
+the employed quad precision
+benchmarks is also shown
+−16 −14 −12 −10 −8 −6 −4 −2 0
+min
+10−6
+10−5
+10−4
+10−3
+10−2
+10−1
+100
+fraction of events
+u¯u → t¯tg
+Quad Precision
+OL1 + Collier
+OL1 + Cuttools
+OL2
+−16 −14 −12 −10 −8 −6 −4 −2 0
+10−6
+10−5
+10−4
+10−3
+10−2
+10−1
+100
+fraction of events
+gg → t¯tg
+Quad Precision
+OL1 + Collier
+OL1 + Cuttools
+OL2
+−16 −14 −12 −10 −8 −6 −4 −2 0
+10−6
+10−5
+10−4
+10−3
+10−2
+10−1
+100
+fraction of events
+u¯d → W+gg
+Quad Precision
+OL1 + Collier
+OL1 + Cuttools
+OL2
+−16 −14 −12 −10 −8 −6 −4 −2 0
+instability min
+10−6
+10−5
+10−4
+10−3
+10−2
+10−1
+100
+fraction of events
+u¯u → W+W−g
+Quad Precision
+OL1 + Collier
+OL1 + Cuttools
+OL2
+123
+
+
+--- Page 31 ---
+Eur. Phys. J. C (2018) 78 :70 Page 31 of 35 70
+Fig. 17 Stability distributions
+for 2 → 4 processes deﬁned as
+in Fig. 16
+−16 −14 −12 −10 −8 −6 −4 −2 0
+10−6
+10−5
+10−4
+10−3
+10−2
+10−1
+100
+fraction of events
+u¯u → t¯tgg
+Quad Precision
+OL1 + Collier
+OL1 + Cuttools
+OL2
+−16 −14 −12 −10 −8 −6 −4 −2 0
+10−6
+10−5
+10−4
+10−3
+10−2
+10−1
+100
+fraction of events
+gg → t¯tgg
+Quad Precision
+OL1 + Collier
+OL1 + Cuttools
+OL2
+−16 −14 −12 −10 −8 −6 −4 −2 0
+10−6
+10−5
+10−4
+10−3
+10−2
+10−1
+100
+fraction of events
+u¯d → W+ggg
+Quad Precision
+OL1 + Collier
+OL1 + Cuttools
+OL2
+−16 −14 −12 −10 −8 −6 −4 −2 0
+instability min
+10−6
+10−5
+10−4
+10−3
+10−2
+10−1
+100
+fraction of events
+u¯u → W+W−gg
+Quad Precision
+OL1 + Collier
+OL1 + Cuttools
+OL2
+123
+
+
+--- Page 32 ---
+70 Page 32 of 35 Eur. Phys. J. C (2018) 78 :70
+ever, both approaches guarantee excellent numerical stabil-
+ity.
+7 Conclusions and outlook
+We have presented a new approach for the automated calcula-
+tion of scattering amplitudes at one loop. This new technique
+is based on the open-loop approach, where cut-open loop
+integrands are factored into a product of loop-momentum
+dependent segments that are combined through recursive ten-
+sorial multiplications.
+The key idea behind the new method is that various oper-
+ations, which are typically done at the level of full Feynman
+diagrams or amplitudes, can be performed on-the-ﬂy during
+the open-loop recursion, i.e. after the multiplication of each
+loop segment. Since it exploits the factorised structure of
+open loops in a systematic way, this on-the-ﬂy approach can
+reduce the complexity of certain operations in a very signif-
+icant way.
+We have ﬁrst applied the on-the-ﬂy method to helicity
+summations and to the merging of topologically equivalent
+open loops, ﬁnding speed-up factors of up to two or three
+as compared to the original open-loop algorithm. Moreover,
+using the integrand reduction method by del Aguila and Pit-
+tau, we have introduced an on-the-ﬂy technique for the reduc-
+tion of open loops. With this approach, the construction of
+loop amplitudes and their reduction are interleaved step by
+step within a single numerical recursion. In this way, objects
+with tensor rank higher than two are avoided throughout, and
+the complexity of the calculations is reduced in a very drastic
+way. The proliferation of pinched subtopologies that emerge
+from the reduction is avoided by absorbing them on-the-ﬂy
+into topologically equivalent open loops.
+The employed integrand reduction method suffers from
+severe numerical instabilities that are dominated by kine-
+matic regions with small rank-two Gram determinantsΔ and
+scale like 1 /Δ
+2. In the reduction of N-point objects with
+N ≥ 4, we have shown that Δ -instabilities can easily be
+avoided through appropriate permutations of the loop denom-
+inators. In this way we were able to isolate Δ -instabilities
+in triangle topologies with a particular kinematic conﬁgura-
+tion and to cure them by means of analytic expansions in
+Δ . This approach is the ﬁrst example of an integrand reduc-
+tion algorithm that is essentially free from Gram-determinant
+instabilities. The level of stability that is achieved in double
+precision is competitive with public implementations of OPP
+reduction in quadruple precision.
+The new algorithm is fully automated and validated at
+NLO QCD and can be extended to electroweak interactions.
+It will become publicly available in the upcoming release of
+OpenLoops 2. Its technical features can be especially bene-
+ﬁcial in NLO calculations for challenging multi-particle pro-
+cesses. Moreover, in view of its excellent numerical stabil-
+ity, the new algorithm is very attractive for the calculation
+of real–virtual contributions at NNLO. Finally, the idea of
+simplifying the construction of loop amplitudes through the
+factorisation of loop integrands and their on-the-ﬂy reduction
+may open new interesting perspectives for the automation of
+two-loop calculations.
+Acknowledgements We are grateful to P. Maierhöfer and J. Lindert
+for discussions and extensive technical support. This research was
+supported in part by the Swiss National Science Foundation (SNF)
+under contracts PP00P2-128552 and BSCGI0-157722 as well as by
+the Research Executive Agency (REA) of the European Union under
+the Grant agreement PITN–GA–2012–316704 (HiggsTools).
+Open Access This article is distributed under the terms of the Creative
+Commons Attribution 4.0 International License ( http://creativecomm
+ons.org/licenses/by/4.0/), which permits unrestricted use, distribution,
+and reproduction in any medium, provided you give appropriate credit
+to the original author(s) and the source, provide a link to the Creative
+Commons license, and indicate if changes were made.
+Funded by SCOAP
+3.
+Appendix A: Reduction of the remaining tensor integrals
+After the on-the-ﬂy reduction described in Sect. 4.1 we are
+left with a few types of low-rank integrals (84) that need to be
+reduced to the standard basis of one-loop scalar integrals. The
+relevant reductions are performed upon taking the trace (76)
+as described in the following. In this appendix we restrict our-
+selves to tensor integrals with four-dimensional q
+μ terms in
+the numerator, while contributions with additional ˜q2 terms
+in the numerator are described in Sect. 4.4.
+A.1: Five- and higher-point integrals with R = 0, 1
+Integrals with N ≥ 5 loop propagators and a numerator of
+rank R ≤ 1,
+N(q) = N + Nμqμ, (A.1)
+can be reduced to a linear combination of scalar boxes,
+∫
+dD¯q N(q)
+¯D0 ¯D1 ··· ¯DN−1
+=
+N−1∑
+i0<i1<i2<i3
+∫
+dD¯q di0i1i2i3
+¯Di0 ¯Di1 ¯Di2 ¯Di3
+. (A.2)
+To determine the box coefﬁcients we use the OPP reduction
+formula [5]
+di0i1i2i3 = 1
+2
+[
+Ri0i1i2i3 (q+
+0 ) + Ri0i1i2i3 (q−
+0 )
+]
+, (A.3)
+123
+
+
+--- Page 33 ---
+Eur. Phys. J. C (2018) 78 :70 Page 33 of 35 70
+where q±
+0 are the solutions of the quadruple-cut conditions
+¯Di0 = ¯Di1 = ¯Di2 = ¯Di3 = 0, and
+Ri0i1i2i3 (q) = N(q)
+N−1∏
+i̸=i0,i1,i2,i3
+¯Di
+(A.4)
+are the corresponding residues.
+For the special case d0123, where pi0 = p0 = 0, the
+explicit solutions of the quadruple cut equations read
+q±
+0 = x1 l1 + x2 l2 + x±
+3 l4 + x±
+4 l4, (A.5)
+where li are the basis momenta deﬁned in (114)–(115). The
+x1,2 coefﬁcients are given by
+x1,2 = 1
+γ
+(
+d2,1 − d0
+(
+1 − α2,1
+)
+− d1,2 α2,1
+)
+, (A.6)
+with di = m2
+i − p2
+i .T h et e r m sα1,2 and γ are deﬁned in
+Sect. 5, and the remaining coefﬁcients in (A.5)a r eg i v e nb y
+x±
+4 = ax±
+3 =− (b ± c0)
+2 , (A.7)
+with a = ( p3 · l3)/( p3 · l4) and
+b = 1
+p3 · l4
+( d0 − d3
+2 + x1 ( p3 · l1) + x2 ( p3 · l2)
+)
+,
+c0 =
+√
+b2 − a
+(
+x1 x2 − d0
+γ
+)
+. (A.8)
+The other coefﬁcients di0i1i2i3 can be obtained from the
+above formulas through an obvious reparametrisation of
+masses and momenta ( i0i1i2i3 → 0123) and a subsequent
+momentum shift, pμ
+i → pμ
+i − pμ
+0 for i = 0, 1, 2, 3, which
+has to be applied throughout in (A.4)–(A.8).
+A.2: Four-point functions with R = 1
+The reduction of rank-one boxes,
+∫
+dD¯q qμ
+¯D0 ··· ¯D3
+=
+3∑
+j=−1
+∫
+dD¯q
+Aμ
+j
+¯D0 ··· /¯D j ··· ¯D3
+, (A.9)
+results into a scalar box ( j =− 1) and four scalar triangles
+( j = 0, 1, 2, 3). For the corresponding coefﬁcients we use
+the reduction formulas [2],
+Aμ
+1,2 = 1
+2γ
+[
+rμ
+2,1 − p3 · r2,1
+p3 · l3
+(
+lμ
+3 + 1
+αlμ
+4
+)]
+,
+Aμ
+3 = 1
+4
+1
+p3 · l3
+(
+lμ
+3 + 1
+αlμ
+4
+)
+, (A.10)
+and
+Aμ
+−1 =
+3∑
+i=1
+fi0 Aμ
+i , Aμ
+0 =−
+3∑
+i=1
+Aμ
+i . (A.11)
+The relevant ingredients, γ,α, lμ
+i , rμ
+i , fi0, are deﬁned in
+Sect. 5.
+A.3: Three-point integrals with R = 1
+For rank-one triangles we use the covariant decomposition
+Cμ( p1, p2, m0, m1, m2) = Cε
+∫
+dD¯q qμ
+¯D0 ¯D1 ¯D2
+=
+2∑
+i=1
+pμ
+i Ci( p2
+1, p2
+2, m0, m1, m2), (A.12)
+where Cε = (2πμ)2ε/(iπ2), and we compute the Ci coefﬁ-
+cients via Passarino–Veltman reduction [70,71].
+A.4: Two-point integrals with R = 1, 2
+Also for two-point integrals with rankR = 1, 2 we perform a
+Passarino–Veltman reduction [70,71] based on the covariant
+decomposition
+Bμ( p1, m0, m1) = Cε
+∫
+dD¯q qμ
+¯D0 ¯D1
+= pμ
+1 B1( p2
+1, m0, m1), (A.13)
+Bμν( p1, m0, m1) = Cε
+∫
+dD¯q qμqν
+¯D0 ¯D1
+= pμ
+1 pν
+1 B11( p2
+1, m0, m1)
++gμνB00( p2
+1, m0, m1). (A.14)
+Besides the standard reduction formulas forB1, B11, and B00,
+for p2 = 0 we have implemented the special cases
+B1(0, m0, m0) =− 1
+2 B0(0, m0, m0), (A.15)
+B1(0, m0, m1) = 1
+4(m2
+0 − m2
+1)
+(
+2 A0(m1)
+−2m2
+0 B0(0, m0, m1) − 1
+)
+, (A.16)
+B11(0, 0, 0) = 1
+3 B0(0, 0, 0) = 0, (A.17)
+B11(0, m0, m0) =− 1
+3 + A0(m0)
+3m2
+0
+, (A.18)
+B11(0, m0, m1) = 1
+18(m0 − m1)3(m0 + m1)3
+×
+(
+5m6
+0 − 9m2
+0m4
+1
++ 4m6
+1 + 6m4
+0 A0(m0)
+− 6(3m4
+0 − 3m2
+0m2
+1
++ m4
+1)A0(m1)
+)
+.
+(A.19)
+with the scalar master integrals
+B0( p2
+1, m0, m1) = Cε
+∫
+dD¯q 1
+¯D0 ¯D1
+,
+123
+
+
+--- Page 34 ---
+70 Page 34 of 35 Eur. Phys. J. C (2018) 78 :70
+A0(m2
+0) = Cε
+∫
+dD¯q 1
+¯D0
+. (A.20)
+References
+1. R. Britto, F. Cachazo, B. Feng, Generalized unitarity and one-loop
+amplitudes in N = 4 super-Yang-Mills. Nucl. Phys. B 725, 275–
+305 (2005). arXiv:hep-th/0412103
+2. F. del Aguila, R. Pittau, Recursive numerical calculus of one-loop
+tensor integrals. JHEP 07, 017 (2004). arXiv:hep-ph/0404120
+3. Z. Bern, L.J. Dixon, D.A. Kosower, Bootstrapping multi-parton
+loop amplitudes in QCD. Phys. Rev. D 73, 065013 (2006).
+arXiv:hep-ph/0507005
+4. A. Denner, S. Dittmaier, Reduction schemes for one-
+loop tensor integrals. Nucl. Phys. B 734, 62–115 (2006).
+arXiv:hep-ph/0509141
+5. G. Ossola, C.G. Papadopoulos, R. Pittau, Reducing full one-loop
+amplitudes to scalar integrals at the integrand level. Nucl. Phys. B
+763, 147–169 (2007). arXiv:hep-ph/0609007
+6. D. Forde, Direct extraction of one-loop integral coefﬁcients. Phys.
+Rev. D 75, 125019 (2007). arXiv:0704.1835
+7. W.T. Giele, Z. Kunszt, K. Melnikov, Full one-loop amplitudes from
+tree amplitudes. JHEP 04, 049 (2008). arXiv:0801.2237
+8. A. van Hameren, Multi-gluon one-loop amplitudes using tensor
+integrals. JHEP 07, 088 (2009). arXiv:0905.1005
+9. F. Cascioli, P. Maierhöfer, S. Pozzorini, Scattering amplitudes with
+open loops. Phys. Rev. Lett.108, 111601 (2012). arXiv:1111.5206
+10. G. Ossola, C.G. Papadopoulos, R. Pittau, CutTools: a program
+implementing the OPP reduction method to compute one-loop
+amplitudes. JHEP 03, 042 (2008). arXiv:0711.3596
+11. C.F. Berger, Z. Bern, L.J. Dixon, F. Febres Cordero, D. Forde, H. Ita
+et al., An automated implementation of on-shell methods for one-
+loop amplitudes. Phys. Rev. D78, 036003 (2008).arXiv:0803.4180
+12. A. van Hameren, C.G. Papadopoulos, R. Pittau, Automated one-
+loop calculations: a proof of concept. JHEP 09, 106 (2009).
+arXiv:0903.4665
+13. V . Hirschi, R. Frederix, S. Frixione, M.V . Garzelli, F. Maltoni, R.
+Pittau, Automation of one-loop QCD corrections. JHEP 05, 044
+(2011). arXiv:1103.0621
+14. P. Mastrolia, G. Ossola, T. Reiter, F. Tramontano, Scattering ampli-
+tudes from unitarity-based reduction algorithm at the integrand-
+level. JHEP 08, 080 (2010). arXiv:1006.0710
+15. S. Badger, B. Biedermann, P. Uwer, V . Yundin, Numerical eval-
+uation of virtual corrections to multi-jet production in mass-
+less QCD. Comput. Phys. Commun. 184, 1981–1998 (2013).
+arXiv:1209.0100
+16. F. Cascioli, J.M. Lindert, P. Maierhöfer, S. Pozzorini, The Open-
+Loops one-loop generator. http://openloops.hepforge.org
+17. G. Cullen, GOSAM-2.0: a tool for automated one-loop calculations
+within the Standard Model and beyond. Eur. Phys. J. C 74, 3001
+(2014). arXiv:1404.7096
+18. T. Peraro, Ninja: automated integrand reduction via laurent expan-
+sion for one-loop amplitudes. Comput. Phys. Commun.185, 2771–
+2797 (2014). arXiv:1403.1229
+19. A. Denner, S. Dittmaier, L. Hofer, Collier: a fortran-based com-
+plex one-loop library in extended regularizations. Comput. Phys.
+Commun. 212, 220–238 (2017). arXiv:1604.06792
+20. S. Actis, A. Denner, L. Hofer, J.-N. Lang, A. Scharf, S. Uccirati,
+RECOLA: recursive computation of one-loop amplitudes. Comput.
+Phys. Commun. 214, 140–173 (2017). arXiv:1605.01090
+21. T. Gleisberg, S. Hoeche, F. Krauss, M. Schonherr, S. Schumann, F.
+Siegert, Event generation with SHERPA 1.1. JHEP02, 007 (2009).
+arXiv:0811.4622
+22. S. Alioli, P. Nason, C. Oleari, E. Re, A general framework for
+implementing NLO calculations in shower Monte Carlo programs:
+the POWHEG BOX. JHEP 06, 043 (2010). arXiv:1002.2581
+23. G. Bevilacqua, M. Czakon, M.V . Garzelli, A. van Hameren, A.
+Kardos, C.G. Papadopoulos et al., HELAC-NLO. Comput. Phys.
+Commun. 184, 986–997 (2013). arXiv:1110.1499
+24. J. Alwall, R. Frederix, S. Frixione, V . Hirschi, F. Maltoni, O. Mat-
+telaer et al., The automated computation of tree-level and next-
+to-leading order differential cross sections, and their matching to
+parton shower simulations. JHEP07, 079 (2014).arXiv:1405.0301
+25. T. Sjöstrand, S. Ask, J.R. Christiansen, R. Corke, N. Desai, P. Ilten
+et al., An introduction to PYTHIA 8.2. Comput. Phys. Commun.
+191, 159–177 (2015). arXiv:1410.3012
+26. C. Weiss, B. Chokoufe Nejad, W. Kilian, J. Reuter, Automated NLO
+QCD Corrections with WHIZARD, PoS EPS-HEP2015 (2015)
+466, arXiv:1510.02666
+27. J. Bellm, Herwig 7.0/Herwig++ 3.0 release note. Eur. Phys. J. C
+76, 196 (2016). arXiv:1512.01178
+28. Z. Bern, L.J. Dixon, F. Febres Cordero, S. Höche, H. Ita, D.A.
+Kosower et al., Next-to-leading order W + 5-jet production at the
+LHC. Phys. Rev. D 88, 014025 (2013). arXiv:1304.1253
+29. S. Badger, B. Biedermann, P. Uwer, V . Yundin, Next-to-leading
+order QCD corrections to ﬁve jet production at the LHC. Phys.
+Rev. D 89, 034019 (2014). arXiv:1309.6585
+30. G. Bevilacqua, H.B. Hartanto, M. Kraus, M. Worek, Top quark
+pair production in association with a jet with next-to-leading-order
+QCD off-shell effects at the large hadron collider. Phys. Rev. Lett.
+116, 052003 (2016). arXiv:1509.09242
+31. S. Höche, P. Maierhöfer, N. Moretti, S. Pozzorini, F. Siegert,
+Next-to-leading order QCD predictions for top-quark pair pro-
+duction with up to three jets. Eur. Phys. J. C 77, 145 (2017).
+arXiv:1607.06934
+32. A. Denner, J.-N. Lang, M. Pellen, S. Uccirati, Higgs production in
+association with off-shell top-antitop pairs at NLO EW and QCD
+at the LHC. JHEP 02, 053 (2017). arXiv:1612.07138
+33. F. Cascioli, S. Höche, F. Krauss, P. Maierhöfer, S. Pozzorini et al.,
+Precise Higgs-background predictions: merging NLO QCD and
+squared quark-loop corrections to four-lepton + 0,1 jet production.
+JHEP 1401, 046 (2014). arXiv:1309.0500
+34. F. Cascioli, P. Maierhöfer, N. Moretti, S. Pozzorini, F. Siegert, NLO
+matching for t ¯tb ¯b production with massiveb-quarks. Phys. Lett. B
+734, 210–214 (2014). arXiv:1309.5912
+35. F. Cascioli, S. Kallweit, P. Maierhöfer, S. Pozzorini, A uniﬁed NLO
+description of top-pair and associated Wt production. Eur. Phys. J.
+C 74, 2783 (2014). arXiv:1312.0546
+36. S. Höche, F. Krauss, P. Maierhöfer, S. Pozzorini, M. Schönherr
+et al., Next-to-leading order QCD predictions for top-quark pair
+production with up to two jets merged with a parton shower.
+arXiv:1402.6293
+37. S. Höche, F. Krauss, S. Pozzorini, M. Schönherr, J. Thompson
+et al., Triple vector boson production through Higgs-Strahlung
+with NLO multijet merging. Phys. Rev. D 89, 093015 (2014).
+arXiv:1403.7516
+38. T. Ježo, J.M. Lindert, P. Nason, C. Oleari, S. Pozzorini, An
+NLO+PS generator for t ¯t and Wt production and decay includ-
+ing non-resonant and interference effects. Eur. Phys. J. C 76, 691
+(2016). arXiv:1607.04538
+39. B. Chokoufé Nejad, W. Kilian, J.M. Lindert, S. Pozzorini, J. Reuter,
+C. Weiss, NLO QCD predictions for off-shell tt and ttH pro-
+duction and decay at a linear collider. JHEP 12, 075 (2016).
+arXiv:1609.03390
+40. S. Kallweit, J.M. Lindert, P. Maierhöfer, S. Pozzorini, M. Schön-
+herr, NLO electroweak automation and precise predictions for
+W+multijet production at the LHC. JHEP 04, 012 (2015).
+arXiv:1412.5157
+123
+
+
+--- Page 35 ---
+Eur. Phys. J. C (2018) 78 :70 Page 35 of 35 70
+41. S. Kallweit, J.M. Lindert, P. Maierhofer, S. Pozzorini, M. Schön-
+herr, NLO QCD+EW predictions for V + jets including off-shell
+vector-boson decays and multijet merging. JHEP 04, 021 (2016).
+arXiv:1511.08692
+42. S. Kallweit, J.M. Lindert, S. Pozzorini, M. Schonherr, NLO
+QCD+EW predictions for 2 ℓ2ν diboson signatures at the LHC.
+arXiv:1705.00598
+43. J.M. Lindert et al., Precise predictions for V+jets dark matter back-
+grounds. arXiv:1705.04664
+44. F. Granata, J.M. Lindert, C. Oleari, S. Pozzorini, NLO QCD+EW
+predictions for HV and HV +jet production including parton-
+shower effects. JHEP 09, 012 (2017). arXiv:1706.03522
+45. M. Wiesemann, M. Grazzini, S. Kallweit, D. Rathlev, Fully-
+differential NNLO predictions for vector-boson pair production
+with MATRIX. PoS LL2016, 072 (2016)
+46. M. Grazzini, S. Kallweit, D. Rathlev, A. Torre, Zγ production
+at hadron colliders in NNLO QCD. Phys. Lett. B 731, 204–207
+(2014). arXiv:1309.7000
+47. F. Cascioli, T. Gehrmann, M. Grazzini, S. Kallweit, P. Maierhöfer
+et al., ZZ production at hadron colliders in NNLO QCD. Phys. Lett.
+B 735, 311–313 (2014). arXiv:1405.2219
+48. T. Gehrmann, M. Grazzini, S. Kallweit, P. Maierhöfer, A. von Man-
+teuffel et al., W
++ W− production at hadron colliders in next to
+next to leading order QCD. Phys. Rev. Lett. 113, 212001 (2014).
+arXiv:1408.5243
+49. M. Grazzini, S. Kallweit, D. Rathlev, Wγ and Zγ production at
+the LHC in NNLO QCD. JHEP07, 085 (2015). arXiv:1504.01330
+50. M. Grazzini, S. Kallweit, D. Rathlev, M. Wiesemann, Transverse-
+momentum resummation for vector-boson pair production at
+NNLL+NNLO. JHEP 08, 154 (2015). arXiv:1507.02565
+51. M. Grazzini, S. Kallweit, D. Rathlev, ZZ production at the LHC:
+ﬁducial cross sections and distributions in NNLO QCD. Phys. Lett.
+B 750, 407–410 (2015). arXiv:1507.06257
+52. M. Grazzini, S. Kallweit, D. Rathlev, M. Wiesemann, W
+± Z pro-
+duction at hadron colliders in NNLO QCD. arXiv:1604.08576
+53. M. Grazzini, S. Kallweit, S. Pozzorini, D. Rathlev, M. Wiesemann,
+W+ W− production at the LHC: ﬁducial cross sections and distri-
+butions in NNLO QCD. arXiv:1605.02716
+54. D. de Florian, M. Grazzini, C. Hanga, S. Kallweit, J.M. Lin-
+dert, P. Maierhöfer et al., Differential Higgs boson pair production
+at next-to-next-to-leading order in QCD. JHEP 09, 151 (2016).
+arXiv:1606.09519
+55. M. Grazzini, S. Kallweit, D. Rathlev, M. Wiesemann, W
+± Z pro-
+duction at the LHC: ﬁducial cross sections and distributions in
+NNLO QCD. arXiv:1703.09065
+56. A. Bredenstein, A. Denner, S. Dittmaier, S. Pozzorini, NLO
+QCD corrections to top anti-top bottom anti-bottom production
+at the LHC: 2. full hadronic results. JHEP 03, 021 (2010).
+arXiv:1001.4006
+57. J.A.M. Vermaseren, Axodraw. Comput. Phys. Commun.83, 45–58
+(1994)
+58. F.A. Berends, W.T. Giele, Recursive calculations for processes with
+n gluons. Nucl. Phys. B 306, 759–808 (1988)
+59. G. Ossola, C.G. Papadopoulos, R. Pittau, On the rational terms of
+the one-loop amplitudes. JHEP 05, 004 (2008). arXiv:0802.1876
+60. P. Draggiotis, M.V . Garzelli, C.G. Papadopoulos, R. Pittau, Feyn-
+man rules for the rational part of the QCD 1-loop amplitudes. JHEP
+04, 072 (2009). arXiv:0903.0356
+61. M.V . Garzelli, I. Malamos, R. Pittau, Feynman rules for the rational
+part of the electroweak 1-loop amplitudes. JHEP 01, 040 (2010).
+arXiv:0910.3130
+62. R. Pittau, Primary Feynman rules to calculate the epsilon-
+dimensional integrand of any 1-loop amplitude. JHEP 02, 029
+(2012). arXiv:1111.4965
+63. A. Denner, S. Dittmaier, Reduction of one-loop tensor 5-point inte-
+grals. Nucl. Phys. B 658, 175–202 (2003)
+64. A. Denner, S. Dittmaier, Scalar one-loop 4-point integrals. Nucl.
+Phys. B 844, 199–242 (2011)
+65. A. van Hameren, OneLOop: for the evaluation of one-loop scalar
+functions. Comput. Phys. Commun. 182, 2427–2438 (2011).
+arXiv:1007.4716
+66. A. Denner, S. Dittmaier, L. Hofer, COLLIER—a fortran-library
+for one-loop integrals. arXiv:1407.0087
+67. R.N. Lee, LiteRed 1.4: a powerful tool for reduction of multiloop
+integrals. J. Phys. Conf. Ser.523, 012059 (2014).arXiv:1310.1145
+68. T. Hahn, Generating Feynman diagrams and amplitudes with Fey-
+nArts 3. Comput. Phys. Commun. 140, 418–431 (2001). hep-
+ph/0012260
+69. S. Badger, B. Biedermann, P. Uwer, NGluon: a package to calculate
+one-loop multi-gluon amplitudes. Comput. Phys. Commun. 182,
+1674–1692 (2011). arXiv:1011.2900
+70. G. Passarino, M.J.G. Veltman, One loop corrections for e+ e- anni-
+hilation into mu+ mu- in the Weinberg model. Nucl. Phys. B 160,
+151–207 (1979)
+71. A. Denner, Techniques for calculation of electroweak radiative cor-
+rections at the one loop level and results for W physics at LEP-200.
+Fortsch. Phys. 41, 307–420 (1993). arXiv:0709.1075
+123

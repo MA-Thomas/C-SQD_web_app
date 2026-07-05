@@ -1,0 +1,1544 @@
+--- Page 1 ---
+RESEA RCH ARTICL E
+Development of a scoring function for
+comparing simulated and experimental
+tumor spheroids
+Julian Herold
+ID
+1,2☯
+, Eric Behle
+ID
+3☯
+, Jakob Rosenbauer
+ID
+3
+, Jacopo Ferruzzi
+ID
+4
+,
+Alexander Schug
+ID
+3
+*
+1 HIDSS4H ealth - Helmholtz Information and Data Science School for Health, Karlsruhe/H eidelberg,
+Germany , 2 Steinbuc h Centre for Computing , Karlsruhe Institute of Technolo gy, Karlsruhe, Germany , 3 NIC
+Researc h Group Comput ational Structural Biology, Ju ¨ lich Research Center, Ju ¨ lich, Germany , 4 Department
+of Bioenginee ring, Univers ity of Texas at Dallas, Richards on, Texas, United States of America
+☯ These authors contribu ted equally to this work.
+* al.schug@ fz-juelich .de
+Abstract
+Progress continues in the field of cancer biology, yet much remains to be unveiled regarding
+the mechanisms of cancer invasion. In particular, complex biophysical mechanisms enable
+a tumor to remodel the surrounding extracellular matrix (ECM), allowing cells to invade
+alone or collectively . Tumor spheroids cultured in collagen represent a simplified, reproduc-
+ible 3D model system, which is sufficiently complex to recapitulate the evolving organization
+of cells and interaction with the ECM that occur during invasion. Recent experimental
+approaches enable high resolution imaging and quantification of the internal structure of
+invading tumor spheroids. Concurrently, computatio nal modeling enables simulations of
+complex multicellular aggregates based on first principles. The comparison between real
+and simulated spheroids represents a way to fully exploit both data sources, but remains a
+challenge. We hypothesize that comparing any two spheroids requires first the extraction of
+basic features from the raw data, and second the definition of key metrics to match such fea-
+tures. Here, we present a novel method to compare spatial features of spheroids in 3D. To
+do so, we define and extract features from spheroid point cloud data, which we simulated
+using Cells in Silico (CiS), a high-perform ance framework for large-scale tissue modeling
+previously developed by us. We then define metrics to compare features between individual
+spheroids, and combine all metrics into an overall deviation score. Finally, we use our fea-
+tures to compare experimental data on invading spheroids in increasing collagen densities.
+We propose that our approach represents the basis for defining improved metrics to com-
+pare large 3D data sets. Moving forward, this approach will enable the detailed analysis of
+spheroids of any origin, one application of which is informing in silico spheroids based on
+their in vitro counterparts. This will enable both basic and applied researchers to close the
+loop between modeling and experiments in cancer research.
+PLOS COMP UTATIONAL  BIOLOGY
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 1 / 26
+a1111111111
+a1111111111
+a1111111111
+a1111111111
+a1111111111
+OPEN ACCESS
+Citation: Herold J, Behle E, Rosenbauer J, Ferruzzi
+J, Schug A (2023) Developmen t of a scoring
+function for comparing simulated and experime ntal
+tumor spheroids. PLoS Comput Biol 19(3):
+e1010471. https://d oi.org/10.1371/j ournal.
+pcbi.1010471
+Editor: Philipp M Altrock, Max Planck Institute for
+Evolutiona ry Biology: Max-Planc k-Institut fur
+Evolutions biologie, GERMANY
+Received: August 8, 2022
+Accepted: March 4, 2023
+Published: March 30, 2023
+Copyright: This is an open access article, free of all
+copyright, and may be freely reproduced,
+distributed, transmi tted, modifie d, built upon, or
+otherwise used by anyone for any lawful purpose.
+The work is made available under the Creative
+Commons CC0 public domain dedication.
+Data Availabilit y Statement: The code for the
+"Cells in Silico" framework is available at https://
+gitlab.com/na stja/nastja. The code for the
+"Nastjapy" framework is available at https://gitlab.
+com/nast ja/nastjapy. Example configuration files
+for the simulati ons, as well as the simulatio n
+configuration files and raw data are provided at
+https://gitlab .com/nastja/ nastjapy_pape r.
+Funding: AS, EB, JR This work has been funded by
+NIC (John von Neuman n Institute for Computing)
+
+
+--- Page 2 ---
+Author summary
+Cells within a tumor use various methods to escape and thereby invade into healthy parts
+of the body. These methods are studied experimentally by examining tumor spheroids,
+spherical aggregates of hundreds to thousands of individual cells. Such spheroids can also
+be simulated, and the comparison of both simulations and experiments is desirable. Here,
+we present an analysis strategy for the comparison of tumor spheroids of any origin.
+Using this strategy, we aim to increase the information gained from the data and improve
+the collaborative potential between experimentalists and theorists.
+This is a PLOS Computational Biology Methods paper.
+1 Introduction
+The worldwide challenge of fighting cancer is as urgent as ever [1, 2]. When trying to under-
+stand the mechanisms driving the disease, one is faced with a complex and wildly inhomoge-
+neous landscape of cellular properties and interactions, which vary both within and between
+cancer types [3–5]. Furthermore, cancer is not one single disease, but rather refers to a large
+number of diseases with shared characteristics, which are captured in the hallmarks of cancer
+[2, 6]. The processes underlying these diseases, such as the rise of malignancy via loss of cell-
+cell adhesion and subsequent increased motility [7], span a wide range of scales, both in space
+and in time [8]. To further the understanding of cancer, it is crucial to decipher how these pro-
+cesses interact and lead to the formation of macroscopic invasive tumors. Thus, combating
+cancer requires input from many different domains of science, such as biology, medicine, and
+pharmacology, but also physics, computer science, and mathematics [8, 9]. Unfortunately,
+time-resolved analysis of in vivo tumor tissue is challenging, as due to low spatial or temporal
+resolution of imaging methods, single-cell resolution 4D trajectories are not yet widely applica-
+ble. To increase accessibility for analysis, the system has to be divided into smaller subsystems.
+Thus, in vitro and in silico models are created, allowing the study of individual aspects of the
+system. An in vitro example is the study of tumor spheroids, which represent a useful model
+system for studying tumor growth and cell dynamics [10]. Tumor spheroids are spherical
+arrangements of hundreds to thousands of cells, which can be placed within a structural extra-
+cellular matrix (ECM), e.g. a collagen scaffold. They are widely used for studying e.g. drug
+response, tissue fluidity and tumor invasion [11–13]. On the in silico side, tumor growth mod-
+els of varying degree of coarse-graining are being developed [14–16], some of which are also
+applied to simulate tumor spheroids [17, 18]. Thus, both experimentalists and theorists gener-
+ate data for the same systems, but these studies are often not compared quantitatively. Quanti-
+tative comparison is an important step towards fully leveraging the results of both groups, and
+in this context requires an adaptive and robust comparison strategy for spheroid data, regard-
+less of its origin. In prior studies, Browning et al. have investigated structural aspects of mela-
+noma-derived spheroids by building a data-analysis pipeline for spheroid images resulting
+from confocal microscopy [19], and Szymańska et al. have studied the proliferation behavior
+of spheroids using Bayesian inference [20]. However, to our knowledge there is currently no
+strategy for systematically comparing 3D structural data between two spheroids, which can be
+obtained in vitro using stacked multiphoton microscopy images [13]. Hence, in this study, we
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 2 / 26
+of the Helmholtz associatio n. AS, JH The present
+contributio n is supported by the Helmholtz
+Association under the joint research school
+“HIDSS4He alth – Helmholtz Information and Data
+Science School for Health. JF Collection of
+experimen tal data was funded by the National
+Cancer Institute (NIHgran t U01CA2021 23) and by
+the Department of Defense (DoD grant W81XWH-
+15-1-0070 ). The funders had no role in study
+design, data collection and analysis, decision to
+publish, or preparation of the manuscript.
+Competing interests : The authors declare that they
+have no competing interests.
+
+
+--- Page 3 ---
+want to provide a toolbox of features which may be extracted from a given 3D structure of a
+spheroid, and metrics to compare these extracted features between different spheroids. These
+features and metrics can be used on their own, or in combination, to obtain an overall devia-
+tion score. Our strategy utilizes point cloud data, in which each point denotes the position of a
+cell. Importantly, this enables the comparison of both simulated and experimental spheroids.
+To demonstrate this, we applied our toolbox to previously published data that captured struc-
+tural differences in triple-negative breast cancer spheroids invading into a collagenous ECM of
+varying density [13]. Such experimental data were used as a motivation to simulate a variety of
+spheroid behaviors in silico (see Fig 1). Using our previously developed platform “Cells in Sil-
+ico” (CiS) [21], we performed multiple simulations of 3D tumor spheroids, and for this study,
+we want to highlight a subset of four spheroid phenotypes: “spherical”, “spherical with far gas-
+likes”, “deformed”, and “disordered”. These phenotypes emerged from different combinations
+of the aforementioned parameters (see Sections 2.1 and 4.2), and will be used as examples
+throughout.
+In the following, we will first outline our work with CiS towards simulating spheroids and
+arriving at the four phenotypes. Then, we will describe the spatial features that we extracted
+from individual simulated and experimental spheroids. Next, we will discuss our strategy for
+comparing these features between multiple spheroids, including the derivation of an overall
+deviation score, and how it can be tuned for a specific use case. After validating our strategy
+via a transformation study, we will show comparisons between exclusively simulated spher-
+oids, exclusively experimental spheroids, and comparisons between simulated and experimen-
+tal spheroids. We will conclude by evaluating the success of our method, and providing an
+outlook for its further use.
+2 Results
+2.1 Adapting CiS to the simulation of spheroids
+CiS is a highly scalable general-purpose framework for tissue simulation at subcellular resolu-
+tion. It extends a Cellular Potts Model (CPM) with an agent-based layer, and allows the
+description of various properties and phenomena, such as cell-cell adhesion, cell compressibil-
+ity and cell motility, cell divison, cell mutation and cell-ECM interactions (see Section 4.1 for
+more details). In order to apply it to the simulation of spheroids, we first defined the simula-
+tion system and parameters to be investigated. Previous studies have identified cell-ECM inter-
+actions such as adhesion, degradation and remodeling as strong components in facilitating
+invasion [22–24]. Hence, we focused on the effects of different ECM alignments, cell-ECM
+adhesion, ECM degradation, as well as self-propelled cell motility (see Section 4.2 for more
+details). We performed multiple simulations of 3D tumor spheroids placed in a coarse-
+grained, rigid ECM. In our model, this ECM can be both adhered to and degraded by cells, but
+due to its rigidity, the alignment of the fibers remains constant (see Section 4.2 for more
+detail). Since it is known that tumors remodel their ECM, and ECM alignment is one of the
+main drivers of invasion [24], we decided to include a radially aligned ECM in our studies (see
+Fig 1a). Thus, we performed multiple simulations of spheroids at different model parameters
+(see Table 2). Within this parameter space, we observed four spheroid phenotypes, which were
+connected by singular differences in parameter values (see Table 1). These were the following:
+Spherical. Cell-cell adhesion dominated, and the cells remained in a spherical arrange-
+ment, with a relatively smooth surface of the spheroid bulk throughout the simulation.
+Deformed. Due to a strong increase of the cell-ECM adhesion strength, cells adhered to
+and moved along the radially aligned fibers. Through a combination of cell division filling
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 3 / 26
+
+
+--- Page 4 ---
+gaps and cell-cell adhesion keeping the bulk intact, the spheroid lost its spherical shape and
+exhibited protrusions along the ECM fibers.
+Spherical with far gaslikes. Through a combination of high ECM degradation rate and
+cell-ECM adhesion, cells in the outermost layer of the spheroid moved into the ECM faster
+than by adhesion alone. This resulted in a halo of singular cells around an approximately
+spherical spheroid bulk.
+Fig 1. Simulat ed spheroids and emerging phenotypes . a) Cut-outs of the initial states of simulate d spheroids for two ECM alignments . Each spheroid,
+shown in red and containin g roughly 2000 cells, was placed into an (800 μm)
+3
+volume and surrounde d by either an unaligned or radially aligned ECM
+(green fibers). To improve visibility, the front half of the volume (dashed lines) is not shown b) Time evolution of simulated spheroids displayin g four
+different phenotype s: “spherical ”, “deformed ”, “spherical with far gaslikes”, “disordered ”. The ECM is radially aligned for these phenotypes , and is not
+shown in order to highlight the spheroid morpholo gy. Each phenotype resulted from different combination s of parame ters connected to the cell
+motility, the cell-cell adhesion and the interaction with the ECM (see Section 2.1 and Table 1). Each simulatio n lasted 250 000 Monte-C arlo (MC) steps,
+and shown are five snapshot s for each simulation. A single MC step correspond s to roughly 1 s of real time in the context of this study. Througho ut our
+investigation, we focused on the final configurati on (orang e rectangle ), and used five replicates from each phenotype.
+https://doi.o rg/10.1371/j ournal.pcbi. 1010471.g001
+Table 1. Differences between the four simulated phenotypes used throughout this study.
+Phenotype Cell-ECM adhesion ECM degradation period Motility magnitude
+Spherical 50 1 (disabled) 0
+Deformed 450 1 (disabled) 0
+Spherical with far gaslikes 450 5000 MC steps 0
+Disordered 450 5000 MC steps 100
+Listed are the three parameters in which the phenotypes differed from each other. The remainin g paramete rs were the same for all phenotypes , and were as follows:
+ECM density: 1; ECM alignment: radially aligned; Cell-cell adhesion: 50; Random walk persistence : 0; cell division: enabled.
+https://do i.org/10.1371/j ournal.pc bi.1010471. t001
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 4 / 26
+
+
+--- Page 5 ---
+Disordered. The cells dissociated from each other due to high self-propelled motility.
+Subsequently, the spheroid integrity was lost.
+These four phenotypes visually differed between each other (see Fig 1, and the next step of
+our investigation was to quantify these differences.
+2.2 Individual features
+We focused on the analysis of spatial properties of tumor spheroids. For this, we utilized data
+containing the three-dimensional positions of all individual cell centers at one given point in
+time. For the analysis of these data we considered various features which could be used indi-
+vidually or as an overall deviation score (see Section 2.4). These features and their applicability
+are highlighted in the following.
+Cell density distribution. Analyzing the distribution of cell density is useful for determin-
+ing the extent of the bulk of the spheroid, as well as its geometry. For our studies we focused
+on the so-called central local density, which we defined as the fraction of cells found within
+spherical layers of constant thickness and increasing radii around the spheroid center. For a
+uniform spherical distribution of cells, this density is non-zero only within the spheroid bulk
+(see Fig 2a). Disordered spheroids, on the other hand, exhibit a distribution over a larger
+domain.
+Gaslike cell distribution. The detachment of single “gaslike” cells from a spheroid has
+been a recent focus [13], and can be used to distinguish between ordered and disordered
+spheroids. However, the assignment strategy of the “gaslike” status needs to be well defined.
+Kang et al. were able to experimentally measure the spheroid boundary [13], and defined cells
+outside of this boundary as “gaslike”. Since the spheroid boundary is not tracked in our simu-
+lations, we used a definition based on nearest-neighbor distances and distance from the center
+of the spheroid. The set of gaslike cells G as a subset of all cells C is thus defined as follows:
+G ¼ fc
+i
+2 C : d ðc
+i
+; OÞ > D
+cri t
+^ min ðN
+i
+Þ > d
+cri t
+g; ð1Þ
+where D
+crit
+is the threshold distance from the spheroid center O, N
+i
+= {d(c
+i
+, c
+j
+)jc
+j
+2 C, c
+j
+6¼ c
+i
+} is
+the set of Euclidean distances between cell c
+i
+and all other cells, and d
+crit
+is the threshold neigh-
+bor distance. The first constraint in Eq 1 provides the context of a bulk structure, and its
+parameter D
+crit
+can be selected considering the inflection point of the central local density. The
+second constraint ensures that only detached cells are defined as gaslikes, and its parameter
+d
+crit
+was chosen by considering the mean distance between all cells. Fur our purposes we
+Table 2. Simulate d parameter space from which the four phenoty pes were obtained.
+Paramet er Values
+ECM density 1, 2
+ECM degradat ion period 1000 MC steps, 5000 MC steps, 1 (disabled)
+ECM alignmen t unaligned, radially aligned
+Cell-cell adhesion 50, 100
+Cell-ECM adhesion 50, 450
+Motility magnitude 0, 50, 100
+Random walk persistence 0, 0.3, 0.5
+Cell division enabled
+Listed are the number of values per parameter, as well as the total number of paramete r combination s resulting from
+this (see section 4.2 for more detail). For each simulation, five replicate s were simulated.
+https://d oi.org/10.1371/j ournal.pc bi.1010471. t002
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 5 / 26
+
+
+--- Page 6 ---
+Fig 2. Visualiza tion of cell based features extracted from simulation data for four different phenoty pes. a) Cell density distribution. Shown is,
+averaged over all replicates of each phenoty pe, the fraction of cells within spherical layers around the spheroid center versus the radii of these layers. The
+“spherical” phenotype shows a steep drop at a radius of 150 μm, while the “deformed ” and “disordered ” phenotype s show a long-taile d distribution. The
+“spherical with far gaslikes” phenot ype behaves similar to the “spherical” phenoty pe, except for a non-zero density above 175 μm. b) Gaslike cell
+distribution . Shown are the average fractions of gaslike cells according to Eq 1 versus their normali zed average distance to the spheroid center. The
+fraction of gaslikes exhibite d by the “spherical ”, “spherical with far gaslikes” and “deformed ” phenotypes is similar, but the distance from the spheroid
+center is far greater for the “spherical with far gaslikes” phenotype. The “disordered ” phenotype on the other hand contains many cells classified as
+gaslikes across the entire spheroid volume. Their normalized average distance from the center evens out to a value slightly above 1. c) Voronoi cell
+volume distributio n. Shown are histograms of the average Voronoi cell volumes found in the four phenotypes . The “spherical” phenoty pe shows a
+sharp peak around a volume of 4000 μm
+3
+, and a smaller peak around a volume of 2000 μm
+3
+. The “spherical with far gaslikes” and “deformed”
+phenotypes show a similar behavior , with a slightly more pronou nced tail toward s larger volumes. Finally, the “disorde red” phenot ype shows volumes
+distributed over a wide range. The range between volume s of 1500 μm
+3
+and 5000 μm
+3
+is magnified on the right to highlight the differences between
+phenotypes in the two peaks.
+https://doi.o rg/10.1371/j ournal.pcbi. 1010471.g002
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 6 / 26
+
+
+--- Page 7 ---
+selected the data by Kang et al. [13] as basis for deriving these parameters: D
+crit
+= 125 μm, d
+crit
+= 19 μm. This set G can be used to compute various properties, such as the fraction of gaslikes
+and their average distance from the spheroid center. We combined these two properties in this
+feature, defining it as a point p within the space spanned by them. The first property p
+x
+describes the fraction of all cells in the spheroid that are detached. The second property p
+y
+describes the mean distance of the detached cells from the spheroid center.
+p ¼ p
+x
+; p
+y
+� �
+¼
+jGj
+jC j
+;
+1
+jGj
+X
+i
+d ðc
+i
+; OÞ
+p
+95
+ðG
+∗
+Þ
+ !
+ð2Þ
+where p
+95
+(G*) is the 95th percentile of distances of the non-gaslike cells G* = C\G from the
+spheroid center, which serves as a normalization factor. We included only the non-gaslike cells
+for this normalization factor, because our aim was to define the distance relative to the spher-
+oid bulk. As shown in Fig 2b, the “disordered” and “spherical with far gaslikes” phenotypes
+can be distinguished from the others using this feature, but it is suited less well for comparing
+“spherical” and “deformed” spheroids.
+Voronoi cell volume distribution. The distribution of Voronoi cell volumes within the
+spheroid serves as a measure of cell deformation, as well as their confinement. To obtain these
+volumes, we performed a Voronoi tessellation [25] on the cell center point cloud, during
+which the system was divided into N
+cells
+regions according to the distances between adjacent
+cells. It is important to note that the Voronoi cell volumes are not the same as the biological
+cell volumes, but represent a proxy in which detached cells occupy a significantly larger vol-
+ume. We generated a histogram of the Voronoi cell volumes, as shown in Fig 2c). Here we
+observe that the first three phenotypes are distributed sharply around a volume of roughly
+4000 μm
+3
+, with a smaller spike around 2000 μm
+3
+and a tail. The volumes of the “disordered”
+phenotype are evenly distributed over a much wider range. The tail of the first three distribu-
+tions is a useful artefact of the Voronoi tesselation, as it allows to extract additional informa-
+tion about the bulk spheroid surface.
+Spheroid surface and surface deformation. While the cell density distribution provides a
+measure of the spheroid size, its information about the spheroid shape is limited. To study this
+in more detail, we needed to approximate the spheroid surface, as we wanted to distinguish
+deformed spheroid bulk from spherical bulk. We did this via surface triangulation using the
+marching cubes algorithm [26]. To apply this algorithm we performed some preprocessing of
+the point cloud data: first, we extracted the set of non-gaslikes G*, as we were only interested
+in the shape of the spheroid bulk. Next, we obtained a continuous spheroid volume from the
+remaining points by voxelizing our data. This voxelization was performed by mapping the sys-
+tem onto a 3-dimensional density grid. The density of each grid point was set to 1 if the grid
+point was closer than a threshold distance to any cell in the point cloud, and was set to 0 other-
+wise. The resulting region defined by grid points of a density of 1 served as a proxy of the con-
+tinuous spheroid volume. We then used the marching-cubes algorithm [26] to generate a
+mesh of triangles which approximated the surface of the continuous volume, a process known
+as surface triangulation (see also S4 Fig). Finally, we extracted two features from this: first, we
+calculated the surface area from the triangle mesh (see Fig 3a)), and second, we analyzed the
+surface deformation by investigating the orientations of the mesh vertices. This was done by
+calculating, for each vertex, the scalar product between its normal vector and its origin vector,
+with the spheroid center at the origin (see S4 Fig). Then these scalar products were combined
+in a histogram. The vertex orientations serve as a measure of deformation, since for a perfect
+sphere all scalar products are equal to 1, and a deformed sphere results in a more widely spread
+distribution (see Fig 3b).
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 7 / 26
+
+
+--- Page 8 ---
+By using these features we were able to measure and quantitatively describe different
+aspects of individual tumor spheroids. This provided a basis on which we could compare two
+spheroids with each other. Such a comparison required the definition of distance metrics for
+each feature, which are highlighted in the following.
+2.3 Individual metrics
+To accomodate the different types of output data between features, we required suitable met-
+rics. For the spheroid surface area, which provided a scalar value per spheroid, we used the
+mean squared error (MSE). For the gaslike cell distribution, which provided a tuple of two
+coordinates per spheroid, we used the Euclidean distance. Finally, for the distribution-based
+features, i.e. cell density distribution, Voronoi cell volume distribution and spheroid surface
+deformation, we used the 1-Wasserstein distance (WSD). The Wasserstein distance is a metric
+between probability distributions, and is a common sight in mathematics, especially statistics
+and computer science. The p-Wasserstein distance between two probability measures μ and ν
+on the metric space ðR
+n
+; d Þ is defined as:
+W
+p
+ðm; nÞ≔
+�
+inf
+g2Gðm;nÞ
+Z
+R
+n
+�R
+n
+d ðx; yÞ
+p
+dgðx; yÞ
+�
+1=p
+ð3Þ
+where Γ denotes the collection of all joint probability measures γ with marginals μ and ν [27],
+and d(x, y) denotes the metric distance used to the define the metric space. Here, d(x, y) = |x −
+y|. An intuitive illustration of the Wasserstein distance can be given by viewing each distribu-
+tion as a pile of earth of different shape, and considering the amount of work that has to be
+done to transform one pile into the other. Assuming this work to be equal to the product
+between the amount of earth that has to be moved and the distance it needs to be moved, the
+Fig 3. Visualiza tion of spheroid bulk based features extracted from simulatio n data for four different phenotypes . Surface information was
+extracted via the marching cubes algorithm [26] (see also section 2.2). a) Spheroi d surface area. Shown is the average surface area found for each
+phenotype. The “spherical with far gaslikes” phenoty pe has the smallest average surface area, due to the spherical bulk containing less cells than that of
+the “spherical ” phenotype. The larger average surfaces of the “deformed ” and “disorde red” phenoty pes are due to their more irregular shape. b)
+Spheroid surface deformat ion. Shown are histograms of the scalar products between vertex normal vectors and vertex origin vectors, with the origin
+denoting the center of the spheroid. The vertices were obtained from surface triangulation of the spheroid point cloud and denote points on this surface
+(see also S4 Fig). The “spherical ” phenotype exhibits a sharp peak at scalar products of 1, which is less pronounced for the “spheri cal with far gaslikes”
+phenotype. The remaining two phenoty pes are spread more widely.
+https://doi.o rg/10.1371/j ournal.pcbi. 1010471.g003
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 8 / 26
+
+
+--- Page 9 ---
+Wasserstein distance is the minimum amount of work that has to be done. Due to this illustra-
+tion, the WSD is often referred to as “earth mover’s distance” [28].
+2.4 Combination of multiple metrics
+At this point, the individual features described in the previous sections could be reliably com-
+pared between two spheroids using our defined metrics. Next, one of our main goals was to
+combine these features and metrics into a single scalar value, which could then serve as an
+overall deviation score between two spheroids (see Fig 4). This can be seen as a summary sta-
+tistic, which are also used in Bayesian inference [29]. Many different questions regarding the
+comparison of tumor spheroids require such a singular scalar. From an experimentalist’s view,
+this could be the comparison of spheroids cultivated in different conditions, with the goal of
+quantitatively determining how the change of one experimental variable influences the spher-
+oid growth and invasion pattern. A problem faced by theorists running simulations is how to
+optimize the model parameters to reproduce experimental results. Both problems require one
+scalar distance measure like the one we aimed to derive here. Before doing so, we need to
+address the fact that it is unlikely for such a distance measure to be generally applicable to all
+types of tumor spheroids and experimental settings. This is due to the high dimensionality of
+even a single spheroid dataset at a single point in time. To illustrate this, we consider the case
+of comparing two spheroids, each containing 1000 cells. The desired distance is a function
+f : R
+300 0
+� R
+3000
+! R. Such a function will, by design, project many different pairs of spher-
+oids onto the same point in R. This property can hardly be circumvented, and is desired in a
+distance measure. On the other hand, this also means that the measure has to be carefully
+selected depending on the use case. Therefore, in addition to defining the overall deviation
+score here, we will also propose a method to adapt the score to different use cases.
+Fig 4. Sketch of the applicat ion of Nastjapy. An overall deviation score D
+i,j
+is calculated between two individua l spheroids i and j (see also section 4.4).
+https://doi.org/10 .1371/journal.p cbi.1010471.g0 04
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 9 / 26
+
+
+--- Page 10 ---
+Standardization. We first ensured that all metrics were on a similar scale. For this stan-
+dardization, we used five replicates from each of the four phenotypes from our simulations,
+and compared each feature, resulting in N
+spheroids
+= 20 spheroids and N
+distances
+= 400 metric
+distances per feature f. These distances d
+i,j,f
+between spheroid i and spheroid j were then trans-
+formed according to Eq 4:
+d
+i;j;f ;std
+¼
+d
+i;j;f
+  m
+d;f
+s
+d;f
+ð4Þ
+where μ
+d,f
+and σ
+d,f
+respectively denote the mean and standard deviation across the N
+distances
+val-
+ues for each feature f. Since this standardization may lead to values of d
+i,j,f,std
+below zero, and
+we aimed to define a positive distance for each feature, we further shifted each value by the
+minimum across all d
+i,j,f,std
+, finally arriving at d
+i
+; j; f
+∗
+as defined in Eq 5:
+d
+∗
+i;j;f
+¼ d
+i;j;f ;std
+þ jminð½d
+1;1;f ;std
+; d
+1;2;f ;std
+; ð. . .Þ; d
+N
+sphe roi ds
+;N
+sphe roids
+;f ;std
+�Þj
+ð5Þ
+Overall deviation score and use case adaptation. Next, we defined the overall deviation
+score D
+i,j
+. This definition entailed merging the previously standardized d
+∗
+i;j;f
+via the following
+linear combination:
+D
+i;j
+X
+N
+fea tur es
+f ¼1
+l
+f
+� d
+∗
+i;j;f
+; ð6Þ
+where λ
+f
+denote the weight factors for each feature, i.e. how much it contributes to the final
+deviation score D
+i,j
+. In order to optimize these values, we once again turned to our simulated
+phenotypes and their five respective replicates. Because we wanted to ensure the deviation
+score to distinguish between different phenotypes, we required values of λ
+f
+that minimized the
+intra-phenotype deviations and maximized the inter-phenotype deviations. This can be for-
+mulated as a maximization problem:
+max
+fl
+f
+g
+X
+N
+feat ure s
+f ¼1
+l
+f
+X
+N
+phen otyp es
+k¼1
+X
+i2P
+k
+X
+j=2P
+k
+d
+∗
+i;j;f
+|fflfflfflfflfflfflffl {zfflfflfflfflfflfflffl }
+inte r  phen otyp e
+ 
+X
+i2P
+k
+X
+j2P
+k
+d
+∗
+i;j;f
+|fflfflfflfflfflfflffl {zfflfflfflfflfflfflffl }
+in tra  phen oty pe
+0
+B
+B
+B
+B
+@
+1
+C
+C
+C
+C
+A
+;
+ð7Þ
+where P
+k
+is the set of all spheroids of phenotype k. This optimization procedure can be inter-
+preted as an inverse clustering. During clustering, the property described in Eq 7 is maximized
+by assigning individuals to a cluster. In contrast to this, our method uses prior clustering infor-
+mation to optimize the metric space itself. This shows resemblance to methods of contrastive
+learning, with the notable difference that we use a linear model in our approach [30]. We
+argue, that adjusting the weighting of features according to their relevance to the formation of
+predefined clusters will allow to more strongly distinguish between those clusters. Assuming
+that phenotypes are correctly grouped, maximizing Eq 7 already ensures that each λ
+f
+> 0.
+Additionally, we decided on the following constraint:
+X
+N
+fea tur es
+f ¼1
+l
+2
+f
+¼ 1 ð8Þ
+This constraint is important to prevent the optimization procedure from collapsing towards
+the trivial solution of setting λ
+f
+! 1. It also fixes each λ
+f
+to the domain [0, 1]. Furthermore,
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 10 / 26
+
+
+--- Page 11 ---
+using the square of each λ
+f
+minimizes the influence of outliers across features. The optimiza-
+tion of Eq 7 under consideration of this constraint was performed using the Sequential Least
+Squares Programming (SLSQP) method implemented in the SciPy package [31] The contribu-
+tion of each feature to the overall deviation score resulting from the optimization of the λ
+f
+is
+shown in Table 3.
+2.5 Validation: Transformation study
+Validating a metric, such as the one derived in this work, requires a set of data examples with
+known relation. For this purpose, we designed a transformation study, in which we generated
+multiple point clouds from a reference spheroid using transformation functions. These func-
+tions were selected in such a way, that for a useful metric we expected higher distances between
+reference and transformed point cloud for higher transformation strengths. On the other
+hand, the metric has to remain invariant under transformations related to the frame of refer-
+ence, e.g. rotation or translation of the point cloud. Therefore, we also included these transfor-
+mations. Hence, we tested for the following properties:
+1. invariance under rotation and translation,
+2. monotony within the domain of interest: a small deviation from an original spheroid shall
+result in a lower distance than a large deviation.
+We investigated these properties for the five described features and the overall deviation
+score by appling four transformations to a spheroid S ¼ f
+~
+P g j
+~
+P 2 R
+3
+of the “spherical” phe-
+notype. The transformations were represented by functions in the space of point clouds
+T : S � R ! S. With this approach, we aimed to verify both of the above properties. Invari-
+ance is shown, when the distance does not depend on the strength of the transformation. Simi-
+larly, monotony is shown, when the distance metric grows monotonously with the
+transformation strength. The four transformations that we used were the following:
+Rotation. Rotating each cell of the spheroid by a given angle α around an arbitrary axis i
+through the spheroid center:
+T
+R
+ðS; aÞ ¼ fR
+i
+ðaÞ
+~
+P j
+~
+P 2 Sg; ð9Þ
+where R
+i
+(α) is the rotational matrix.
+Noise. Adding a random vector drawn from a standard uniform distribution to the posi-
+tion of each cell:
+T
+N
+ðS; aÞ ¼ f
+~
+P þ a �
+~
+X j
+~
+P 2 S;
+~
+X � U
+3
+ð0; 1Þg;
+ð10Þ
+Deformation. Translating each cell along the radial vector of the spheroid, modulated by
+the spherical angles of the cell’s position:
+T
+D;o
+ðS; aÞ ¼ f
+~
+P þ a � ^e
+r
+� ðcos oφ þ si n oyÞ j
+~
+P 2 Sg ð11Þ
+Table 3. Fitted weight factors for each feature contributing to the overall deviation score between two spheroid s.
+Feature Cell density distributio n Gaslike cell distribution Vorono i cell volume distribution Spheroid surface area Spheroid surface deformation
+λ
+f
+0.41 0.50 0.43 0.34 0.52
+The values were obtained by maximizin g Eq 7, with the simulated phenotypes serving as a calibrati on set (see Section 2.1).
+https://do i.org/10.1371/j ournal.pc bi.1010471. t003
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 11 / 26
+
+
+--- Page 12 ---
+This deformation can be interpreted as adding ripples with frequency ω and amplitude α to
+the spheroid surface.
+Scaling. Multiplying the position of each cell by its distance to the center of the spheroid:
+T
+S
+ðS; aÞ ¼ fa � k
+~
+P k �
+~
+P j
+~
+P 2 Sg
+ð12Þ
+This transformation affects cells with a larger distance to the spheroid center more strongly
+than those close to it. The spheroid density is therefore not conserved.
+A visual example for each of these four transformations is provided in Fig 5. For complete-
+ness, we also mention the translation transformation, which is defined as follows:
+Transformation. Changing the position of each cell by the same vector ~a
+T
+T
+ðS; ~a Þ ¼ f
+~
+P þ ~a j
+~
+P 2 Sg
+ð13Þ
+We do not show it however, because translational invariance is ensured. This is because all
+features depend only on relative and not absolute distances, and this transformation conserves
+relative distance. Rotational invariance was expected due to the rotational symmetry of the
+underlying features. Nonetheless, we wanted to test whether artifacts, produced by the voxeli-
+zation for features related to the spheroid surface (see Section 2.2), had any notable effect. For
+this reason, we included the rotation transformation. The remaining transformations were
+chosen to validate the monotony of the deviation score.
+We applied each transformation at increasing strength and compared the resulting spher-
+oid with the untransformed version. The results of this are shown in Fig 5. Starting with the
+rotation transformation in subfigure a), we observed no change in the feature distances at
+increasing rotation angle, except for negligible changes in the spheroid surface derformation.
+This underlines the rotational invariance of our features. For the other three transformations,
+we observed monotony in all cases. Those features related to the spheroid surface could not be
+meaningfully extracted when the spheroid bulk was disrupted, i.e. at high degrees of the noise
+and deformation transformations (subfigures b) and c)). The gaslike distribution feature dis-
+tance remained constant for small values of the scaling transformation (subfigure d)), since no
+cells were classified as gaslike here. Aside from these edge-cases, our features behaved robustly.
+It is interesting to note that the overall deviation score scaled approximately linearly with the
+transformation strength within the domain of interest, excluding the aforementioned extreme
+cases. This property can be viewed as a stronger version of the monotony property. Impor-
+tantly, this was not used as a constraint when optimizing the weights, but emerged from the
+procedure itself.
+2.6 Validation: Comparing simulated spheroid phenotypes
+As a second way to validate our methods, we now moved to the comparison of simulated
+spheroids. We chose the final simulation state, after 250 000 MC steps, of five new replicates
+from each phenotype. Importantly, these were not the same replicates which we used earlier
+for the calibration of the weight factors. We calculated the overall deviation score for each pair.
+As shown in Fig 6a), we compared individual replicates (upper triangle), and we also com-
+bined replicate comparisons into an average phenotype deviation score (lower triangle).
+Importantly, while it is questionable whether the “disordered” phenotype is a biologically
+occuring configuration (see section 3), we chose to include it to serve as a phenotype maxi-
+mally distant to the others. The deviation score was lowest when a phenotype was compared
+with itself, and highest, when any phenotype was compared with the “disordered” one. The
+“spherical”, “deformed” and “spherical with far gaslikes” phenotypes showed a smaller devia-
+tion score between each other, but were nonetheless distinguishable. This is underlined in
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 12 / 26
+
+
+--- Page 13 ---
+Fig 5. Feature comparis on for spheroid point clouds resulting from four different transform ation functi ons. Shown are the standardi zed metric
+distances between the un-transf ormed reference spheroid and an increasingly transfor med version for each data feature. In addition , the combined
+deviatio n score is depicted in gray crosses for each transforma tion (see Section 2.4). Below each subfigur e, we provid e a top-dow n view snapshot of the
+spheroid at three levels of transfor mation. Blue cells are classified as non-gas like, and red cells are classified as gaslike. a) Rotation. Except for negligible
+change s in the spheroid surface deformatio n feature, we observe no change at increasing rotation angle. This supports rotational invariance of our features.
+b) Noise. For each feature, the distance increases at increasing noise level. Due to the loss of a solid core at high noise levels, the spheroid surface area and
+deforma tion features are no longer sensible , and were therefore cut. The deviation score increases approxi mately linearly up to a noise level of 200, at which
+point the features related to the spheroid surface area were cut. c) Deformatio n. Similar behavior to b) is observed here. Above a deformatio n amplitude of
+120 the spheroid point cloud still contains cells classified as non-gasli ke but loses its solid core. Surface area and deformatio n values were therefore cut
+above this threshold . The deviation score increases approxi mately linearly up to a deformatio n amplitude of 120. d) Scaling. We observe increased
+distances both for scale factors below and above 1. Due to the fixed values of D
+crit
+and d
+crit
+(see Eq 1), the gaslike distribution feature is scale-depen dent, and
+also varies here. For scale factors below 1.0, no gaslikes were found, and therefore the values of this feature remained constant. The deviation score increases
+approxi mately linearly both for scale factors smaller and larger than 1.
+https://d oi.org/10.1371 /journal.pcbi.10 10471.g005
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 13 / 26
+
+
+--- Page 14 ---
+subfigure b), in which we show box plots of the overall deviation scores between the “spheri-
+cal” phenotype and the others. Here, each phenotype comparison was clearly distinct from the
+comparison of the “spherical” phenotype with itself (see also S1 Fig). Significance was deter-
+mined using Welch’s t-test.
+2.7 Validation: Comparing experimental spheroids
+To demonstrate the fact that our deviation score can also be used for experimental data, we
+again turned to the dataset on which we based our initial simulations. Kang et al. previously
+investigated the invasive behavior of tumor spheroids cultured in increasing collagen concen-
+trations [13]. Their data set contained cell-resolved 3D snapshots of spheroids in four different
+collagen concentrations (1–2-3-4 mg/ml) at different times (days 1–2-3) during invasion (see
+Fig 7a)). For each collagen concentration and day of culture, data from three individual spher-
+oids were acquired using a combination of optical clearing and multiphoton microscopy.
+Since the optical clearing procedure requires fixation, data from successive days of culture
+share the same initial conditions but do not originate from the same spheroid. For more
+details, see Section 4.3.
+Fig 6. Deviation score comparis on for four simula ted spheroid phenotypes . a) Shown are the deviatio n scores for five replicat es of each phenot ype on
+the upper triangle, and the average deviatio n score over all replicates of each phenoty pe on the lower triangle. A top-down view of the spheroid point cloud
+for each replicate is shown next to the respective row/colum n. Blue cells are classified as non-gaslike, and red cells are classifi ed as gaslike. For better
+comparison , an enlarged version of each spheroid was placed at the bottom of the figure. We observe the highest deviation between the “disordered ”
+phenot ype and the others, with the maximum deviation between the “spherical ” and the “disordered ” phenotypes. The “spherical”, “spherical with far
+gaslikes” and “deform ed” phenoty pes, which are more similar from a visual perspec tive, show a smaller deviatio n score using our analysis, but are
+nonethe less distinguisha ble. b) Box plots of the deviation score values between the “spheri cal” phenotype and each other phenot ype. The values used here
+correspond to those used for the lowest row of subfigure a). We observe that the deviatio n scores for the “spherical” phenoty pe compared with the other
+phenot ypes consistentl y lie above the maximu m deviation score of the “spherical” phenoty pe compared with itself. Significance was determined using
+Welch’s t-test.
+https://d oi.org/10.1371 /journal.pcbi.10 10471.g006
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 14 / 26
+
+
+--- Page 15 ---
+In order to keep the scale consistent throughout this study, we used the same standardiza-
+tion and weight factors as for our simulated spheroids. We compared the spheroids grown for
+one day, two days, and three days, and visualized them in Fig 7. Similar to Fig 6a), in Fig 7b)
+we show, for each growth duration, the deviation scores for individual replicates on the upper
+triangle, and the average deviation score over a set of replicates on the lower triangle. For illus-
+trative purposes and consistency, we have kept the color bar range the same as before. In
+Fig 7. Deviation score comparis on for in vitro MDA-M B-231 spheroid s cultured in four collage n concentra tions c (data provided by Kang et al [13]).
+a) 2D cross-secti ons of 3D multipho ton microscop y image stacks depicting one replicat e of each collagen concentra tion [13]. Spheroids were imaged at
+one, two or three days after embeddin g in collagen, and were then fixed and imaged (see Section 4.3). b) Deviation score comparison between all spheroid
+samples. For each day, the deviation scores for three replicates of each collagen concent ration are shown on the upper triangle, and the average deviatio n
+score for each collagen concentratio n is shown on the lower triangle. A top-down view of the spheroid point cloud for a representati ve replicate of each
+collage n concentration is shown next to each heatmap (see S2 Fig for all replicates). Blue cells are classified as non-gasli ke, and red cells are classified as
+gaslike. Due to matching initial conditions, we observe low deviation scores between spheroids grown for one day. These differences increase at day 2,
+where we observe an approximate ly linear increase of the average deviation score from c = 1 mg/ml to c = 4 mg/ml. Finally, at day 3, we observe the lowest
+deviatio n between c = 3 mg/ml and c = 4 mg/ml. This underlines the findings by Kang et al., who observed a transition in invasion behavior between 2 mg/
+ml and 3 mg/ml. c) Deviation score box plots from spheroids grown for one, two and three days respectively. The box plots for each day show the deviation
+score values between c = 1 mg/ml and each other concentration . These values correspond to those used for the lowest rows in b). We observe that for
+spheroids grown for one and two days, the deviation score values of c = 1 mg/ml compa red with itself are similar to the deviation score values of c = 1 mg/
+ml compared with the other concentration s. The difference s are nonsignifi cant and therefore not sufficie nt to clearly distingui sh between the
+concentra tions. This change s at day three, where each concentratio n shows a higher deviation score to c = 1 mg/ml than c = 1 mg/ml compared with itself.
+Signific ance was determined using Welch’s t-test.
+https://d oi.org/10.1371 /journal.pcbi.10 10471.g007
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 15 / 26
+
+
+--- Page 16 ---
+subfigure c), we show box plots of the deviation score values between collagen 1 and each
+other concentration. As expected, we observe low to nonsignificant devation between the day
+1 spheroids, both in subfigure b) and c). This changes at day 2, where the difference between
+collagen concentrations becomes clearer. However, while the difference is visible in the aver-
+age deviation score in subfigure b), there is still strong overlap between the values across con-
+centrations. Furthermore, in subfigure c) we see that the differences are not significant.
+Finally, on day 3, we see the highest difference between the collagen concentration of 2 mg/ml
+versus the other concentrations, while spheroids of collagen concentrations 3 and 4 mg/ml are
+most similar to each other. This is consistent with qualitative observations from subfigure a),
+and from prior quantifications by Kang et al. (cf., Fig 4 c) in [13]) who observed a sudden tran-
+sition in single cell individualization during invasion between collagen concentrations of 2
+and 3 mg/ml. Importantly, as seen in subfigure c), the deviation score reliably distinguishes
+between the concentrations at day 3.
+2.8 Comparing simulated and experimental spheroids
+Finally, to show another aspect for which the deviation score may be used, we applied our anal-
+ysis method to the comparison between simulated and experimental spheroids. For this, we
+used both our simulated phenotypes, and the experimental data from spheroids grown for
+three days (see Section 2.7). Since the simulation parameters used here were not fitted to the
+data, but represented default parameter sets, we did not expect a high degree of similarity. On
+the other hand, this provided an opportunity to investigate both the overall deviation score
+and the underlying feature distances, and to demonstrate how the differences in spheroid mor-
+phology manifested themselves within the features. In subfigure a) of Fig 8, we show the com-
+parison between each experimental replicate (horizontal) and each simulated replicate
+(vertical) on the left side. On the right side we show the average within replicates. Here, we
+observed the highest deviation scores between collagen density 2 and both “spherical” (S) and
+“spherical with far gaslikes” (SFG) spheroids. Visually, this is sensible when comparing the 2D
+images of the replicates (see also S2 Fig for this); the round shapes of the S and SFG spheroids
+differ strongly from that of spheroids in 2 mg/ml collagen, as does the number and location of
+cells classified as gaslike. Furthermore, we observed the lowest deviation scores between spher-
+oids in 4 mg/ml collagen and “deformed” spheroids. Here, the spheroid shape visually
+matched much better between the replicate images. The deviation score between spheroids in
+2 mg/ml collagen and the “disordered” (D) phenotype is also low. These visual differences and
+similarities are reflected in our features, as seen within subfigure b). Here we decomposed the
+overall deviation score back into its components, and thereby show the influence of each fea-
+ture on it. To improve visibility, the color bar range maximum is set to half of that shown in
+subfigure a). We see that the distance between the collagen density 2 spheroids and the SFG
+phenotype is noticable for all features. Of these, the gaslike cell distribution and the spheroid
+surface area exhibit especially high distances. Conversely, the high deviation score of the spher-
+oids with collagen concentration 2 mg/ml to the S phenotype stems mostly from the difference
+in surface deformation, and is less pronounced in the other features. Regarding the lowest
+observed deviation scores, collagen density 4 spheroids and “deformed” spheroids match com-
+paratively well for each feature, and the spheroid surface area distance between them is the
+lowest of all. Collagen concentration 2 mg/ml and “disordered” spheroids also exhibit a low
+deviation score between each other, due to low difference in cell density distribution, Voronoi
+cell volume distribution and spheroid surface area.
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 16 / 26
+
+
+--- Page 17 ---
+Fig 8. Deviation score comparis on between in vitro spheroids grown in media at four different collagen concentratio ns c (data provided by Kang et al
+[13]), and in silico spheroid s exhibit ing four different phenotypes , simulated by us. a) Shown are the deviation scores between three replicates of each
+collage n concentration, grown for three days, and five replicates of each simulate d phenot ype, simulate d for 250 000 MC steps. A single MC step
+correspond s to roughly 1 s of real time in this context. Each individual deviation score is shown on the left, and the average within a pairing of collagen
+concentra tion and phenot ype is shown on the right. A top-down view of the spheroid point cloud of a representativ e replicate for each collagen
+concentra tion / phenotype is shown next to both heatma ps. Blue cells are classified as non-gasli ke, and red cells are classified as gaslike. See S2 Fig for an
+enlarged view of all experime ntal spheroid point clouds, and Fig 6 for an enlarged view of all simulated spheroid point clouds. We observe the highest
+average deviation scores between c = 2 mg/ml and the “spherical” phenotype . The lowest average deviation score is found between c = 4 mg/ml and the
+“deformed ” phenotype b) Individual metric distances for each of the features constituting the overall deviation score. Shown are the standardized and
+weight ed metric distances between three replicat es of each collagen concentratio n, grown for three days, and five replicates of each simulate d phenotype,
+simulate d for 250 000 MC steps. A single MC step correspond s to roughly 1 s of real time in this context. Due to the overall deviatio n score being a sum of
+all weighted feature distanc es, the color range has been adjusted here. The highest deviatio n score observed in a) is a combinatio n of high metric distances
+in all features, especially the spheroid surface deformat ion. On the other hand, the lowest deviatio n score observed in a) stems from overall low values,
+especially in the spheroid surface area.
+https://d oi.org/10.1371 /journal.pcbi.10 10471.g008
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 17 / 26
+
+
+--- Page 18 ---
+2.9 Nastjapy
+During our derivation of the overall deviation score and its application to various data, we
+developed the Python package Nastjapy. Through this, we wanted to facilitate the use of our
+procedure by others. The package can be found at http://www.gitlab.com/nast ja/nastjapy.
+Nastjapy allows the investigation of spheroids and other single-cell resolved data from differ-
+ent origins. It thereby unifies the analysis pipeline for simulated data and data from multiple
+experimental sources. See Section 4.4 for more details.
+3 Discussion and conclusions
+Both experimentalists and theorists produce data concerning tumor spheroids. However, both
+the quantitative comparison between different experiments or simulations, and processes such
+as fitting simulations to experimental data, are hindered by the lack of an adaptable distance
+measure that captures the similarity of the spatial features of two spheroids. We aimed to solve
+this issue via the following steps. First, we proposed a set of five relevant spatial features, which
+could be extracted from spheroid point clouds. Next, we devised metrics to compare each fea-
+ture, and combined all metrics into an overall deviation score. We also provided an optimiza-
+tion scheme which could be used to adapt the deviation score to the specific use case. For this,
+we turned to four in silico spheroid phenotypes which emerged from our simulations, and
+used them to standardize and combine the metrics into the overall deviation score D
+i,j
+. We did
+this by weighing individual metrics differently while maximizing a phenotype separation prop-
+erty (see Eq 7). We characterized the behavior of our features by applying four different trans-
+formations to a point cloud obtained from a spherical simulated spheroid. We were able to
+confirm rotational invariance by analyzing the “rotation” transformation, and monotony for
+the others. While the features related to the spheroid surface showed some instabilities for
+higher transformation strengths in the “noise” and “deformation” transformations, this only
+occured when the point cloud was so disordered that a solid core could no longer be defined.
+Overall, the behavior of the features was therefore considerered suitable to quantitatively com-
+pare the structure of spheroids. Interestingly, the overall deviation score did not only scale
+monotonously with the strength of the studied transformations, but did so approximately line-
+arly within the domains of interest. This is a useful property for a distance measure, which was
+not used as a constraint, but instead emerged as a result of our optimization scheme.
+During the investigation of our simulated spheroid phenotypes, we found that our devia-
+tion score distinguished well between dissimilar spheroid phenotypes, as all phenotypes
+showed the highest deviation score towards the “disordered” phenotype (see Fig 6). This large
+distance was a value that was desired, as this phenotype did not have a solid core and was
+therefore deemed to be least similar to all other phenotypes. The slightly lower deviation score
+found between the “disordered” and “deformed” phenotypes can be attributed to the fact that
+our spheroid surface extraction method constructs surfaces for each cluster of cells that is close
+enough together to be considered solidlike. These surfaces sum up to a large overall surface
+area, and are highly deformed due to their irregular structure. These features are therefore less
+meaningful if a singular bulk structure is not present. On the other hand, even glioblastoma
+spheroids, which originate from one of the most invasive types of cancer, have been shown to
+retain a bulk structure [32]. We therefore view the “disordered” phenotype as an edge case, but
+wanted to show it for completeness. Since we observed significant deviation between the other
+three phenotypes (see Fig 6b) and S1 Fig), we were able to confirm that our strategy is also
+applicable to more similar spheroids. We therefore consider D
+i,j
+to represent a useful metric
+for the systematic quantification of spheroid similarity. This was further confirmed by our
+analysis of experimentally measured spheroids generated by Kang et al. [13].
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 18 / 26
+
+
+--- Page 19 ---
+During our analysis of the experimental spheroids, we observed that statistically significant
+difference between the four collagen concentrations only occured after three days of growth
+(see Fig 7c). This suggests that there exists a minimum time which is required until differences
+in the spheroid structure manifest themselves sufficiently to be detected by Nastjapy. On the
+other hand, this could also be used as a tool to study such timeframes in more detail, e.g. when
+investigating the response time of drug or radiation treatments.
+One of the possible applications of the deviation score is to use it as a reliable objective func-
+tion for fitting simulated spheroids to experimental data. Therefore, we included a comparison
+between simulations with unfitted, default parameters, and the aforementioned experimental
+spheroid data. Here, we were able to highlight, which features contributed most towards each
+deviation score, and to show that the quantities matched well with a visual comparison. Since
+the “disordered” phenotype is not present in the experimental data, we expected to see high
+deviation scores in the top rows of Fig 8a). However, this was not the case, which once again
+stems from how the surface extraction method functions when a solid spheroid bulk is not
+present. While we still consider the “disordered” phenotype as an edge-case for spheroids, this
+represents an opportunity to further develop these features in the future. Distinguishing
+between singular and multiple bulk structures could become relevant once we apply Nastjapy
+to the analysis of more complex tissues, e.g. organoids.
+The features we have defined here admittedly have some limitations. They cannot, for
+example, measure the dynamics of cell movement over time. Also, spheroids or other tissues
+we might want to apply this method to, may be composed of multiple different types of cells,
+and we currently do not distinguish between these. However, since we implemented our strat-
+egy in our freely available Nastjapy framework (see Section 4.4), it can easily be extended. We
+aim to further develop this in the future, via incorporating more features. Points of interest
+would be generating features spanning multiple timesteps, e.g. cell velocity correlation and
+autocorrelation. Furthermore, we envision features such as the distribution of different cell
+types, which will enable the application of the analysis scheme to the aforementioned non-
+spheroid tissue models.
+4 Materials and methods
+4.1 Model description
+Cells in Silico is a framework for simulating the dynamics of cells and tissues at subcellular res-
+olution, which was previously developed by our group [21]. It combines a Cellular Potts
+Model (CPM) at the microscale with nutrient and signal exchange at the mesoscale and an
+agent-based layer at the macroscale. This enables detailed capture of individual cell dynamics.
+Furthermore, as an extension of the NAStJA framework [33] its efficiency scales excellently
+with increasing system size and CPU core number. Hence, CiS has already been used for simu-
+lating tissues composing millions of cells [21]. Here, we briefly outline the main properties of
+the microscale, mesoscale and macroscale layers, and a more detailed description can be found
+in [21].
+Microscale. The CPM was developed by Graner and Glazier in 1992 [34], as an extension
+of the Potts model. In it, a system of lattice points on a regular grid is propagated according to
+its overall energy. Cells are defined as aggregates of points of the same type (see S5 Fig), and
+the overall energy of the system is built of multiple components E
+i
+, which dictate the morphol-
+ogy of and interaction between the cells. Weighted by coupling factors λ
+i
+, they are combined
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 19 / 26
+
+
+--- Page 20 ---
+into the following Hamiltonian:
+H
+CPM
+¼
+X
+i
+l
+i
+E
+i
+¼ l
+V
+X
+c2C
+ðvðcÞ   V ðtðcÞÞÞ
+2
+Cel l volum es
+þl
+S
+X
+c2C
+ðsðcÞ   SðtðcÞÞÞ
+2
+Cell surf ace s
+þ
+X
+i2o
+X
+j2N ðiÞ
+A
+tðc
+i
+Þ;tðc
+j
+Þ
+ð1   dðc
+i
+; c
+j
+ÞÞ Cell‐ce ll adhe sio n
+ð14Þ
+where c is a cell from the set of all cells C, τ(c) is the type of cell c, s(c) and v(c) are the current
+surface and volume of cell c, S(τ) and V(τ) are the target surface and volumes of cells of type τ,
+A is the adhesion coefficient matrix for all cell types, N(i) are all lattice points neighboring
+point i, and δ is the Kronecker delta. Eq 14 can be extended to include further effects, such as
+cell motility [35] (see also Section 4.2.
+Mesoscale. CiS includes the capability of introducing signals or nutrients to the system.
+These can be exchanged between cells via the cell-cell interface. As this functionality is outside
+of the scope of this study, we only briefly mention it here and refer the reader to [21].
+Macroscale. While using the CPM layer allows for excellent reproduction of cell shape
+and deformation, there are other important cellular functions which are not intrinsically cap-
+tured. For example, the CPM Hamiltonian does not in itself include the effect of cell division.
+Furthermore, while self-propelled cell motility can be added to Eq 14 [35], the direction of the
+motility vector must be periodically updated for each cell, to ensure realistic movement, e.g.
+via random walk (see also Section 4.2). This requires information on the cell center location,
+which must be extracted from the CPM. A third aspect, which is very important for simulating
+realistic tumors, is the capability of in silico cell mutation. Here, cell parameters such as divi-
+sion rate, motility magnitude, cell-cell adhesion etc. must be adjusted at the time of division.
+All the aforementioned aspects are treated in the macroscale layer. It combines information
+gathered from the lower layers with higher-level parameters, which results in an agent-based
+system. Here, the conditions for cell division are checked, the division process is carried out,
+the motility direction is updated, etc.
+By combining micro-, meso- and macroscale, we gain a versatile tool, which can then be
+parameterized.
+4.2 Model parameters
+As mentioned in section 2.1, we simulated a multitude of spheroids using CiS. We based our
+simulations on experimental spheroid data provided by our collaborators [13]. Hence, each
+simulated spheroid had an initial diameter of 200 μm, contained roughly 2000 cells, and was
+placed in the center of a volume spanning 800 x 800 x 800 μm
+3
+. Using CiS, we propagated this
+system at a range of different simulation parameter combinations, which are highlighted
+below.
+Extracellular matrix. The extracellular matrix (ECM) is a scaffold within tissues, which
+connects cells and serves both as a structural component and cell maintenance network [36]. It
+is composed of overlapping fibrous polymers, such as collagens, proteoglycans and glycopro-
+teins [37]. Tumor spheroids are often placed into a collagen matrix, which serves as a proxy
+for an in vivo ECM [13, 38]. To capture this in our simulations, we modeled the ECM as over-
+lapping, randomly oriented fibers, which were placed within the system volume surrounding
+the spheroid (see Fig 1a)). These fibers represented rigid obstacles for the cells, to which they
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 20 / 26
+
+
+--- Page 21 ---
+could adhere, but which could not be displaced. Since in reality the ECM is not a solid struc-
+ture, but can be modified and degraded by cells [39], this alone was an overly simplified
+description. We therefore added a degradation effect, by which cells removed ECM lattice
+points with which they were in direct contact on the CPM lattice. This occured after a set num-
+ber of MC steps, as described by the ECM degradation period parameter. During each degra-
+dation event, a lattice point in contact with a cell was removed with a probability of 50%. For
+our simulations, we varied both the ECM density and the ECM degradation period. The ECM
+density was varied between qualitative values of 729 and 1728 fibers. The ECM degradation
+was either disabled, or its period was varied between 1 000 and 5 000 MC steps. Finally, we
+wanted to investigate the effect of ECM alignment. Since it is known that tumors remodel
+their ECM, and ECM alignment is one of the main drivers of invasion [24], we decided to
+include both an unaligned and a radially aligned ECM in our studies (see Fig 1a)). We per-
+formed simulations both with aligned and unaligned ECM.
+Cell-cell adhesion. Changes in the adhesion strength between cells are a well known fac-
+tor which facilitates invasion [7]. We therefore varied the adhesion strength parameter within
+our simulations, by changing the adhesion coefficient matrix in the third component of Eq 14.
+This matrix describes the strength of adhesion between different cell types, as well as the
+strength of adhesion between cells and the ECM.
+Cell motility magnitude and persistence. Similar to cell-cell adhesion, the cell motility is
+strongly connected to the invasion properties of cells [40]. To include it, we modified the CPM
+Hamiltonian by adding a directional potential to each cell with the following contribution
+[35]:
+H
+CPM;mo t
+¼ H
+CPM
+þ l
+mot
+�
+X
+c2C
+~m
+c
+�
+~
+R
+c
+; Cel l moti lity
+~m
+c
+¼ p � ð
+~
+R
+c
+ðt Þ  
+~
+R
+c
+ðt   Dt ÞÞ þ ð1   pÞ � ~Z
+ð15Þ
+where ~m
+c
+is the potential and direction a cell c experiences, R
+c
+is the center of mass of cell c,
+and ~Z is a random vector obtained by a Wiener process [41]. The motility is implemented as a
+modified persistent random walk of each cell. The energy contribution of each cell is the dot
+product of
+~
+R
+c
+and ~m
+c
+, which in turn is determined by the cell’s previous movement and the
+random vector ~Z . The mixture of persistent and random movement can be chosen by the per-
+sistence parameter p 2 [0, 1]. Cells with p = 0 perform purely random walks, and cells with
+p = 1 perform purely persistent walks. The coupling strength of this energy term to the CPM is
+given by λ
+mot
+.
+Cell division. Including the effect of cell proliferation is crucial when simulating growing
+tissues. In CiS, this is implemented as follows: upon division, half of those lattice points on the
+CPM layer which belong to the dividing cell are assigned a new value, corresponding to the ID
+of the new cell. The old cell is kept, but its surface, volume, age and generation are adjusted,
+such that both cells resemble daughter cells of the original one. A division condition needs to
+be fulfilled in order for a cell to divide. This condition is checked at every MC step. It can be
+customized, and can include nutrient availability, cell volume, division probability, and cell
+generation, i.e. the maximum number of divisions per original cell. Since we did not explicitly
+model nutrient distribution in this study, we focused on the last three aspects. Hence, in our
+simulations a cell’s volume had to be at least 90% of its target volume. Furthermore, in the
+experimental data by Kang et al [13], the cell number roughly doubles after three days of
+growth. Therefore, we set the division probability per MC step such that the overall cell num-
+ber would double after 250 000 MC steps. Finally, we set the cell generation condition such
+that each cell could only divide once.
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 21 / 26
+
+
+--- Page 22 ---
+4.3 Experimental spheroid preparation and analysis
+All experimental methods were previously reported by Kang et al. [13] and are briefly summa-
+rized here. Multicellular tumor spheroids were formed by seeding highly invasive, triple-nega-
+tive MDA-MB-231 breast cancer cells [42] in low-attachment 96 well plates (Corning, No.
+07201680) in the presence of 2.5% v/v Matrigel (Corning, No. 354234) [43]. Using this
+approach, *1000 cancer cells coalesced into a spherical aggregate (i.e., a tumor spheroid) of
+300-to-400μm in diameter over the course of 48 hours. Once formed, individual spheroids
+were fully embedded into a 3D fibrous gel prepared using rat-tail collagen I (Corning, No.
+354249) [44]. As shown in Kang et al. [13], by varying the collagen concentration between 1
+and 4 mg/ml, one can tune the fiber density and overall mechanical properties of the collagen
+network surrounding each tumor spheroids. MDA-MB-231 spheroids were then cultured in
+such 3D micro-environments for either 1 hour (Day 0), 24 hours (Day 1), 48 hours (Day 2), or
+72 hours (Day 3). While at Day 0 all cells remained within the main spheroid (solid-like
+phase), over the course of 3 days tumor spheroids progressively developed strikingly different
+patterns of invasion as a function of collagen concentration, including single cell invasion in
+1–2 mg/ml collagen (gas-like phase) and collective invasion in 3–4 mg/ml collagen (liquid-like
+invasion) [13]. For each time point, spheroids were fixed, optically cleared [45], stained with
+DAPI (Fisher Scientific, No. D1306), and imaged using a Bruker Ultima Investigator multi-
+photon microscope equipped with a long working distance 16x water-immersion objective
+(Nikon, 0.8 N.A., 3mm working distance) to enable whole-spheroid imaging [13]. The 3D
+positions of DAPI-stained cell nuclei were finally identified using a custom Matlab code devel-
+oped by Kang et al. [13] and used herein as point cloud data to extract features from experi-
+mental spheroids. In this work we used point cloud data from spheroids imaged at days 0–1-2-
+3 in collagen concentrations of 1–2-3-4 mg/ml, n = 3 per group, except for day 0 in 1 mg/ml
+(n = 2), and day 2 in 2 mg/ml (n = 9).
+4.4 Nastjapy
+To facilitate the use of the analysis pipeline presented in this study, we developed the Python
+package Nastjapy, which can be found at http://www.gitlab.com/ nastja/nastjapy. For this
+study, Nastjapy served three functions:
+1. providing a unified interface for processing data from multiple different sources
+2. performing efficient and parallel feature extraction and analysis
+3. adaptating and computing the deviation score for specific applications.
+We have implemented multiple loading functions into Nastjapy, such that it can treat
+spheroids and other single-cell resolved data from different sources. It currently supports load-
+ing point cloud data in the CSV, HDF5, SQLite and matlab file formats. These data are loaded
+into so-called DataHandler objects, which are structured the same way regardless of the origin
+of the data. Hence, except for the data contained in it, the DataHandler object of a simulated
+spheroid is the same as that of an experimentally measured spheroid. Each DataHandler object
+includes functionalities for visualizing the point cloud data, and extracting the features dis-
+cussed in section 2.2. Furthermore two or more DataHandler objects can be compared with
+each other. For this, the timesteps to be compared between the spheroids are mapped to each
+other, and the metric distances are then calculated for each extracted feature. Extracting all fea-
+tures for many different spheroids, possibly at multiple points in time, as well as the compari-
+son between a large number of spheroids, can quickly become computationally expensive. We
+have therefore added the option to parallelize the feature extraction for individual
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 22 / 26
+
+
+--- Page 23 ---
+DataHandler objects on multiple CPU cores via MPI. As we discussed in section 2.4, we have
+implemented a use case adaptation method, in which the feature distances are standardized,
+and the weight factors for each feature distance are optimized to maximize the relation stated
+in Eq 7. All functions neccessary to perform this for a set of DataHandler objects are imple-
+mented in Nastjapy.
+Supporting information
+S1 Fig. Deviation score box plots for simulated phenotypes. a) Each phenotype compared to
+the “deformed” phenotype. b) Each phenotype compared to the “spherical with far gaslikes”
+phenotype. c) Each phenotype compared to the “disordered” phenotype. Significance was
+determined using Welch’s t-test.
+(TIF)
+S2 Fig. Top-down view of spheroid point clouds obtained from in vitro MDA-MB-231
+spheroids grown in collagen media at four different concentrations c. Spheroids were
+imaged after one, two and three days of growth, and three replicates were imaged per concen-
+tration and growth duration. Blue cells are classified as non-gaslike, and red cells are classified
+as gaslike.
+(TIF)
+S3 Fig. Deviation score box plots of in vitro spheroids grown in media at four different col-
+lagen concentrations (data provided by Kang et al [13]). The horizontal axis denotes the
+growth duration of the spheroids within the respective boxplot, and the vertical axis denotes
+the reference collagen concentration. Significance was determined using Welch’s t-test.
+(TIF)
+S4 Fig. Visualization of the spheroid surface deformation feature on a triangulated spher-
+oid surface. Shown is the surface, composed of many connected triangles, as well as an exam-
+ple of the normal and origin vectors of two triangle vertices. During the feature extraction, the
+scalar product between these two vectors is calculated for each vertex in the triangle mesh, and
+grouped in a histogram. Non-deformed surfaces will contain more vertices in which the two
+vectors are approximately parallel (left example), while strongly deformed surfaces will contain
+many vertices in which there is a strong deviation between the two (right example).
+(TIF)
+S5 Fig. Sketch of the three layers of Cells in Silico (CiS). A 3D Cellular Potts Model (CPM,
+shown in 2D for illustrative purpose) at the microscale is combined with nutrient and signal
+exchange at the mesoscale and an agent-based layer at the macroscale. This enables detailed
+capture of individual cell dynamics. Adapted from [46].
+(TIF)
+Acknowledgmen ts
+The authors gratefully acknowledge the Gauss Centre for Supercomputing e.V. (www.gauss-
+centre.eu) for funding this project by providing computing time through the John von Neu-
+mann Institute for Computing (NIC) on the GCS Supercomputer JUWELS at Ju ¨ lich Super-
+computing Centre (JSC).
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 23 / 26
+
+
+--- Page 24 ---
+Author Contributions
+Conceptualization: Julian Herold, Eric Behle, Jakob Rosenbauer, Jacopo Ferruzzi, Alexander
+Schug.
+Data curation: Julian Herold, Eric Behle, Jakob Rosenbauer.
+Formal analysis: Julian Herold, Eric Behle.
+Funding acquisition: Alexander Schug.
+Investigation: Julian Herold, Eric Behle.
+Methodology: Julian Herold, Eric Behle, Jakob Rosenbauer.
+Project administration: Alexander Schug.
+Resources: Jacopo Ferruzzi, Alexander Schug.
+Software: Julian Herold, Eric Behle, Jakob Rosenbauer.
+Supervision: Alexander Schug.
+Validation: Julian Herold, Eric Behle.
+Visualization: Eric Behle.
+Writing – original draft: Julian Herold, Eric Behle, Jakob Rosenbauer, Jacopo Ferruzzi, Alex-
+ander Schug.
+Writing – review & editing: Julian Herold, Eric Behle, Jakob Rosenbauer, Jacopo Ferruzzi.
+References
+1. The global challeng e of cancer. Nature Cancer. 2020; 1(1):1–2. https://doi.or g/10.103 8/s43018-019-
+0023-9 PMID: 351218 40
+2. Hanahan D. Hallmarks of Cancer: New Dimen sions. Cance r Discover y. 2022; 12(1):31–4 6. https://doi.
+org/10.1158/ 2159-8290.C D-21-1059 PMID: 350222 04
+3. Pei-Hsun W, Gilkes Daniele M, Phillip Jude M, Akshay N, Wen-Ta o CT, Jorge M, et al. Single-cell mor-
+phology encodes metast atic potentia l. Science Advances . 2020; 6(4):eaaw6 938. https://doi.or g/10.
+1126/sciad v.aaw6938
+4. Tashireva LA, Zavyalova MV, Savelieva OE, Geras hchenko TS, Kaigorodo va EV, Denisov EV, et al.
+Single Tumor Cells With Epithelial- Like Morphology Are Associated With Breast Cancer Metas tasis.
+Frontiers in Oncolo gy. 2020; 10. https://doi.or g/10.3389/ fonc.2020 .00050 PMID: 32154161
+5. Wang Z, An K, Li R, Liu Q. Tumor Macroscop ic Morphology Is an Important Prognostic Factor in Pre-
+dicting Chem otherapeutic Efficacy and Clinical Outcomes of Patients With Colorectal Neuroen docrine
+Neoplasm s, One Multicenter Retrospectiv e Cohort Study. Frontiers in Endocr inology. 2021; 12. https://
+doi.org/10.33 89/fendo.2021. 801741 PMID: 34987482
+6. Hanahan D, Weinberg RA. The Hallmarks of Cance r. Cell. 2000; 100(1):57– 70. https://doi.or g/10.1016 /
+S0092-867 4(00)8168 3-9 PMID: 10647931
+7. Klymkow sky MW, Savagner P. Epithelial- mesenchy mal transitio n: a cancer resear cher’s conceptual
+friend and foe. The American journal of patholo gy. 2009; 174:158 8–93. https://doi.o rg/10.2353/aj path.
+2009.08054 5 PMID: 19342369
+8. Montagud A, de Leon MP, Valencia A. Systems biology at the giga-scal e: Large multiscale models of
+complex, hetero geneous multicellul ar systems. Current Opinion in System s Biology. 2021; 28:100385.
+https://doi.or g/10.101 6/j.coisb.202 1.100385
+9. Nia HT, Munn LL, Jain RK. Physical traits of cancer. Science (New York, NY). 2020; 370. https://doi.
+org/10.1126/ science.aaz086 8 PMID: 33122355
+10. Gunti S, Hoke ATK, Vu KP, London NRJ. Organoid and Spheroid Tumor Models: Techniqu es and
+Applications . Cancers. 2021; 13. https://doi.or g/10.339 0/cancers13 040874 PMID: 336696 19
+11. Perche F, Torchilin VP. Cancer cell spheroids as a model to evaluate chemoth erapy protocols. Cancer
+biology & therapy. 2012; 13:1205 –13. https://doi.or g/10.416 1/cbt.21353
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 24 / 26
+
+
+--- Page 25 ---
+12. Grosser S, Lippoldt J, Oswald L, Merkel M, Sussman DM, Renner F, et al. Cell and Nucleus Shape as
+an Indicator of Tissue Fluidity in Carcinom a. Phys Rev X. 2021; 11:011033.
+13. Kang W, Ferruzzi J, Spatarelu CP, Han YL, Sharma Y, Koehler SA, et al. A novel jamming phase dia-
+gram links tumor invasion to non-equili brium phase separatio n. iScience. 2021; 24(11):103 252. https://
+doi.org/10.10 16/j.isci.202 1.103252 PMID: 347550 92
+14. Swat MH, Thomas GL, Shirinifar d A, Clendeno n SG, Glazie r JA. Emergent Stratific ation in Solid
+Tumors Selects for Reduced Cohesion of Tumor Cells: A Multi-Cell, Virtual-Tiss ue Model of Tumor Evo-
+lution Using CompuCe ll3D. PLOS ONE. 2015; 10(6):1–40 . https://doi.o rg/10.1371/jo urnal.pone.
+0127972
+15. Goodin DA, Frieboes HB. Simulation of 3D centimeter- scale continuum tumor growth at sub-millim eter
+resolution via distributed computing. Comp uters in biology and medicine. 2021; 134:104507. https:// doi.
+org/10.1016/ j.compbiomed .2021.10 4507 PMID: 3415761 2
+16. Fu X, Zhao Y, Lopez JI, Rowan A, Au L, Fendler A, et al. Spatial pattern s of tumour growth impact clonal
+diversificati on in a computation al model and the TRACERx Renal study. Nature Ecology & Evolutio n.
+2022; 6(1):88–10 2. https://doi.or g/10.1038/s 41559-021- 01586-x
+17. Bull JA, Mech F, Quaise r T, Waters SL, Byrne HM. Mathematic al modelling reveals cellular dynamics
+within tumour spheroid s. PLOS Computationa l Biology . 2020; 16(8):1–25 . https://doi.or g/10.137 1/
+journal.pcbi. 1007961 PMID: 32810174
+18. Amereh M, Edwards R, Akbari M, Nadler B. In-Silico Modeling of Tumor Spheroid Formation and
+Growth. Micromachine s. 2021; 12. https://doi.o rg/10.3390/m i12070749 PMID: 34202262
+19. Browning AP, Sharp JA, Murphy RJ, Gunasi ngh G, Lawson B, Burrage K, et al. Quantitative analysis of
+tumour spheroid structure. Elife. 2021; 10:e730 20. https://doi.or g/10.7554 /eLife.73020 PMID:
+34842141
+20. Szymańska Z, Skrzeczkow ski J, Miasojedo w B, Gwiazda P. Bayesian inference of a non-local prolifera-
+tion model. Royal Society open science. 2021; 8(11):2112 79. https://doi.or g/10.1098/rs os.211279
+PMID: 348492 47
+21. Berghoff M, Rosenbaue r J, Hoffman n F, Schug A. Cells in Silico–introd ucing a high-perfo rmance frame-
+work for large-scale tissue modelin g. BMC bioinformatic s. 2020; 21(1):1–21 . https://doi.or g/10.1186/
+s12859-020 -03728-7 PMID: 33023471
+22. Friedl P, Locker J, Sahai E, Segall JE. Classifyin g collective cancer cell invasion. Nature Cell Biology .
+2012; 14(8):777– 783. https://doi.or g/10.1038/ ncb2548 PMID: 228548 10
+23. Lautscham LA, Ka ¨ mmerer C, Lange JR, Kolb T, Mark C, Schilling A, et al. Migratio n in Confined 3D
+Environm ents Is Determined by a Combinat ion of Adhesive ness, Nuclear Volume , Contractility, and
+Cell Stiffness . Biophysica l journal. 2015; 109:900–13. https://doi.or g/10.1016/ j.bpj.2015.07.0 25 PMID:
+26331248
+24. Wang WY, Pearson AT, Kutys ML, Choi CK, Wozniak MA, Baker BM, et al. Extracellular matrix align-
+ment dictates the organization of focal adhesio ns and directs uniaxial cell migratio n. APL bioengineer -
+ing. 2018; 2:04610 7. https://doi.or g/10.106 3/1.5052239 PMID: 31069329
+25. Aurenhamm er F. Voronoi Diagrams—a Survey of a Fundamen tal Geome tric Data Structure. ACM
+Comput Surv. 1991; 23(3):345– 405. https://doi. org/10.1145/1 16873.1 16880
+26. Lorensen WE, Cline HE. Marching Cubes: A High Resolut ion 3D Surface Construction Algorithm. SIG-
+GRAPH Comput Graph. 1987; 21(4):163– 169. https://doi.or g/10.1145/ 37402.37422
+27. Villani C. Optimal transport: old and new. vol. 338. Springer; 2009.
+28. Levina E, Bickel P. The earth mover’s distance is the mallows distance: Some insights from statistic s.
+In: Procee dings Eighth IEEE International Conferen ce on Computer Vision. ICCV 2001. vol. 2. IEEE;
+2001. p. 251–25 6.
+29. Kursawe J, Baker RE, Fletcher AG. Approximate Bayesian computation reveals the importan ce of
+repeated measurem ents for parame terising cell-based models of growing tissues. Journal of theoretical
+biology. 2018; 443:66–81. https:// doi.org/10.10 16/j.jtbi .2018.01.020 PMID: 29391171
+30. Khosla P, Teterwak P, Wang C, Sarna A, Tian Y, Isola P, et al. Supervised contrastiv e learning.
+Advances in Neural Information Processin g System s. 2020; 33:1866 1–18673.
+31. Virtanen P, Gommer s R, Oliphant TE, Haberlan d M, Reddy T, Cournapeau D, et al. SciPy 1.0: Funda-
+mental Algorithms for Scientifi c Comput ing in Python. Nature Methods. 2020; 17:261– 272. https://doi.
+org/10.1038/ s41592-019- 0686-2 PMID: 3201554 3
+32. Stein AM, Demuth T, Mobley D, Berens M, Sander LM. A mathematic al model of glioblas toma tumor
+spheroid invasion in a three-dimens ional in vitro experime nt. Biophysica l journal. 2007; 92:356– 65.
+https://doi.or g/10.152 9/biophysj .106.093468 PMID: 17040992
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 25 / 26
+
+
+--- Page 26 ---
+33. Berghoff M, Kondov I. Non-colle ctive Scalable Global Network Based on Local Communic ations. In:
+2018 IEEE/AC M 9th Workshop on Latest Advances in Scalabl e Algorithms for Large-Sca le System s
+(scalA); 2018. p. 25–32.
+34. Graner Fmc, Glazier JA. Simulati on of biological cell sorting using a two-dimens ional extended Potts
+model. Phys Rev Lett. 1992; 69:2013– 2016. https://doi.or g/10.110 3/PhysRev Lett.69.2013 PMID:
+10046374
+35. Guisoni N, Mazzitello KI, Diambra L. Modelin g Active Cell Movem ent With the Potts Model. Frontiers in
+Physics. 2018; 6. https://doi.or g/10.338 9/fphy.2018 .00061
+36. Kular JK, Basu S, Sharma RI. The extracellu lar matrix: Structur e, composition, age-relate d differe nces,
+tools for analysis and applications for tissue engine ering. Journal of tissue engineerin g. 2014;
+5:20417314 14557112. https://doi.or g/10.117 7/2041731414 557112 PMID: 25610589
+37. Bonnans C, Chou J, Werb Z. Remodellin g the extracellu lar matrix in develop ment and disease. Nature
+reviews Molecular cell biology. 2014; 15:786–801. https://doi.or g/10.1038/n rm3904 PMID: 254155 08
+38. Mark C, Grundy TJ, Strissel PL, Bo ¨ hringer D, Grumme l N, Gerum R, et al. Collective forces of tumor
+spheroids in three-dimensio nal biopolyme r networks . eLife. 2020; 9:e5191 2. https://doi.or g/10.755 4/
+eLife.5191 2 PMID: 32352379
+39. Lu P, Takai K, Weaver VM, Werb Z. Extracell ular matrix degradation and remodeling in develop ment
+and disease. Cold Spring Harbor perspective s in biology. 2011; 3. https://doi. org/10.1101/c shperspect.
+a005058 PMID: 21917992
+40. Stuelten CH, Parent CA, Montell DJ. Cell motility in cancer invasion and metastasis : insights from sim-
+ple model organis ms. Nature Reviews Cancer. 2018; 18(5):296– 312. https://doi.or g/10.103 8/nrc.2018.
+15 PMID: 295468 80
+41. Durrett R. Probability : theory and examples. vol. 49. Cambridge university press; 2019.
+42. Cailleau R, Mackay B, Young RK, Reeves WJ. Tissue Culture Studie s on Pleural Effusions from Breast
+Carcinoma Patient s. 1974; 34:10.
+43. Ivascu A, Kubbies M. Rapid Generatio n of Single-Tum or Spheroids for High-Throughp ut Cell Function
+and Toxicity Analysis. Journal of Biomolec ular Screening. 2006; 11(8):922– 932. https://doi.or g/10.
+1177/10870 57106292763 PMID: 169739 21
+44. Harjanto D, Maffei JS, Zaman MH. Quantitative Analysis of the Effect of Cancer Invasiv eness and Col-
+lagen Concentrati on on 3D Matrix Remodeling . PLoS ONE. 2011; 6(9):e2489 1. https://doi.or g/10.137 1/
+journal.pon e.00248 91 PMID: 21980363
+45. Susaki EA, Tainaka K, Perrin D, Yukinaga H, Kuno A, Ueda HR. Advanced CUBIC protocol s for whole-
+brain and whole-bo dy clearing and imaging . Nature Protoco ls. 2015; 10(11):170 9–1727. https://doi.or g/
+10.1038/ nprot.2015.08 5 PMID: 264483 60
+46. Rosenbauer J, Berghoff M, Schug A. Emerging Tumor Development by Simulating Single-cell Events.
+bioRxiv. 2020.
+PLOS COMP UTATIONAL  BIOLOGY
+Develo pment of a scoring function for comparing tumor spheroids
+PLOS Computationa l Biology | https:/ /doi.org/10.13 71/journal.p cbi.1010471 March 30, 2023 26 / 26

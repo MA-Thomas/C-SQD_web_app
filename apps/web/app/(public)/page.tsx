@@ -1,193 +1,264 @@
 import Link from "next/link";
 
-import { PublicWorkCard } from "../components/public-work-card";
+import { LeadStoryCard } from "../components/lead-story-card";
+import { TupleBadge } from "../components/tuple-badge";
+import { TUPLE_ITEMS } from "../lib/tuple-items";
+import { WorkCard } from "../components/work-card";
+import { SectionRail, WorkListRow } from "../components/work-list-row";
 import { getScholarlyObjects } from "../lib/csqd-api";
 import {
-  formatDate,
-  getAcademicCweNodes,
+  formatCount,
   getPublicAuditSummariesForObjects,
   groupScholarlyObjects,
   publicAuditStatusLabel,
+  type PublicAuditSummary,
+  type ScholarlyWorkGroup,
 } from "../lib/public-audit";
 
-export default async function PublicRegistryHomePage() {
-  const [objects, cweNodes] = await Promise.all([
-    getScholarlyObjects(),
-    getAcademicCweNodes(),
-  ]);
+/// Briefing homepage: the lead audit report as the top story, then rails
+/// answering "what changed?" — recently challenged, gaining scrutiny,
+/// awaiting review — and a card grid across the registry.
+export default async function HomePage() {
+  const objects = await getScholarlyObjects();
   const groups = groupScholarlyObjects(objects);
-  const publicSummaries = await getPublicAuditSummariesForObjects(
+  const summaries = await getPublicAuditSummariesForObjects(
     groups.map((group) => group.primaryVersion),
   );
-  const reportGroups = groups.filter((group) => {
-    const summary = publicSummaries.get(group.primaryVersion.id);
+  const summaryOf = (group: ScholarlyWorkGroup) =>
+    summaries.get(group.primaryVersion.id) ?? null;
 
-    return (summary?.synthesisReviewCount ?? group.synthesisReviewCount) > 0;
-  });
-  const needingReview = groups.filter((group) => {
-    const summary = publicSummaries.get(group.primaryVersion.id);
-
-    return (
-      publicAuditStatusLabel(group.primaryVersion, summary) !==
-      "Audit report available"
+  const reportGroups = groups
+    .filter((group) => summaryOf(group)?.latestReport)
+    .sort(
+      (left, right) => reportTime(summaryOf(right)) - reportTime(summaryOf(left)),
     );
-  });
-  const elementReviewCount = groups.reduce((sum, group) => {
-    const summary = publicSummaries.get(group.primaryVersion.id);
+  const lead = reportGroups[0] ?? null;
+  const moreReports = reportGroups.slice(1, 6);
 
-    return sum + (summary?.elementReviewCount ?? group.elementReviewCount);
-  }, 0);
-  const synthesisReviewCount = groups.reduce((sum, group) => {
-    const summary = publicSummaries.get(group.primaryVersion.id);
+  const challenged = groups
+    .filter((group) => (summaryOf(group)?.challengeCount ?? 0) > 0)
+    .sort(
+      (left, right) =>
+        (summaryOf(right)?.challengeCount ?? 0) -
+        (summaryOf(left)?.challengeCount ?? 0),
+    )
+    .slice(0, 5);
 
-    return sum + (summary?.synthesisReviewCount ?? group.synthesisReviewCount);
-  }, 0);
+  const gainingScrutiny = groups
+    .filter(
+      (group) =>
+        group.id !== lead?.id &&
+        (summaryOf(group)?.tuple?.scrutinyDepth ?? 0) > 0,
+    )
+    .sort(
+      (left, right) =>
+        (summaryOf(right)?.tuple?.scrutinyDepth ?? 0) -
+        (summaryOf(left)?.tuple?.scrutinyDepth ?? 0),
+    )
+    .slice(0, 5);
+
+  const awaitingReview = groups
+    .filter((group) => {
+      const label = publicAuditStatusLabel(group.primaryVersion, summaryOf(group));
+
+      return label === "Unaudited" || label === "Registered for audit";
+    })
+    .slice(0, 5);
+
+  const gridGroups = groups
+    .filter((group) => group.id !== lead?.id)
+    .sort(
+      (left, right) =>
+        (summaryOf(right)?.elementReviewCount ?? 0) -
+        (summaryOf(left)?.elementReviewCount ?? 0),
+    )
+    .slice(0, 6);
 
   return (
-    <section className="workspace registry-home">
-      <header className="registry-header">
+    <>
+      <header className="pub-page-head">
         <div>
-          <p className="eyebrow">Public audit registry</p>
-          <h1>C-SQD</h1>
+          <p className="pub-kicker">Public audit registry</p>
+          <h1>Today in audits</h1>
           <p>
-            Discover scholarly works, inspect public audit activity, read
-            SynthesisReviews, and follow focused ElementReviews by criterion.
+            Commissioned and public audits of scientific and technical claims —
+            reports, criterion-level reviews, and challenges, all on the record.
           </p>
         </div>
-        <Link className="status-pill" href="/method">
+        <Link className="secondary-action" href="/method">
           How the method works
         </Link>
       </header>
 
-      <form className="retrieval-form registry-search" action="/discover">
-        <label htmlFor="registry-query">Search public audit subjects</label>
-        <div className="retrieval-controls">
-          <input
-            id="registry-query"
-            name="q"
-            placeholder="Title, DOI, arXiv, PubMed, author, venue, or keyword"
-            type="search"
-          />
-          <button type="submit">Search</button>
+      {lead ? (
+        <div className="pub-lead-cluster">
+          <LeadStoryCard group={lead} summary={summaryOf(lead)} />
+          <SectionRail
+            footerHref="/audits"
+            footerLabel="All audit reports"
+            title="More reports"
+          >
+            {moreReports.length === 0 ? (
+              <li>
+                <p className="pub-row-meta">No other public reports yet.</p>
+              </li>
+            ) : (
+              moreReports.map((group) => (
+                <WorkListRow group={group} key={group.id} summary={summaryOf(group)} />
+              ))
+            )}
+          </SectionRail>
         </div>
-      </form>
+      ) : (
+        <div className="pub-empty">
+          <h3>No public audit reports yet</h3>
+          <p>
+            Public SynthesisReviews will appear here as audit reports are
+            delivered. Explore registered works in Discover meanwhile.
+          </p>
+        </div>
+      )}
 
-      <section
-        className="metric-grid four-metric-grid"
-        aria-label="Public registry metrics"
-      >
-        <div className="metric">
-          <span>Scholarly works</span>
-          <strong>{groups.length}</strong>
-        </div>
-        <div className="metric">
-          <span>CRWE criteria</span>
-          <strong>{cweNodes.length}</strong>
-        </div>
-        <div className="metric">
-          <span>ElementReviews</span>
-          <strong>{elementReviewCount}</strong>
-        </div>
-        <div className="metric">
-          <span>SynthesisReviews</span>
-          <strong>{synthesisReviewCount}</strong>
+      <section className="pub-section">
+        <div className="pub-grid">
+          <SectionRail
+            footerHref="/audits#challenges"
+            footerLabel="All challenged audits"
+            title="Recently challenged"
+          >
+            {challenged.length === 0 ? (
+              <li>
+                <p className="pub-row-meta">No open public challenges.</p>
+              </li>
+            ) : (
+              challenged.map((group) => (
+                <WorkListRow
+                  detail={
+                    <span>
+                      {summaryOf(group)?.challengeCount} challenge
+                      {(summaryOf(group)?.challengeCount ?? 0) === 1 ? "" : "s"}
+                    </span>
+                  }
+                  group={group}
+                  key={group.id}
+                  summary={summaryOf(group)}
+                />
+              ))
+            )}
+          </SectionRail>
+
+          <SectionRail
+            footerHref="/discover?sort=scrutiny"
+            footerLabel="Sort Discover by scrutiny"
+            title="Gaining scrutiny"
+          >
+            {gainingScrutiny.length === 0 ? (
+              <li>
+                <p className="pub-row-meta">No scrutiny activity yet.</p>
+              </li>
+            ) : (
+              gainingScrutiny.map((group) => (
+                <WorkListRow
+                  detail={
+                    <span>
+                      depth {formatCount(summaryOf(group)?.tuple?.scrutinyDepth ?? 0)}
+                    </span>
+                  }
+                  group={group}
+                  key={group.id}
+                  summary={summaryOf(group)}
+                />
+              ))
+            )}
+          </SectionRail>
+
+          <SectionRail
+            footerHref="/discover?status=unaudited"
+            footerLabel="Find works to review"
+            title="Awaiting review"
+          >
+            {awaitingReview.length === 0 ? (
+              <li>
+                <p className="pub-row-meta">
+                  Every registered work has review activity.
+                </p>
+              </li>
+            ) : (
+              awaitingReview.map((group) => (
+                <WorkListRow group={group} key={group.id} summary={summaryOf(group)} />
+              ))
+            )}
+          </SectionRail>
         </div>
       </section>
 
-      <section className="registry-band" aria-label="Recent public reports">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Public Audits</p>
-            <h2>Recent Reports</h2>
-          </div>
-          <Link className="secondary-action" href="/public-audits">
-            View all
-          </Link>
+      <section className="pub-section">
+        <div className="pub-section-head">
+          <h2>Across the registry</h2>
+          <Link href="/discover">Open Discover</Link>
         </div>
-        {reportGroups.length === 0 ? (
-          <div className="empty-state">
-            <h2>No public reports yet</h2>
-            <p>
-              Public SynthesisReviews will appear here as audit reports are
-              published.
-            </p>
+        {gridGroups.length === 0 ? (
+          <div className="pub-empty">
+            <h3>No registered works yet</h3>
+            <p>Register a scholarly work to open its public audit record.</p>
           </div>
         ) : (
-          <div className="report-list">
-            {reportGroups.slice(0, 3).map((group) => {
-              const summary = publicSummaries.get(group.primaryVersion.id);
-
-              return (
-                <Link
-                  className="report-row"
-                  href={`/scholarly-objects/${group.primaryVersion.id}#latest-report`}
-                  key={group.id}
-                >
-                  <div>
-                    <strong>{group.title}</strong>
-                    <span>
-                      {summary?.latestReport
-                        ? summary.latestReport.summary
-                        : "Audit report available"}
-                    </span>
-                  </div>
-                  <span>
-                    {summary?.latestReport
-                      ? formatDate(summary.latestReport.authored_at)
-                      : "Current"}
-                  </span>
-                </Link>
-              );
-            })}
+          <div className="pub-grid">
+            {gridGroups.map((group) => (
+              <WorkCard group={group} key={group.id} summary={summaryOf(group)} />
+            ))}
           </div>
         )}
       </section>
 
-      <section className="registry-band" aria-label="Public audit subjects">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Discover</p>
-            <h2>Works With Public Audit Activity</h2>
-          </div>
-          <Link className="secondary-action" href="/discover">
-            Open Discover
-          </Link>
+      <section className="pub-section">
+        <div className="pub-section-head">
+          <h2>How to read the evaluation tuple</h2>
+          <Link href="/method#evaluation-tuple">Read the method</Link>
         </div>
-        <div className="object-list">
-          {(reportGroups.length > 0 ? reportGroups : needingReview)
-            .slice(0, 4)
-            .map((group) => (
-              <PublicWorkCard
-                group={group}
-                key={group.id}
-                summary={publicSummaries.get(group.primaryVersion.id) ?? null}
-              />
+        <div className="pub-tuple-explainer">
+          <figure>
+            <TupleBadge
+              tuple={{
+                problems: 2,
+                ethicalConcerns: 0,
+                stakes: 3,
+                scrutinyDepth: 4,
+                uptake: 12,
+              }}
+            />
+            <figcaption>
+              Example. Concern criteria turn red when reviewers have upheld
+              problems; the dots give magnitude at a glance.
+            </figcaption>
+          </figure>
+          <dl className="pub-def-list">
+            {TUPLE_ITEMS.map((item) => (
+              <div key={item.key}>
+                <dt>{item.label}</dt>
+                <dd>{item.definition}</dd>
+              </div>
             ))}
-        </div>
-      </section>
-
-      <section className="registry-band" aria-label="Evaluation tuple explainer">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Method</p>
-            <h2>What The Evaluation Tuple Means</h2>
-          </div>
-          <Link className="secondary-action" href="/method">
-            Read the method
-          </Link>
-        </div>
-        <div className="tuple-explainer">
-          <p>
-            Every public audit subject carries a derived five-part summary of
-            its audit record: <strong>Problems</strong> found by reviewers,{" "}
-            <strong>Ethical concerns</strong>, the <strong>Stakes</strong> of
-            the work, the <strong>Scrutiny depth</strong> it has received, and
-            its <strong>Uptake</strong>. The tuple is recomputable for any
-            reviewer community and reference time — a derived view over the
-            immutable audit record, not a mysterious score.
+          </dl>
+          <p className="pub-filter-note">
+            The tuple is recomputable for any reviewer community and reference
+            time — a derived view over the immutable audit record, not a
+            mysterious score.
           </p>
         </div>
       </section>
-    </section>
+    </>
   );
+}
+
+function reportTime(summary: PublicAuditSummary | null) {
+  const value = summary?.latestReport?.authored_at;
+
+  if (!value) {
+    return 0;
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
 }

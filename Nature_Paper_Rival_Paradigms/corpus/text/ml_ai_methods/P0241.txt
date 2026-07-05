@@ -1,0 +1,721 @@
+--- Page 1 ---
+Sampling-Decomposable Generative Adversarial
+Recommender
+Binbin Jin†, Defu Lian†§∗, Zheng Liu‡, Qi Liu†§ Jianhui Ma†, Xing Xie‡ , Enhong Chen†§∗
+†School of Computer Science and Technology, University of Science and Technology of China
+§School of Data Science, University of Science and Technology of China
+‡Microsoft Research Asia
+bb0725@mail.ustc.edu.cn, {liandefu, qiliuql, jianhui, cheneh}@ustc.edu.cn,
+{zhengliu, xingx}@microsoft.com
+Abstract
+Recommendation techniques are important approaches for alleviating information
+overload. Being often trained on implicit user feedback, many recommenders
+suffer from the sparsity challenge due to the lack of explicitly negative samples.
+The GAN-style recommenders (i.e., IRGAN) addresses the challenge by learning
+a generator and a discriminator adversarially, such that the generator produces
+increasingly difﬁcult samples for the discriminator to accelerate optimizing the
+discrimination objective. However, producing samples from the generator is very
+time-consuming, and our empirical study shows that the discriminator performs
+poor in top-k item recommendation. To this end, a theoretical analysis is made for
+the GAN-style algorithms, showing that the generator of limit capacity is diverged
+from the optimal generator. This may interpret the limitation of discriminator’s
+performance. Based on these ﬁndings, we propose a Sampling-Decomposable Gen-
+erative Adversarial Recommender (SD-GAR). In the framework, the divergence
+between some generator and the optimum is compensated by self-normalized
+importance sampling; the efﬁciency of sample generation is improved with a
+sampling-decomposable generator, such that each sample can be generated inO(1)
+with the V ose-Alias method. Interestingly, due to decomposability of sampling,
+the generator can be optimized with the closed-form solutions in an alternating
+manner, being different from policy gradient in the GAN-style algorithms. We
+extensively evaluate the proposed algorithm with ﬁve real-world recommendation
+datasets. The results show that SD-GAR outperforms IRGAN by 12.4% and the
+SOTA recommender by 10% on average. Moreover, discriminator training can be
+20x faster on the dataset with more than 120K items.
+1 Introduction
+With the popularity of Web 2.0, content disseminated on Internet has been growing explosively,
+which greatly intensiﬁes the information overload problem. Recommender system is regarded as an
+important approach to address this problem by ﬁltering out irrelevant information automatically. In
+recent years, personalized ranking algorithms, such as [7, 11, 16, 17, 13, 18, 32], have been widely
+used in E-commerce and online advertisement, creating huge business value and social impact for
+various kinds of web services. Since the recommendation algorithms are usually trained with implicit
+user feedback such as click and purchase history, the lack of explicitly negative samples become
+an imperative problem. In other words, how to discover and utilize informative negative samples
+becomes critical in optimizing the learning performance.
+∗Defu Lian and Enhong Chen are corresponding authors.
+34th Conference on Neural Information Processing Systems (NeurIPS 2020), Vancouver, Canada.
+
+
+--- Page 2 ---
+Existing work on negative sampling can be grouped into two categories. One category is to treat
+all items without user interaction as negative samples, which are assigned with a small conﬁdence
+score [12]. The algorithm has been proved to impose the gravity regularizer, which penalizes the
+non-zero prediction for uninteracted items [1]. A number of algorithms have been developed for its
+optimization, from batch-based ALS to mini-batch SGD [15]. To further distinguish the conﬁdence
+of being negative, the user-item conﬁdence matrix has been regularized to be sparse and low-rank
+to facilitate learning efﬁciency [24, 8]. The other category is to sample negative items from those
+uninteracted ones with various kinds of neural networks such as GAN-based models [4, 33], GCN-
+based models [9] and AE-based models [17]. A widely used sampling strategy is to draw negative
+items either w.r.t. uniform distribution [25, 37, 29], popularity [23], or based on recommendation
+models [26, 36, 11, 34]. Sampling based on recommendation models is regarded to be more effective;
+and in recent years, the GAN-style algorithms, e.g., IRGAN [ 34], become highly popular. It is
+also discussed in [6], that the GAN-style framework could be a promising direction of discovering
+informative negative samples. As discussed in this work, it is also more possible for the framework to
+seamlessly integrate approximate search algorithms, such as ALSH [28, 21], PQ [14] and HNSW [20],
+with complex recommendation algorithms, so as to mutually reinforce the learning of both algorithms.
+The GAN-style recommendation algorithms learn a generator and a discriminator in an iterative
+and adversarial way, such that the generator may produce increasingly difﬁcult samples for the
+discriminator to accelerate optimizing the discrimination objective. However, the existing GAN-
+style recommendation algorithms may suffer from two severe limitations. On the one hand, the
+discriminator rather than the generator is more suitable for the top-k item recommendation [5, 3]. In
+addition to the fact that the generator acts as a negative sampler, another reason is that the discriminator
+learns directly from training data, whereas the generator merely learns from samples drawn from the
+generator distribution; besides, the learning of the generator is guided by the discriminator, which can
+be not reliable. Unfortunately, the discriminator of existing algorithms performs very poor according
+to our empirical study. On the other hand, generating samples from the generator is time-consuming
+due to the generator’s large sample space, which restricts it from being applied for large-scale datasets.
+To this end, in this paper, a theoretical analysis is made for the GAN-style algorithms, which
+shows that a generator of enough capacity has the optimal solution given the discriminator. The
+divergence between the generator of limit capacity and the optimum may lead to the limitation of
+discriminator’s performance. Based on these ﬁndings, we propose the Sampling-Decomposable
+Generative Adversarial Recommender (SD-GAR), where sampling is carried out with a decomposable
+generator. In the framework, the divergence between the generator and its optimum is compensated
+by self-normalized importance sampling, so that the recommendation performance of discriminator is
+considerably improved. Another interesting result of using the self-normalized importance sampling is
+that if the generator is degenerated to the uniform distribution, the discriminator intrinsically subsumes
+recommendation models with dynamic negative sampling [37] and self-adversarial sampling [29].
+Due to decomposability of sampling, the generator can be optimized with its closed-form solutions in
+an alternating manner, which is different from using policy gradient as in the GAN-style algorithms
+and can lead to better training efﬁcacy. More importantly, the efﬁciency of sample generation can be
+remarkably improved, where each sample can be generated inO(1) with the V ose-Alias method [31].
+We extensively evaluate the proposed algorithm with ﬁve real-word recommendation datasets of
+varied size and difﬁculty of recommendation. The experimental results show that the proposed
+algorithm outperforms IRGAN by 12.4% on average and the SOTA recommender by 10% w.r.t.
+NDCG@50. The efﬁciency study indicates that discriminator training can be accelerated by 20x in
+the dataset with more than 120K items.
+2 Sampling-Decomposable Generative Adversarial Recommender
+Before elaborating the proposed SD-GAR, we ﬁrst brieﬂy introduce the GAN-style recommenders
+(e.g., IRGAN [34]) and provide some theoretical analysis results. Following that, we propose a new
+objective function base on expectation approximation with self-normalized importance sampling.
+Within the objective function, we propose a sampling-decomposable generator and investigate its
+optimization algorithm. Finally, we provide complexity analysis to SD-GAR and comparison with
+IRGAN. In the following, to be generic, we use context to represent user, time, location, behavior
+history and so on. Denote by C the set ofN contexts, I the set ofM items and Ic interacted items in
+a contextc.
+2
+
+
+--- Page 3 ---
+2.1 Analysis to IRGAN
+Generally speaking, IRGAN applies a game theoretical minimax game in the GAN framework
+for information retrieval (IR) tasks, and has been used for three speciﬁc IR scenarios including
+web search, item recommendation and question answering. More speciﬁcally, IRGAN iteratively
+optimizes a generatorG and a discriminatorD, such that the generator produces increasingly difﬁcult
+samples for the discriminator to minimize the discrimination objective. In case of recommendation
+from implicit user feedback, IRGAN formally optimizes the following objective function:
+max
+G
+min
+D
+J (D,G ) =
+∑
+c∈C
+−Ei∼Ptrue(·|c) logD(i|c) − Ej∼PG(·|c) log (1 −D(j|c)), (1)
+wherePtrue(·|c) is an underlying true relevance distribution over candidate items and PG(·|c) is a
+probability distribution used to generate negative samples.D(i|c) = σ(gφ(c,i )) = 1
+1+exp(−gφ(c,i))
+estimates the probability of preferring item i in a context c. As generative process is stochastic
+process over discrete data, IRGAN applies the REINFORCE algorithm for optimizing the generator.
+WhenD andG is well trained, the generatorG is used for recommendation, since the discriminator
+D performs poor in practice according to our empirical study. However, by considering the generator
+as a negative sampler so as to address the sparsity issue, the discriminatorD rather thanG should be
+used for recommendation. Before understanding this problem, we ﬁrst provide theoretical analysis
+for IRGAN.
+Theorem 2.1. AssumeG has enough capacity. Given the discriminatorD, minG J (D,G ) achieves
+the optimum when
+PG⋆ (·|c) = one-hot(arg max
+i
+(gφ(c,i ))). (2)
+The proof is provided in the appendix. When generating samples fromPG∗, it is reduced to binary
+function search problem [30], and many approximate search algorithms, such as PQ, HNSW and
+ALSH, can be applied for fast search. Therefore, this framework seamlessly integrates approx-
+imate search algorithms with any complex recommendation algorithms, which are represented
+by the discriminator D. However, sampling from PG⋆ suffers from the false negative issue,
+since items with large gφ(c,i ) score are also more likely to be positive. To this end, we intro-
+duce randomness into the generator by imposing entropy regularization over the generator, i.e.,
+H(PG(·|c)) = −∑
+i∈IPG(i|c) logPG(i|c).
+Theorem 2.2. Assume G has enough capacity and let fc(i) = − log (1 −D(i|c)) = log(1 +
+exp(gφ(c,i ))). Given the discriminatorD, minG J (D,G ) −T · H(PG(·|c)) achieves the optimum
+when
+PG⋆
+T (i|c) = exp (fc(i)/T )∑
+j∈I exp (fc(j)/T ). (3)
+The proof is provided in the appendix. When T → 0,PG⋆
+T →PG⋆, and whenT → +∞,PG⋆
+T is
+degenerated to a uniform distribution. Therefore,T controls the randomness of the generator.
+2.2 A New Objective Function
+It is infeasible to directly sample from PG⋆
+T due to large sample space and potentially large com-
+putational cost of gφ(c,i ). Therefore, a generator QG(·|c) with limit capacity is usually used to
+approximate the PG⋆
+T , with the aim of improving sampling efﬁciency. However, the divergence
+between the generator with limit capacity and the optimum with sufﬁcient capacity may lead to
+the limitation of discriminator’s performance in top-k item recommendation. To compensate the
+divergence between them, we propose to approximate J (D,G⋆
+T ) with self-normalized importance
+sampling, by drawing a set of samples Sc fromQG(·|c) in each context. Formally, for each context,
+given a set of samples Ic fromPtrue(·|c) observed as the training data, J (D,G⋆
+T ) is approximated as
+J (D,G⋆
+T ) ≈ VT (D, S) =
+∑
+c∈C
+
+− 1
+|Ic|
+∑
+i∈Ic
+logD(i|c) −
+∑
+j∈Sc
+wcj log (1 −D(j|c))
+
+,
+wcj =
+exp
+(
+fc(j)/T − log ˜QG(j|c)
+)
+∑
+i∈Sc
+exp
+(
+fc(i)/T − log ˜QG(i|c)
+).
+(4)
+3
+
+
+--- Page 4 ---
+where S =⋃
+c∈C Sc and ˜QG(j|c) is the unnormalizedQG(j|c). The detailed derivation is provided
+in the appendix. This approximate quantity satisﬁes the following properties.
+Proposition 2.1 (Theorem 9.2 [22]). VT (D, S) is an asymptotic unbiased estimator of J (D,G⋆
+T ),
+P
+(
+lim
+∀c,|Sc|→∞
+VT (D, S) = J (D,G⋆
+T )
+)
+= 1.
+Since we focus on modeling QG(·|c) rather than Ptrue(·|c) in this paper, we only consider the
+uncertainty fromQG(·|c) which can provide guidance for variance reduction and help optimize the
+proposalQG(·|c). The variance is then approximated with the delta method [22],
+Var(VT (D, S)) =
+∑
+c∈C
+1
+|Sc|
+∑
+i∈I
+PG⋆
+T (i|c)2(fc(i) −µc)2
+QG(i|c) , (5)
+whereµc = Ei∼PG⋆
+T
+(·|c)(fc(i)). It is not possible to approach 0 variance with ever better choices of
+QG due to the following proposition.
+Proposition 2.2. Var(VT (D, S)) ≥∑
+c∈C
+1
+|Sc| Ei∼PG⋆
+T
+(·|c)(|fc(i) −µc|)2, where the equality holds
+ifQG(i|c) ∝PG⋆
+T (i|c)|fc(i) −µc|.
+The proof is provided in the appendix. The result can provide guidance for designing better learning
+algorithms ofQG.
+In addition to these properties, this new objective function is also quite a generic framework to
+integrate any negative samplers with recommendation algorithms, which can subsume several existing
+algorithms when the generator is degenerated to the uniform distribution.
+Proposition 2.3. If ∀c, Sc drawn i.i.d from uniform(I), then wcj = exp(fc(j)/T )∑
+i∈Sc exp(fc(i)/T ) and ∀0 <
+T1 <T 2 < +∞,
+lim
+T→+∞
+VT (D, S)< VT2 (D, S)< VT1 (D, S)< lim
+T→0
+VT (D, S).
+The proof is provided in the appendix. Note that limT→0 VT (D, S) corresponds to logit-loss based
+recommender with dynamic negative sampling [37], and limT→+∞ VT (D, S) corresponds to logit-
+loss based recommender with uniform sampling [ 25, 19]. The recently proposed self-adversarial
+loss [29] is also a special case, by simply preventing gradient propagating through sample importance.
+2.3 Sampling-Decomposable Generator
+In most GAN-style recommendation algorithms, though the generator is of limit capacity, sampling
+from the generator is still time-consuming due to the requirement of on-the-ﬂy probability com-
+putation. To this end, we propose a sampling-decomposable generator, where sampling from the
+generator is decomposed into two steps. The ﬁrst step is to sample from a probability distribution over
+latent states conditioned on contexts, and the second step is to sample from a probability distribution
+overM candidate items conditioned on latent states. Formally, assuming xc deﬁnes the probability
+distribution overK latent states and y·k deﬁnes the probability distribution over candidate items,
+then the generator is decomposed as
+QG(·|c) =
+K−1∑
+k=0
+xc,ky·k = Y xc, (6)
+where Y = [ y·0, · · ·, y·K−1] stacks y·k by column, being subject to 1⊤
+M Y = 1K. Therefore, it
+is easy to verify that such a sampling-decomposable generator satisﬁes ∑
+i∈IQG(i|c) = 1 . The
+probability decomposablity has been widely used in probabilistic graphical models, such as PLSA [10]
+and LDA [2]. To draw samples from the generator, we can ﬁrst sample a latent state k from the
+distribution xc, and then draw an item from the distribution y·k. Since the probability tables only
+occupyO((M +N )K) space, we also pre-compute the alias table for xc and y·k according to the
+V ose-Alias method. As a consequence, due to the sampling-decomposable assumption, each item can
+be generated from the generator inO(1), achieving remarkable speedup for item sampling.
+4
+
+
+--- Page 5 ---
+2.4 Optimization of Generator
+Though the sampling-decomposable assumption decreases the model capacity, the generator is not
+necessarily optimized by the REINFORCE algorithm any more, so that better training efﬁcacy may
+be achieved. Following IRGAN and trying to reduce the variance of the objective estimatorVT (D, S)
+according to Proposition 2.2, we propose the follow optimization problem to learning the generator,
+max
+X≥0,Y≥0
+∑
+c∈C
+∑
+i∈I
+x⊤
+c yiPG⋆
+T (i|c)|fc(i) −µc|, s.t. X1K = 1N and 1⊤
+M Y = 1K, (7)
+where X = [x0, · · ·, xN−1]⊤ stacks xc by row. To solve this problem, alternating optimization can
+be applied, which iteratively update X and Y until convergence. In particular, when Y ﬁxed, the
+optimization problem w.r.t. xc is then formulated as
+max
+xc∈AK
+x⊤
+c
+∑
+i∈I
+yiPG⋆
+T (i|c)|fc(i) −µc| +λX H(xc), (8)
+where AK = {a ∈ RK
++ |a⊤1K = 1 } the (K − 1)-simplex and H(xc) = −∑
+kxc,k logxc,k
+is an entropy regularizer, to prevent xc from degenerating to the one-hot distribution. Based on
+Theorem 2.2, the solution for the problem (8) is derived as follows.
+Corollary 2.1. Let bc =∑
+i∈I yiPG⋆
+T (i|c)|fc(i) −µc|. The objective function in Eq (8) achieves
+the optimum when
+xc = softmax(bc/λX ). (9)
+To obtain xc, it is required to ﬁrst calculate these quantities µc and bc. It is infeasible to straight-
+forwardly compute them since they involve summation overM items. Therefore, we again resort
+to self-normalized importance sampling to perform approximate estimation of these two expecta-
+tions. To reduce bias of the estimators, we draw different sample sets from the most recent proposal
+QG(i|c) = x⊤
+c yi for separate use.
+When X ﬁxed, the optimization problem w.r.t. y·k, thek-th column of Y , is then formulated as:
+max
+y·k∈AM
+∑
+i∈I
+yi,k
+∑
+c∈C
+xc,kPG⋆
+T (i|c)|fc(i) −µc| +λY H(y·k). (10)
+where H(y·k) is an entropy regularizer, to prevent y·k from degenerating to the one-hot distribution.
+Following the Theorem 2.2, we can derive the solution of the problem as follows.
+Corollary 2.2. Letdk,i =∑
+c∈Cxc,kPG⋆
+T (i|c)|fc(i)−µc|. The objective function in Eq(10) achieves
+the optimum when
+y·k = softmax(dk/λY ). (11)
+To obtain y·k, it is required to calculate µc and dk. After xc is updated, µc is re-estimated by
+drawing a new sample set from the updated proposal distribution. To estimate dk, we ﬁrst use
+self-normalized importance sampling to estimate the normalize constantZG⋆
+T (c) ofPG⋆
+T (i|c). Then
+we use the probabilityQG(c|i) =∑
+kP (k|i)P (c|k) for context sampling, whereP (k|i) = yi,k∑
+kyi,k
+and P (c|k) = xc,k∑
+cxc,k
+by assuming the prior P (k) = 1
+K and P (c) = 1
+N . With the V ose-Alias
+method, we draw a sample set of contexts Si for approximatingdk,i as follows:
+dk,i = Ec∼QG(c|i)
+PG⋆
+T (i|c)
+QG(c|i)xc,k|fc(i) −µc| ≈ 1
+|Si|
+∑
+c∈Si
+ˆwicxc,k|fc(i) −µc|. (12)
+where ˆwic = exp
+(
+fc(i)/T − logQG(c|i) − log ˜ZG⋆
+T (c)
+)
+.
+Algorithm 1 shows the overall procedure of iteratively updating the discriminator and the generator,
+where the parameters of the generator are randomly initialized.
+2.5 Time Complexity Analysis
+Thanks to our sampling-decomposable generator and V ose-Alias method sampling techniques, gen-
+erating an item from the generator only requiresO(1). Therefore, if |Sc| is a multiplier of |Ic|, the
+5
+
+
+--- Page 6 ---
+Algorithm 1: Sampling-Decomposable Generative Adversarial Recommender
+Input: Context set C; interacted items set Ic; sample sets Sc, Si; temperatureT,λX,λY ; total
+iterationsL; update frequencylg of the generator
+Output: Parameters Θ of the discriminator
+1 X ∼U (0, 1);
+2 Y ∼U (0, 1);
+3 foreachc ∈ C do
+4 P (k|c) ← AliasTable(xc/x⊤
+c 1K); // O(K)
+5 fork = 0...K − 1 do
+6 P (i|k) ← AliasTable(y·k/y⊤
+·k1M ); // O(M )
+7 for l=1...L do
+8 foreach interacted item set Ic do
+9 draw item sample set Sc as negatives based onP (k|c) andP (i|k); // O(|Sc|)
+10 update parameters Θ of the discriminator by minimizing Eq (4);
+11 if l %lg == 0 then
+12 foreachc ∈ C do
+13 draw item sample set Sc based onP (k|c) andP (i|k); // O(|Sc|)
+14 compute xc using Eq (9);
+15 P (k|c) ← AliasTable(xc); // O(K)
+16 fork = 0...K − 1 do
+17 P (c|k) ← AliasTable(x·k/x⊤
+·k1N ); // O(N )
+18 P (k|i) ← AliasTable(yi/y⊤
+i 1K); // O(K)
+19 draw context sample set Si for each item based onP (c|k); // O(|Si|)
+20 compute y·k using Eq (11);
+21 P (i|k) ← AliasTable(y·k); // O(M )
+22 return Θ
+time complexity of training the discriminator is still linearly proportional to the data size. When
+learning parameters X and Y of the generator, the time complexity of the proposed algorithm is
+O(NK |Sc| +MK |Si|), where |Sc| is the size of the item sample set for approximation and |Si|
+is the size of the context sample set for approximation. The value of |Sc| and |Si| is usually very
+small compared to the number of itemsM and the number of contextsN. Therefore, training the
+generator is very efﬁcient. Moreover, we empirically ﬁnd that lowering the frequency of updating the
+generator would almost not affect the overall recommendation performance, so we choose to update
+the generator everylg iterations.
+Comparison with IRGAN . SD-GAR is similar to IRGAN. However, according to [ 34], the time
+complexity of training IRGAN is O(NMK ), where O(K) indicates the time cost of computing
+preference score for each item. Therefore, the proposed algorithm is much more efﬁcient than
+IRGAN.
+3 Experiments
+We ﬁrst compare our proposed SD-GAR with a set of baselines, including the state-of-the-art model.
+Then, we show the efﬁciency and scalability of SD-GAR from two perspectives.
+3.1 Datasets
+As shown in Table 1, ﬁve publicly available real-world datasets2 are used for evaluating the proposed
+algorithm. The datasets vary in difﬁculty of item recommendation, which may be indicated by the
+2Amazon: http://jmcauley.ucsd.edu/data/amazon; MovieLens: https://grouplens.org/datasets/movielens;
+CiteULike: https://github.com/js05212/citeulike-t; Gowalla: http://snap.stanford.edu/data/loc-gowalla.html;
+Echonest: https://blog.echonest.com/post/3639160982/million-song-dataset
+6
+
+
+--- Page 7 ---
+Table 1: Dataset Statistics. Concentration indicates rating percentage on top 5% most popular items.
+#users #items #ratings density concentration
+CiteULike 7,947 25,975 134,860 6.53e-04 31.56%
+Gowalla 29,858 40,988 1,027,464 8.40e-04 29.15%
+Amazon 130,380 128,939 2,415,650 1.44e-04 32.98%
+MovieLens 60,655 8,939 2,105,971 3.88e-03 61.98%
+Echonest 217,966 60,654 4,422,471 3.35e-04 45.63%
+numbers of items and ratings, the density and concentration. The Amazon dataset is a subset of
+customers’ ratings for Amazon books and the MovieLens dataset is from the classic MovieLens10M
+dataset. For Amazon and MovieLens10M, we treat items with scores higher than 4 as positive. The
+CiteULike dataset collects users’personalized libraries of articles, the Gowalla dataset includes users’
+check-ins at locations, and the Echonest dataset records users’ play count of songs. To ensure each
+user can be tested, we ﬁlter these datasets such that users rated at least 5 items. For each user, we
+randomly sample her 80% ratings into a training set and the rest 20% into a testing test. 10% ratings
+of the training set are used for validation. We build recommendation models on the training set and
+evaluate them on the test set.
+3.2 Experimental Setup
+In this paper, our proposed SD-GAR is implemented based on Tensorﬂow and trained with the Adam
+algorithm on a linux system (2.10GHz Intel Xeon Gold 6230 CPUs and a Tesla V100 GPU). In
+addition, there are some hyper-parameters. Note that the discriminator can be any existing model.
+In this paper, we choose to use the matrix factorization model (i.e., D(·|c) = σ(Y xc + b) where
+b is the bias of items) since it is simple and even superior to neural recommendation algorithms in
+some cases [27]. Unless otherwise speciﬁed, the dimension of user and item embeddings is set to 32.
+The batch size is ﬁxed to 512 and the learning rate is ﬁxed to 0.001. We impose L2 regularization
+to prevent overﬁtting and its coefﬁcient is tuned over {0.01, 0.03, 0.05} on the validation set. The
+number of item sample set for learning the discriminator is set to 5. The number of item and
+context sample set for learning the generator is set to 64. The temperatureT,λX,λY is tuned over
+{0.1, 0.5, 1}. The sensitivity of some important parameters is discussed in the appendix.
+The performance of recommendation is assessed by how well positive items on the test set are ranked.
+We exploit the widely-used metric NDCG for ranking evaluation. NDCG at a cutoff k, denoted as
+NDCG@k, rewards method that ranks positive items in the ﬁrst few positions of the top-k ranking
+list. The positive items ranked at low positions of ranking list contribute less than positive items at
+the top positions. The cutoff k in NDCG is set to 50 by default.
+3.3 Baselines
+To validate the effectiveness of SD-GAR, we compare it against seven popular methods.
+• BPR [25] is a pioneer work of personalized ranking in recommender systems. It uses pairwise
+ranking loss and randomly samples negative items.
+• AOBPR [26] improves BPR with adaptive oversampling. We use the implementation in LibRec 3.
+• W ARP[35] uses the weighted approximate-rank pairwise loss function for collaborative ﬁltering
+whose loss is based on a ranking error function. We use the implementation in LightFM 4.
+• CML [11] learns a joint metric space to encode users’ preference as well as user-user and item-item
+similarity and uses WARP loss function for optimization. We use the authors’ released code 5.
+Following the original paper, the margin size is tuned over {0.5, 1.0, 1.5, 2.0}.
+• DNS [37] draws a set of negative samples from a uniform distribution but only leaves one item
+with the highest predicted score to update the model.
+3https://github.com/guoguibing/librec
+4https://github.com/lyst/lightfm
+5https://github.com/changun/CollMetric
+7
+
+
+--- Page 8 ---
+Table 2: Comparison with baselines on ﬁve datasets with respect to NDCG@50
+CiteULike Gowalla MovieLens Amazon Echonest
+NDCG@50 imp% NDCG@50 imp% NDCG@50 imp% NDCG@50 imp% NDCG@50 imp% AvgImp
+BPR 0.1165 17.2 0.1255 29.1 0.2605 20.3 0.0387 78.3 0.0882 43.7 37.7
+AOBPR 0.0977 39.8 0.1349 20.1 0.2545 23.1 0.0573 20.6 0.1038 22.0 25.1
+W ARP 0.0948 44.0 0.1397 16.0 0.2546 23.1 0.0553 24.9 0.1116 13.5 24.3
+CML 0.1194 14.4 0.1303 24.3 0.2737 14.5 0.0572 20.9 0.1035 22.4 19.3
+DNS 0.1157 18.0 0.1412 14.7 0.2693 16.4 0.0580 19.0 0.1013 25.0 18.6
+IRGAN 0.1174 16.2 0.1443 12.3 0.2858 9.7 0.0627 10.2 0.1114 13.7 12.4
+SA 0.1269 7.6 0.1490 8.7 0.2764 13.4 0.0619 11.7 0.1138 11.3 10.5
+SD-GAR 0.1365 - 0.1620 - 0.3134 - 0.0691 - 0.1267 - -
+• IRGAN [34] is a state-of-the-art GAN based model including a generative network that generates
+items for a user and a discriminative network that determines whether the instance is from real
+data or generated. We use the authors’ released code 6.
+• SA [29] is a special case of the proposed method where the generator is replaced by a uniform
+distribution and the gradient from sample importance is forbidden.
+For the sake of fairness, hyperparameters of these competitors (e.g., the embedding size and the
+number of negative samples) are set to the same as SD-GAR.
+3.4 Experimental Results
+Overall Performance. In this experiment, we show the comparison results between SD-GAR and
+the baselines in Table 2. In addition to the comparative results, we also analyze some potential limits
+and effective mechanism of the baselines.
+• SD-GAR consistently outperforms all baselines on all ﬁve datasets. On average, the relative
+performance improvements are at least 10.5%. The relative improvements to the classic method
+BPR reach 37.7% on average. This fully validates the effectiveness of SD-GAR.
+• Among the baselines, AOBPR is a method that approximates the rank of items to sampling process
+while DNS, IRGAN, SA utilize the predicted scores for this goal. According to the experimental
+results, we can ﬁnd that AOBPR is not competitive in most cases. This may be because applying
+predicted scores can distinguish the importance of items at a ﬁner granularity and lead to better
+results. W ARP and CML are two methods utilizing rejection sampling from a uniform distribution.
+After they are better trained, it is hard to draw informative samples which limit their performance.
+• We ﬁnd that weighting negative samples with predicted scores can bring much improvements. This
+is based on the observation that SA and DNS outperform BPR. In particular, SA assigns higher
+weights to items with larger predicted scores, while DNS only leaves the negative item with the
+highest score. In addition, the fact that SA is superior than DNS also implies introducing more
+negative samples can improve coverage and performance.
+• IRGAN is beaten by SA due to the divergence between the generator and its optimum. By
+compensating the divergence with self-normalized importance sampling, our proposed SD-GAR
+obtains 12.4% improvements on average and achieves best performance among all baselines.
+• Figure 1(a) shows the performance trends with respect to the number of iterations comparing with
+three classic methods on the Gowalla dataset. We can ﬁnd SD-GAR stays ahead of other baselines
+along with the training process and starts to converge when it comes to around 30 iterations.
+Comparison of Time Consumption. Here, we illustrate the efﬁciency of SD-GAR. As shown in
+Figure 1(b), we compare SD-GAR with IRGAN since they have similar frameworks which contain a
+generative network and a discriminative network. We give the results on two large-scale datasets (i.e.,
+Amazon, Echonest). In the Figure, the blue bars represent the training time of the discriminator while
+the red bars represent the training time of the generator. Regarding the discriminator, the training
+time of SD-GAR is 20x (10x) faster on the Amazon (Echonest) dataset. Regarding the generator,
+6https://github.com/geek-ai/irgan
+8
+
+
+--- Page 9 ---
+SD-GAR
+80
+NDCG@50(*100)
+0 10 20 30 40 50 60 70
+Iterations
+6
+8
+10
+12
+14
+16
+BPR
+SA
+DNS
+SD-GAR
+(a) NDCG@50 w.r.t. iterations
+SD-GAR IRGAN SD-GAR IRGAN
+0
+1000
+2000
+3000
+4000Time/s
+opt-D
+opt-G
+Amazon Echonest
+3467.6
+1493.9
+63.3
+618.8 538.6
+120.2
+2683.2
+1293.0 (b) Time consumption comparison
+20K 40K 60K 80K 100K
+Number of items
+500
+1000
+1500
+2000
+2500
+3000Time/s
+opt_D
+opt_G
+IRGAN
+SD-GAR
+all (c) Time consumption w.r.t. M
+Figure 1: (a) shows the performance trends between SD-GAR and classic beselines. (b) and (c) show
+the comparison of time consumption between SD-GAR and IRGAN.
+the training time of SD-GAR is 5x faster on both datasets. In addition, note that our generator is
+optimized at a frequency oflg > 1 iterations so that its training time per iteration is much shorter.
+Figure 1(c) shows the time consumption of two models with respect to the number of items. Speciﬁ-
+cally, we conduct this experiment on the Amazon dataset as it consists of more than 120K items. We
+random select 20K, 40K, 60K, 80K, 100K items and remove the irrelevant data. In the Figure, the
+dotted lines are the training time of IRGAN while the solid lines are the training time of SD-GAR.
+From the results, less time is spent in training the discriminator and generator of SD-GAR. In addition,
+the time consumption of both models grows linearly with the increasing number of items. However,
+the growth rate of IRGAN is much larger than that of SD-GAR. Therefore, SD-GAR is much more
+efﬁcient and scalable than IRGAN.
+4 Conclusion
+In this paper, we proposed a sampling-decomposable generative adversarial recommender, to address
+low efﬁciency of negative sampling with the generator and bridge the gap between the generator
+of limit capacity and the optimal generator with sufﬁcient capacity. The proposed algorithm was
+evaluated with ﬁve real-world recommendation datasets, showing that the proposed algorithm signiﬁ-
+cantly outperforms the competing baselines, including the SOTA recommender. The efﬁciency study
+showed that the training of the proposed algorithm achieves remarkable speedup. The future work
+includes the better design and the learning mechanism of sampling-efﬁcient generators.
+Broader Impact
+In this paper, we develop a new recommendation algorithm, which aims to efﬁciently solve the
+sparsity challenge in recommender system. The ofﬂine evaluation results on multiple datasets
+show that the new algorithm achieves better recommendation performance in terms of NDCG. The
+task does not leverage any biases in the data. As a consequence, the customers who often use
+recommendation services may more easily ﬁgure out their interested products, the researchers who
+design new recommendation algorithms may be inspired by the insight delivered in this paper, and
+the engineers who develop recommendation algorithms may implement the new algorithm and
+incorporate the new loss function and the new negative sampler in their recommendation services.
+Nobody would be put at disadvantage from this research. The practical recommendation service
+usually adopt the ensemble of many recommendation models, so any single algorithm does not lead
+to any serious consequences of user experiences.
+Acknowledgements
+The work was supported by grants from the National Natural Science Foundation of China (No.
+61976198, 62022077, 61922073 and U1605251), Municipal Program on Science and Technology
+Research Project of Wuhu City (No. 2019yf05), and the Fundamental Research Funds for the Central
+Universities.
+9
+
+
+--- Page 10 ---
+References
+[1] Immanuel Bayer, Xiangnan He, Bhargav Kanagal, and Steffen Rendle. A generic coordinate
+descent framework for learning from implicit feedback. In Proceedings of WWW’17, pages
+1341–1350, 2017.
+[2] David M Blei, Andrew Y Ng, and Michael I Jordan. Latent dirichlet allocation. the Journal of
+machine Learning research, 3:993–1022, 2003.
+[3] Liwei Cai and William Yang Wang. Kbgan: Adversarial learning for knowledge graph embed-
+dings. In Proceedings of the 2018 Conference of the North American Chapter of the Association
+for Computational Linguistics: Human Language Technologies, Volume 1 (Long Papers), pages
+1470–1480, 2018.
+[4] Dong-Kyu Chae, Jin-Soo Kang, Sang-Wook Kim, and Jung-Tae Lee. Cfgan: A generic
+collaborative ﬁltering framework based on generative adversarial networks. In Proceedings of
+CIKM’18, pages 137–146, 2018.
+[5] Jingtao Ding, Yuhan Quan, Xiangnan He, Yong Li, and Depeng Jin. Reinforced negative
+sampling for recommendation with exposure data. In Proceedings of IJCAI’19, pages 2230–
+2236. AAAI Press, 2019.
+[6] Ian J Goodfellow. On distinguishability criteria for estimating generative models.arXiv preprint
+arXiv:1412.6515, 2014.
+[7] Xiangnan He, Lizi Liao, Hanwang Zhang, Liqiang Nie, Xia Hu, and Tat-Seng Chua. Neural
+collaborative ﬁltering. In Proceedings of WWW’17, pages 173–182, 2017.
+[8] Xiangnan He, Jinhui Tang, Xiaoyu Du, Richang Hong, Tongwei Ren, and Tat-Seng Chua. Fast
+matrix factorization with nonuniform weights on missing data. IEEE transactions on neural
+networks and learning systems, 2019.
+[9] Xiangnan He, Kuan Deng, Xiang Wang, Yan Li, YongDong Zhang, and Meng Wang. Lightgcn:
+Simplifying and powering graph convolution network for recommendation. In Proceedings of
+SIGIR’20, page 639–648. ACM, 2020.
+[10] Thomas Hofmann. Probabilistic latent semantic analysis. In Proceedings of the Fifteenth
+conference on Uncertainty in artiﬁcial intelligence, pages 289–296, 1999.
+[11] Cheng-Kang Hsieh, Longqi Yang, Yin Cui, Tsung-Yi Lin, Serge Belongie, and Deborah Estrin.
+Collaborative metric learning. In Proceedings of WWW’17, pages 193–201, 2017.
+[12] Y . Hu, Y . Koren, and C. V olinsky. Collaborative ﬁltering for implicit feedback datasets. In
+Proceedings of ICDM’08, pages 263–272. IEEE, 2008.
+[13] Zhenya Huang, Qi Liu, Chengxiang Zhai, Yu Yin, Enhong Chen, Weibo Gao, and Guoping
+Hu. Exploring multi-objective exercise recommendations in online education systems. In
+Proceedings of CIKM’19, pages 1261–1270, 2019.
+[14] Herve Jegou, Matthijs Douze, and Cordelia Schmid. Product quantization for nearest neighbor
+search. IEEE Transactions on Pattern Analysis and Machine Intelligence, 33(1):117–128, 2011.
+[15] Walid Krichene, Nicolas Mayoraz, Steffen Rendle, Li Zhang, Xinyang Yi, Lichan Hong, Ed Chi,
+and John Anderson. Efﬁcient training on very large corpora via gramian estimation. arXiv
+preprint arXiv:1807.07187, 2018.
+[16] Jianxun Lian, Xiaohuan Zhou, Fuzheng Zhang, Zhongxia Chen, Xing Xie, and Guangzhong
+Sun. xdeepfm: Combining explicit and implicit feature interactions for recommender systems.
+In Proceedings of KDD’18, pages 1754–1763. ACM, 2018.
+[17] Dawen Liang, Rahul G Krishnan, Matthew D Hoffman, and Tony Jebara. Variational autoen-
+coders for collaborative ﬁltering. In Proceedings of WWW’18, pages 689–698, 2018.
+[18] Q. Liu, Y . Ge, Z. Li, E. Chen, and H. Xiong. Personalized travel package recommendation. In
+Proceedings of ICDM’11, pages 407–416. IEEE, 2011.
+10
+
+
+--- Page 11 ---
+[19] Yong Liu, Lifan Zhao, Guimei Liu, Xinyan Lu, Peng Gao, Xiao-Li Li, and Zhihui Jin. Dy-
+namic bayesian logistic matrix factorization for recommendation with implicit feedback. In
+Proceedings of IJCAI’18, pages 3463–3469, 2018.
+[20] Yury A Malkov and Dmitry A Yashunin. Efﬁcient and robust approximate nearest neighbor
+search using hierarchical navigable small world graphs. IEEE transactions on pattern analysis
+and machine intelligence, 2018.
+[21] Behnam Neyshabur and Nathan Srebro. On symmetric and asymmetric lshs for inner product
+search. In Proceedings of ICML’15, pages 1926–1934, 2015.
+[22] Art B. Owen. Monte Carlo theory, methods and examples. 2013.
+[23] R. Pan, Y . Zhou, B. Cao, N.N. Liu, R. Lukose, M. Scholz, and Q. Yang. One-class collaborative
+ﬁltering. In Proceedings of ICDM’08, pages 502–511. IEEE, 2008.
+[24] Rong Pan and Martin Scholz. Mind the gaps: weighting the unknown in large-scale one-class
+collaborative ﬁltering. In Proceedings of the 15th ACM SIGKDD international conference on
+Knowledge discovery and data mining, pages 667–676. ACM, 2009.
+[25] S. Rendle, C. Freudenthaler, Z. Gantner, and L. Schmidt-Thieme. Bpr: Bayesian personalized
+ranking from implicit feedback. In Proceedings of UAI’09, pages 452–461. AUAI Press, 2009.
+[26] Steffen Rendle and Christoph Freudenthaler. Improving pairwise learning for item recommen-
+dation from implicit feedback. In Proceedings of WSDM’14, pages 273–282. ACM, 2014.
+[27] Steffen Rendle, Walid Krichene, Li Zhang, and John Anderson. Neural collaborative ﬁltering
+vs. matrix factorization revisited. arXiv preprint arXiv:2005.09683, 2020.
+[28] Anshumali Shrivastava and Ping Li. Asymmetric lsh (alsh) for sublinear time maximum inner
+product search (mips). In Proceedings of NIPS’14, pages 2321–2329, 2014.
+[29] Zhiqing Sun, Zhi-Hong Deng, Jian-Yun Nie, and Jian Tang. Rotate: Knowledge graph embed-
+ding by relational rotation in complex space. arXiv preprint arXiv:1902.10197, 2019.
+[30] Shulong Tan, Zhixin Zhou, Zhaozhuo Xu, and Ping Li. Fast item ranking under neural network
+based measures. In Proceedings of WSDM’20, pages 591–599, 2020.
+[31] Alastair J Walker. An efﬁcient method for generating discrete random variables with general
+distributions. ACM Transactions on Mathematical Software (TOMS), 3(3):253–256, 1977.
+[32] Hao Wang, Tong Xu, Qi Liu, Defu Lian, Enhong Chen, Dongfang Du, Han Wu, and Wen Su.
+Mcne: An end-to-end framework for learning multiple conditional network representations
+of social network. In Proceedings of the 25th ACM SIGKDD International Conference on
+Knowledge Discovery & Data Mining, pages 1064–1072, 2019.
+[33] Haoyu Wang, Nan Shao, and Defu Lian. Adversarial binary collaborative ﬁltering for implicit
+feedback. In Proceedings of the AAAI Conference on Artiﬁcial Intelligence, volume 33, pages
+5248–5255, 2019.
+[34] Jun Wang, Lantao Yu, Weinan Zhang, Yu Gong, Yinghui Xu, Benyou Wang, Peng Zhang, and
+Dell Zhang. Irgan: A minimax game for unifying generative and discriminative information
+retrieval models. In Proceedings of SIGIR’17, pages 515–524. ACM, 2017.
+[35] Jason Weston, Samy Bengio, and Nicolas Usunier. Large scale image annotation: learning to
+rank with joint word-image embeddings. Machine learning, 81(1):21–35, 2010.
+[36] Fajie Yuan, Guibing Guo, Joemon M Jose, Long Chen, Haitao Yu, and Weinan Zhang.
+Lambdafm: learning optimal ranking with factorization machines using lambda surrogates. In
+Proceedings of CIKM’16, pages 227–236, 2016.
+[37] Weinan Zhang, Tianqi Chen, Jun Wang, and Yong Yu. Optimizing top-n collaborative ﬁltering
+via dynamic negative item sampling. In Proceedings of SIGIR’13, pages 785–788. ACM, 2013.
+11

@@ -1,0 +1,1765 @@
+--- Page 1 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 1
+COMPUTATIONAL NEUROSCIENCE
+ORIGINAL RESEARCH ARTICLE
+published: 20 November 2009
+doi: 10.3389/neuro.10.025.2009
+the  motivation is to produce realistic dendritic structures to be 
+used in an electrophysiology simulator, e.g. (Stiefel and Sejnowski, 
+2007). The prototypical example of the construction approach is 
+L-Systems, a recursive procedure initially invented for modeling 
+plant branching structures (
+Lindenmayer, 1968), which has been 
+successfully applied to neural morphologies ( Hamilton, 1993; 
+Mulchandani, 1995; Ascoli et al., 2001). Other methods have been 
+proposed like probabilistic branching models (van Pelt and V erwer, 
+1983; Kliemann, 1987), Markov models (Samsonovich and Ascoli, 
+2005), Monte Carlo processes ( da Fontoura Costa and Coelho, 
+2005), or diffusion limited aggregation (Luczak, 2006). But as suc-
+cessful as they are in reproducing neuronal shapes, these models 
+provide very little insight into the fundamental growth mechanisms 
+leading to cortex formation.
+Growth models, on the other hand, study the biological mecha-
+nisms that underly the generation of neuronal morphology. Many 
+interesting agent-based simulations have been published, repro-
+ducing various aspects of development, such as cell proliferation 
+(
+Ryder et al., 1999; Shinbrot, 2006 ), polarization ( Samuels et al., 
+1996), cell migration (Cai et al., 2006), neurite extension (Kiddie 
+et al., 2005), growth cone steering (Goodhill et al., 2004; Maskery 
+and Shinbrot, 2005; Krottje and van Ooyen, 2007 ), fasciculation 
+(Hentschel and van Ooyen, 1999)  and synapse formation ( van 
+Ooyen and Willshaw, 1999; Stepanyants et al., 2008 ). Mean ﬁ eld 
+models have also been proposed, for instance to study axon gui-
+dance and map formation (
+Reber et al., 2004; de Gennes, 2007 ). 
+INTRODUCTION
+During the past two decades Computational Neuroscience has 
+developed sophisticated methods for simulating physiology of 
+neurons (
+Markram, 2006; Izhikevich and Edelman, 2008 ). This 
+progress has been partly due to advances in computational resour-
+ces as well as our improved understanding of the basic principles 
+of electrophysiology. But importantly, this approach has been 
+facilitated by the development of robust simulation packages 
+such as NEURON (
+Hines and Carnevale, 1997 ) and GENESIS 
+(Bower and Beeman, 1995 ). By providing neuroscientists with 
+the building blocks and the environment in which to assemble 
+their own neuronal and network models, these programs have 
+relieved scientists from the enormous task of writing complicated 
+computational frameworks themselves, and have left them free 
+to concentrate on productive simulation of experimental data. 
+Similarly, researchers in other areas of biology now also have 
+at their disposal powerful modeling environments, for instance 
+for the study of biochemical pathways (
+Alves et al., 2006 ). The 
+simulation package CX3D that will be described here, offers an 
+analogous tool that can be used to simulate the growth of neu-
+rons in 3D.
+There are two major approaches to the simulation of neural 
+development: construction algorithms, and biologically-inspired 
+growth processes. The construction approach aims to reproduce 
+the geometrical properties of real neurons, and not at understan-
+ding the biological processes underlying neural growth. Often 
+A framework for modeling the growth and development 
+of neurons and networks
+Frederic Zubler* and Rodney Douglas
+Institute of Neuroinformatics, University of Zurich/Swiss Federal Institute of Technology Zurich, Zurich, Switzerland
+The development of neural tissue is a complex organizing process, in which it is difﬁ cult to 
+grasp how the various localized interactions between dividing cells leads relentlessly to global 
+network organization. Simulation is a useful tool for exploring such complex processes because 
+it permits rigorous analysis of observed global behavior in terms of the mechanistic axioms 
+declared in the simulated model. We describe a novel simulation tool, CX3D, for modeling the 
+development of large realistic neural networks such as the neocortex, in a physical 3D space. 
+In CX3D, as in biology, neurons arise by the replication and migration of precursors, which 
+mature into cells able to extend axons and dendrites. Individual neurons are discretized into 
+spherical (for the soma) and cylindrical (for neurites) elements that have appropriate mechanical 
+properties. The growth functions of each neuron are encapsulated in set of pre-deﬁ ned modules 
+that are automatically distributed across its segments during growth. The extracellular space 
+is also discretized, and allows for the diffusion of extracellular signaling molecules, as well 
+as the physical interactions of the many developing neurons. We demonstrate the utility of 
+CX3D by simulating three interesting developmental processes: neocortical lamination based 
+on mechanical properties of tissues; a growth model of a neocortical pyramidal cell based on 
+layer-speciﬁ c guidance cues; and the formation of a neural network in vitro by employing neurite 
+fasciculation. We also provide some examples in which previous models from the literature are 
+re-implemented in CX3D. Our results suggest that CX3D is a powerful tool for understanding 
+neural development.
+Keywords: neural development, cortex, modeling, computational neuroanatomy, axon guidance
+Edited by:
+Stefano Fusi, ETH University Zurich, 
+Switzerland; Columbia University, USA
+Reviewed by:
+Victor Luria, Columbia University, USA
+Enrique Alvarez-Lacalle, Universitat 
+Politécnica de Catalunya UPC, Spain
+*Correspondence:
+Frederic Zubler, Institute of 
+Neuroinformatics, University of Zurich/
+Swiss Federal Institute of Technology 
+Zurich, Winterthurerstrasse 190, 
+CH-8057 Zurich, Switzerland. 
+e-mail: fred@ini.phys.ethz.ch
+
+
+--- Page 2 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 2
+Zubler and Douglas Simulation framework for neural development
+Unfortunately, all these studies were conducted within different 
+frameworks, which prevents the comparison, or the combination 
+of several computational models in larger simulations.
+In addition to allowing for sim ulations of various aspects of 
+development, a general purpose simulation platform should also 
+emulate the physics of developing tissues, namely mechanics and 
+diffusion. Mechanical forces inﬂ uence both structural properties 
+(such as cell densities and macroscopic architecture; 
+Hilgetag 
+and Barbas, 2006 ) and functional properties (via inﬂ  uences on 
+intracellular biochemical pathways, a mechanism called mecha-
+notransduction; 
+Huang et al., 2004 ) of developing tissues. For 
+instance in neurons, the tension in a neurite inﬂ  uences its 
+shape ( Sheﬁ  et al., 2004 ), and its growth rate ( Dennerll et al., 
+1989), and can determine between an axonal vs. dendritic fate 
+(Lamoureux et al., 2002 ). In addition to mechanics, the deve-
+lopment of biological tissues depends strongly on the ability of 
+cells to communicate and inﬂ uence one another, either by con-
+tact (
+Kageyama et al., 2008 ) or by release of diffusible signaling 
+molecules ( Chilton, 2006 ).
+CX3D is an open-source software written in Java for modeling 
+all stages of corticogenesis, such as cell division and migration, 
+extension of axonal and dendritic arbors, and establishment of 
+synaptic connections. It provides a simulated physical space gover-
+ned by a physics engine which computes the forces between objects, 
+and the diffusion of substances through the extracellular space. 
+With this framework, we successfully simulated three important 
+developmental processes: the division and migration of neural pre-
+cursors to form the cortical plate in an inside-out sequence; the 
+differentiation of pyramidal cells forming layer-speciﬁ c branching 
+patterns guided by diffusible guidance cues; and the growth of 
+cultured dissociated neurons forming a connected network. The 
+source code and a user tutorial are freely available at http://www.
+ini.uzh.ch/projects/cx3d/.
+MATERIALS AND METHODS
+ORGANIZATION OF THE EXTRACELLULAR SPACE
+Neighborhood relation
+Neurons in our simulator are composed of discrete physical com-
+ponents such as spheres (somata) and cylinders (neurites), each 
+located at a particular point in 3D space, where they interact locally 
+with one another, simulating the physical and biological processes 
+occurring in the tissue ( Figure 1). Each evaluation for a possi-
+ble interaction between object i and j has a computational cost. 
+Clearly, to evaluate each possible pair (i, j) at each time step would 
+become prohibitively expensive as the number and complexity of 
+the neurons grow. Instead, we maintain for each object a list of 
+neighboring objects with which it might interact. This list is upda-
+ted when an object moves, or when an object is added or deleted 
+from the space.
+To  d e ﬁ ne this neighborhood relation we use a 3D Delaunay 
+triangulation (
+Schaller and Meyer-Hermann, 2004). Given a set P 
+of points in 2D, a triangulation T is a collection of non-overlapping 
+triangles whose vertices coincide with the members of P, that covers 
+the convex hull formed by P. The points and the edges of the triangle 
+deﬁ ne a graph structure. Two points are deﬁ  ned as neighbors if 
+and only if there is at least one triangle t ∈  T of which both are a 
+vertex, i.e. if they share a common edge in the graph. The Delaunay 
+FIGURE 1 | T ypical CX3D simulation. The ﬁ gure shows the result of a 
+simulation in which two neurons extend dendritic (red) and axonal (black) 
+arbors in a dense cortical column, according to the model speciﬁ cation 
+described in Figure 7. The physics engine prevents a branch from passing 
+through another cell. (Half of the cells in the column were removed for better 
+visualization). The 3D rendering was obtain by exporting the result of the CX3D 
+simulation into the free program Blender (http://www.blender.org). The mesh 
+used for the rendering was created with the free java-based software 
+ImageJ3DViewer (http://www.neuroﬂ y.de/ImageJ3DViewer).
+
+
+--- Page 3 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 3
+Zubler and Douglas Simulation framework for neural development
+triangulation is a special triangulation, deﬁ ned by the condition 
+that no point of P is inside the circumsphere of any triangle of T. 
+In 3D, the method generalizes to the Delaunay tetrahedralization, 
+where a set of points in space deﬁ  nes a set of tetrahedrons (for 
+simplicity, we will nevertheless use the term triangulation even in 
+the 3D case). In our framework, each discrete object is associated 
+with a vertex in a 3D triangulation. CX3D uses the package Dyna3D 
+written by Goehlsdorf
+1.
+If the cell density is very low, it might happen that two physical 
+objects far apart are considered as being neighbors, just because 
+there is no other object between them. In this situation, for com-
+putational reasons, the user might want to add additional ‘empty’ 
+vertices to the triangulation, so that physical interactions between 
+pairs of remote objects are not evaluated (Figures 2A,B).
+Diffusion processes
+For the simulation of diffusion, we use an approach similar to 
+the ﬁ nite volume method ( Barth and Ohlberger, 2004 ). The 
+extracellular space is decomp osed into small non overlapping 
+domains. When a physical object secretes a certain quantity of a 
+signaling substance, the concentration of this substance increases 
+in the domain containing this object. Let i and j be two compart-
+ments with respective volume V
+i and Vj, containing the amount 
+Qi and Qj of a given substance (hence the concentrations are 
+ui = Qi/Vi and uj = Qj/Vj). If they are in contact, Fick’s ﬁ  rst law 
+tells us that the net ﬂ ux Ji→ j (in units of quantity per time) going 
+from i to j is:
+J D S
+d uuij
+ij
+ij
+ji→ =− , ()  (1)
+where D is the diffusion coefﬁ cient of the substance, Sij the area of 
+contact between the compartments and dij the distance between 
+their centers.
+A ﬁ rst approach would be to multiply the ﬂ ux Ji→ j by the simu-
+lation time step Δt to compute the quantity transfered from i to j 
+during the time step, to subtract it from Qi and add it to Qj. The 
+new concentrations could be found by dividing the new quantities 
+by the respective volumes. Using this formula in our simulation is 
+equivalent to the Euler explicit method. But it comes with a very 
+high risk of overshoot if the time steps are too large, especially 
+in our case with an irregular decomposition of space. It is thus 
+preferable to solve analytically the diffusion between each pair of 
+neighbors: Remembering that Q
+x and ux vary with time, we obtain 
+the following ordinary differential equation:
+d
+dt Qt D S
+d ut ut D S
+d
+Qt
+V
+Qt
+V
+ij i
+j
+j
+i
+i
+() [ () () ] () ()=− = − ⎛
+⎝⎜
+⎞
+⎠⎟.  (2)
+u(x,t)
+x1
+x2
+ AB
+CD E
+FIGURE 2 | 2D illustration of the Delaunay triangulation and its dual 
+graphs. (A) Each discrete physical object (blue) in the simulation is linked to a 
+vertex in the Delaunay triangulation (green). Additional vertices represent empty 
+regions of space. Two objects are considered as being neighbors when their 
+vertices are linked by an edge. (B) When existing objects move or are deleted, or 
+when new objects are created, their associated Delaunay vertex is automatically 
+moved, deleted or inserted, and the triangulation locally updated. (C) The Voronoi 
+graph (orange) is an example of a dual graph used to deﬁ ne a vertex-centered 
+volume decomposition based on the Delaunay triangulation. The volume around 
+each vertex contains every point in space that is closer to this vertex than to any 
+other. (D) Another dual graph: the median dual graph is the set of lines joining 
+the centroids (or barycenters) of all edges and triangles adjacent to a vertex (in 
+3D: all the edges, triangular faces and tetrahedrons adjacent to a vertex). (E) In 
+the ﬁ nite volumes method, for a given substance, only the average 
+concentration u
+i(t) over a domain Vi is known. The total quantity Qi(t) of the 
+substance inside the domain is equal to ui(t)·Vi (the volume of the orange 
+column). If the domain is deﬁ ned by the median dual graph, a linear vertex-
+centered function with peak of ui contains exactly the same quantity (volume of 
+the green pyramid). This representation is extremely convenient when we have 
+to interpolate the concentration outside the vertices.
+1http://www.ini.uzh.ch/~dennis
+
+
+--- Page 4 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 4
+Zubler and Douglas Simulation framework for neural development
+T o get rid of the dependence on the quantity in the  compartment j, 
+we deﬁ ne the total amount T = Qi + Qj that is time-invariant. We 
+can now solve the equation above and obtain:
+Q tK e n
+m
+i
+mt() =+ −  (3)
+with mD nDS
+dV V
+S
+d
+T
+Vji j
+=+ = () ,11  and  and the integration constant 
+K Qti
+n
+m=− () .0
+The median dual graph
+The Delaunay triangulation that we use for near-object detection 
+already provides us with a decomposition of space in discrete volu-
+mes (the tetrahedrons). But since all substances are produced and 
+probed at the vertices of the triangulation (where the cell elements 
+are located), it makes sense to use a dual graph, i.e. another decom-
+position containing the Delaunay nodes in the center of its volumes. 
+The most popular graph with this property is the Voronoi graph 
+(Figure 2C), but for computational reasons we use the median 
+dual graph ( Figure 2D). Firstly because it is not necessary to 
+compute the boundaries of a domain to compute its volume (it’s 
+simply one-fourth of the volume of the adjacent tetrahedrons). 
+Secondly, because if we consider that the average concentration 
+u
+i(t) for domain i given by the ﬁ nite volumes method corresponds 
+to the real concentration at the vertex position, and that we use 
+linear interpolation between the vertices to deﬁ ne the concentra-
+tion elsewhere, we get a better numerical approximation with the 
+median dual graph (Figure 2E).
+To  d e ﬁ ne the gradient on the Delaunay vertices, we recall that 
+the directional derivative of the concentration u at the point x
+i 
+along the unitary vector ê is equal to the dot product of ê with the 
+gradient of u at xi:
+D uu iiˆ () ˆ ()e xe x=⋅ ∇  (4)
+We can approximate the directional derivative at xi along a vector 
+pointing to any neighbor vertex xj by taking the difference of the 
+two concentrations divided by the distance between them. With 
+three different x
+j, we obtain a system of three equations that we 
+solve to ﬁ nd the three components of the gradient at xi:
+∇⋅ − = −, = , , .uu u jij i j i() ( ) () () { }xxx x x for 1 2 3  (5)
+The smaller the volumes of the dual graph are, the better the 
+precision of the diffusion simulation. This is another justiﬁ cation 
+for having additional vertices added to the Delaunay graph even 
+in absence of physical objects at that location.
+Figure 3A shows a test system introduced to illustrate the perfor-
+mance of our simulator on various aspects of diffusion. It consists of 
+500 vertices randomly distributed into a 200 × 200 × 200 µm
+3 cubic 
+volume. The points are triangulated, with the median dual graph 
+deﬁ ning 500 volumes surrounding the vertices. Inside each discrete 
+volume, we place a precise quantity of three diffusible substances in 
+order to get a desired concentration, varying with the position of 
+the vertex along one spatial dimension: The concentration proﬁ le 
+of chemical R (red) is a step function, of G (green) a linear function 
+and of B (blue) a cosine. Figures 3B,C show the evolution of the 
+concentration proﬁ les over time due to diffusion.
+Chemical reactions
+In addition to diffusion and secretion by cells, the substances in 
+the extracellular space are subject to concentration changes due to 
+degradation and possibly other ch emical reactions. Degradation 
+is processed together with diffusion (a diffusion and a degrada-
+tion constant can be speciﬁ ed for each extracellular substance). T o 
+introduce chemical reactions, the user has the possibility to deﬁ ne 
+changes of concentrations that are applied at each time step on 
+each discrete volume of the extracellular space.
+As an illustration, we implemented in our test system the reac-
+tion 
+R GB k
+k+
+−
+U
+1
+1  (with k1 = 10 and k−1 = 0.5), which corresponds 
+to the combination of one molecule of the red and one molecule of 
+the green substance forming one molecule of the blue substance, 
+by applying the following concentration changes in each volume 
+at each time step:
+−= −== − . −
+dR
+dt
+dG
+dt
+dB
+dt kRG k B[] [] [] [] [] []11  (6)
+Figures 3D,E show the result without and with concurrent dif-
+fusion respectively.
+Inﬂ uence of grid deformations on the concentration proﬁ le
+Modiﬁ cations of the Delaunay mesh have dramatic effects on the dual 
+graph that we use to numerically solve diffusion. Thus we needed to 
+incorporate a mechanism to automatically redistribute the different 
+quantities of substances after each operation on the triangulation 
+(physical object displacement, duplication or removal). The two 
+major requirements are to preserve the concentration proﬁ les, and to 
+ensure mass conservation. Consider the case where the Delaunay ver-
+tex at position x
+i moves. If we didn’t update the quantity of substance 
+located inside the surrounding volume, moving the point would 
+result in substance transport. Our update mechanism consists of two 
+phases: ﬁ rst we interpolate the concentration u′
+i of the chemical at 
+the new location x′i of the moving vertex, and modify the quantity in 
+the newly formed volume V′i to obtain this desired concentration, i.e. 
+deﬁ ne new Q′i so that Q′i/V′i = u′i. Then we compensate for total mass 
+conservation by multiplying the concentrations and the quantities 
+in the surrounding volumes by the ratio between the total quantities 
+before and after the displacement. Similar update mechanisms are 
+used for vertex insertion or removal.
+The procedure is tested in our bench test by moving three inner 
+vertices 100 times (Figure 3F). The displacement is a random 3D 
+vector of less than 5 µm, with a re-centering mechanism to ensure 
+that the points stay inside the convex hull of all other points. This 
+minimally disruptive procedure allows for gradient ascent even in the 
+extreme case where all physical objects are moving (Figure 3G).
+MECHANICAL PROPERTIES OF NEURONS
+The complex shape of neurons, composed of dendritic and axo-
+nal arbors, makes the computation of their mechanical properties 
+and interactions a difﬁ cult task. Following a technique that is used 
+commonly in mechanical engineering and virtual reality contexts 
+(
+Ng and Grimsdale, 1996; Ward et al., 2007 ), neurons in CX3D 
+are composed of chains of springs and masses in series to provide 
+structural integrity and propagate tension. Spherical and cylindrical 
+wrappers enclose the spring-mass chain to confer volume on the 
+
+
+--- Page 5 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 5
+Zubler and Douglas Simulation framework for neural development
+cell and deﬁ ne spatial interactions between neighboring objects. 
+Each wrapper is an independent object containing a single point 
+mass. At each time step, it computes the local forces on its point 
+mass and moves it accordingly.
+Somata are deﬁ ned by a sphere with a central point mass, whe-
+reas neurites are composed of cylinders, each containing one spring 
+and one point mass at its distal end (Figure 4). The disadvantage of 
+this conﬁ guration is the asymmetry of the cylinders. The substantial 
+advantage, on the other hand, is that we can neglect rotations of 
+cylinders. Indeed each one is responsible for moving only its distal 
+end (where the point mass is located), whereas its proximal end 
+is deﬁ ned by the position of its attachment point on the proximal 
+discrete object. During neurite extension, some cylindrical elements 
+are elongated. If their length exceeds a speciﬁ ed threshold, they split 
+into two elements. Similarly, in case of retraction, short cylinders 
+fuse. By this mechanism we ensure the suitable discretization of 
+the cell. This discretization also permits intracellular diffusion. The 
+simulation is performed in a similar way as for extracellular diffu-
+sion, but the volumes are deﬁ ned by the cylinders and the sphere 
+composing the neuron, and substances ﬂ ow along the chains of 
+elements regardless of the triangulation or its dual graph.
+FORCES
+Three different types of forces can be applied to each point mass. 
+The ﬁ rst type arises from the interaction between the physical 
+objects when they come into close contact. The second type is the 
+BC
+EF
+FIGURE 3 | T est system for diffusion and chemical reactions. (A) Initial 
+chemical concentrations in the discrete volumes created by the triangulation 
+of 500 vertices randomly placed inside a cube. The concentration of three 
+substances deﬁ ne a particular proﬁ le, dependent on the volume’s central 
+vertex location along the horizontal axis (red substance: step concentration 
+proﬁ le; green substance: linear proﬁ le; blue substance: cosine proﬁ le). 
+(B) Evolution of the concentration proﬁ les due to diffusion after 50 simulation 
+time steps. (C) Concentration proﬁ les after 500 simulation time steps. 
+(D) Concentration proﬁ les after 500 simulation time steps due to the 
+chemical reaction 
+RG B+ U  (see text), without diffusion. (E) Concentration 
+proﬁ le after 500 steps of the same chemical reaction with diffusion included. 
+Compare with diffusion without reaction in (C). (F) Minor alteration in the 
+concentration proﬁ les after 100 sequences of movements of three central 
+vertices, without diffusion or reaction. (G) Use of diffusion in simulation: 1000 
+yellow cells and 1000 violet cells, secreting respectively ‘yellow’ and ‘violet’ 
+diffusible cues, are distributed randomly in a 3D volume. They aggregate by 
+following the gradient of their cell-type speciﬁ c cue (results after 0, 300, 800 
+and 6000 time steps).
+
+
+--- Page 6 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 6
+Zubler and Douglas Simulation framework for neural development
+internal tension arising when a neurite is stretched, which is mode-
+led by the springs connecting the masses. This internal tension both 
+inﬂ uences, and is inﬂ uenced by, metabolic growth. The third type 
+of forces represents the active movement of cell elements. It follows 
+from the biological properties of the model speciﬁ ed by the user.
+Inter-object forces
+Cells in a tissue have strong resistance to compression. They also have 
+adhesive properties. Consequently they are conveniently modeled as 
+a granular medium with additional bindings (Schaller and Meyer-
+Hermann, 2005; Shinbrot, 2006). The physical interaction between 
+two spherical somata is then a function of their diameter, their relative 
+distance, and possibly their expression of adherence molecules.
+It is possible for users of CX3D to deﬁ  ne their own cell–cell 
+interaction function. However, by default a modiﬁ  ed version of 
+(
+Pattana, 2006) is used, in which the force from sphere si onto 
+sphere sj contains a repulsive component (preventing two cells to 
+overlap) and an attractive component (representing the integrity of 
+the tissue and forces resulting from cell adhesion molecules):
+Feij
+ij
+ij
+k rr
+rr=− + ,
+⎛
+⎝
+⎜
+⎜
+⎜
+⎜
+⎞
+⎠
+⎟
+⎟
+⎟
+⎟
+δγ δ ˆ  (7)
+where k is the repulsion coefﬁ  cient, γ the attraction coefﬁ cient, 
+ri, rj the radii of the spheres, δ the overlap: max(0, ri + rj − distij), 
+and ê the unitary vector pointing from the center of sphere i in 
+direction of sphere j.
+The radius ri used in the previous equation needs not to be exactly 
+the radius of the sphere si. For instance, to reproduce the different 
+neuron densities observed one can use larger effective radii, which 
+increases the range of interaction and hence pushes cells further 
+apart from each other. Or one can use smaller radii for migrating 
+cells, and thereby model the possible deformations of moving cells 
+that are less perturbed by the surrounding tissue.
+In CX3D, we must also consider cylindrical objects, which 
+means that there are in fact three different sorts of interactions: 
+sphere–sphere, sphere–cylinder and cylinder–cylinder. For instance, 
+to compute the interaction between a sphere s
+1 and a cylinder c, we 
+deﬁ ne on c a virtual sphere s2, and then compute the interaction 
+between the two spheres s1 and s2 as described above.
+Cylinders have their unique point mass located at their distal 
+end. So, if the inter-object forces applied to a particular cylinder 
+only affect its own point mass, it means that only one of its extre-
+mities will ever move. Therefore, part of this force has to be tran-
+smitted to its proximal segment (i.e. the object responsible for the 
+mass situated at the proximal end of the cylinder). This repartition 
+of forces along chains of cylinders is essential for stability.
+In addition to the attractive component of the inter-object 
+interaction, additional speciﬁ  c adhesive bonds, permanent or 
+transient, can be added between neighboring objects. These links 
+consist of additional springs between two discrete physical objects. 
+Such links can be used, for example, to stabilize the pre- and post-
+synaptic cell elements with respect to one another at the location 
+of a synapse.
+Intracellular tension
+Dennerll et al. (1989)  have reported that neurites show passive 
+viscoelastic properties when st retched with a force smaller than 
+1 nN. During the 10 ﬁ rst minutes they observed two passive phases: 
+a rapid increase in length and tension, followed by a damped phase. 
+Mechanical models with a spring and a Voigt element (spring and 
+dashpot in parallel) or a Burger element ﬁ  t these data well. If a 
+larger force is applied for a longer time, a third phase is observed in 
+which the neurite continues to extend while the tension diminishes, 
+sometimes to less than the tension before the application of the 
+perturbing force. This third phase corresponds to active growth, 
+including reorganization of the cytoskeleton and incorporation of 
+membrane components. This phenomenon explains ‘towed growth’ 
+(growth not generated by the growth cone).
+Our model does not differentiate between the two passive pha-
+ses, since we consider only springs in series, which is a reasonable 
+approximation to neurite passive mechanical properties (
+Dennerll 
+et al., 1988). The absence of a dashpot is compensated for by the 
+use of the overdamped approximation in the equation for move-
+ment (see below). The tension vector due to the internal spring in 
+a cylinder is thus:
+Teinternal = − ,k ar
+r
+LL
+L
+ˆ  (8)
+where k is the linear spring constant of the neurite, aL the actual 
+length of the spring (length of the cylinder), rL the resting length 
+of the spring and ê the unitary vector aligned with the central line 
+of the cylinder.
+The metabolic phase is modeled by changing the resting length 
+of the springs; for instance, rL →  rL + ΔL for elongation, which auto-
+matically decreases the tension. As described above, the number 
+of discrete cylinders scales with the length of the neurites. The 
+–F
+F
+Fi–1
+Fi
+FIGURE 4 | Cartoon representation of the physical discretization and 
+inter-object mechanical forces in CX3D. Neurons are discretized into small 
+physical objects, composed of a single point mass and a spherical (for the cell 
+body) or cylindrical (for the neurite elements) envelope. The envelopes are 
+used to deﬁ ne inter-object forces when two objects come into close contact. 
+In this example, a cylinder in a neurite (red) and the sphere of an other cell’s 
+soma (violet) overlap, which triggers opposite repulsive forces (F and −F). To 
+determine the repulsion intensity, we deﬁ ne a virtual sphere (black circle) on 
+the cylinder. The forces are proportional to the overlap of the virtual sphere and 
+the soma sphere. Spheres have a central point mass, and the force is directly 
+applied on it. Cylinders have their point mass at the distal extremity, so only a 
+fraction of their inter-object force is applied on it (F
+i), while the rest is 
+transmitted to the proximal element’s point mass (Fi − 1). In addition, cylindrical 
+elements contain a spring which is always attached to another proximal 
+element, and propagates tension along the chain of point masses.
+
+
+--- Page 7 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 7
+Zubler and Douglas Simulation framework for neural development
+ discretization mechanism is based on the resting length: if it exceeds 
+a certain threshold, the cylinder is split into two, each half retaining 
+the same tension.
+Active displacement
+The biological properties speciﬁ  ed by users often require the 
+active movement of spheres and of neurites’ terminal cylin-
+ders, for instance in the case of cell migration or neurite exten-
+sion. In this case, an additional force is applied to the physical 
+objects’ point mass. The moving objects do not modify their 
+trajectories ahead of time in case of an upcoming collision. But 
+if after the displacement two objects have come too close (or 
+interpenetrate), a repulsive force is triggered between them. 
+This system is as stable as trajectory interpolation, but is less 
+computationally demanding.
+In the case of neurite extension, the displacement of the 
+distal point mass must result in an increase in the resting length 
+of the corresponding spring (as in towed growth). It has been 
+shown (
+Lamoureux et al., 1989 ) that the extension rate of an 
+axon is proportional to the tension its growth cone is applying, 
+in the following sequence: movement →  stretching (increase in 
+actual length) →  increase in tension →  active growth (increase 
+in resting length). Although we could reproduce this sequence 
+in CX3D, for computational reasons we usually take a short cut: 
+First the growth cone is moved and then the resting length is set 
+in order to obtain the desired tension. Similar mechanisms are 
+possible for retraction: A reduction of the resting length will 
+induce an increase in tension and then a backward movement 
+of the distal point mass. Alternatively, the point mass can be 
+moved ﬁ rst, and then the resting length is updated to maintain 
+the desired tension.
+MOVEMENT
+During the simulation, each discrete physical object evaluates all 
+instances of the three forces applied to it, and sums them to obtain 
+the total force acting on it. If the total force exceeds a certain thre-
+shold, the object moves its point mass appropriately (Figure 5). For 
+instance, the cylinder i checks if any neighbor in the triangulation 
+is exerting a force F
+ij on it, including possible adhesive bonds b. It 
+also takes into account the tension in its internal spring (Ti) and in 
+the springs of the daughter cylinders directly attached distally to it, 
+if any (note that a terminal cylinder has no daughters, a cylinder in 
+a chain has one daughter and a cylinder proximal to a branching 
+point has two daughters).Finally, it might also have some biological 
+movement M to take into account:
+FF F T T Mii j
+j
+bi
+k
+d
+d
+ktot
+Neighbors Bonds |Daughters
+=+ + ++ .
+|| | | |
+∑∑ ∑  (9)
+In classical mechanics, the equation for movement in a medium 
+with friction is
+m xx F+= , ∑β  (10)
+where x is the acceleration, x the speed, m the mass and β the kinetic 
+friction. Neuron elements in a tissue have a low Reynolds number 
+(typically 10
+−7 for a growth cone; Aeschlimann, 2000), which means 
+that the ratio of the inertial forces to the viscous forces is low. It is 
+then perfectly reasonable to make the overdamped approximation: 
+That is, to assume 
+mx0= . The consequences of this assumption are 
+(1) that an element doesn’t move if it is not currently subject to a 
+force and (2) that the major obstacle to movement is no longer the 
+mass but the friction coefﬁ cient. Consequently, physical objects in 
+CX3D move according to:
+AB C
+FIGURE 5 | CX3D simulation snapshots demonstrating the mechanical 
+interactions in a test system, composed of a chain of cylinders attached to a 
+small sphere (red), and three bigger spheres (blue). The total force applied to 
+each point mass is represented by a black arrow. (A) We start with the artiﬁ cial 
+situation where the chain of cylinders and the three spheres are strongly 
+overlapping. This condition triggers a radial force on each of the cylinders’ point 
+masses, pushing them outside the spheres. The spheres are subject to the sum 
+of the opposite forces, plus the sphere–sphere interactions. (B) After the system 
+has started to relax due to objects being displaced, the magnitudes of the forces 
+start to diminish. The radial movement of the cylinder point masses has resulted 
+in an elongation of the internal springs joining them, which triggers an intra-object 
+force that adds to the component due to the object overlap, and hence results in 
+a less radial total force on the cylinders. (C) After complete relaxation, there is no 
+object overlap anymore, and the distances between the point masses of the 
+cylinders chain correspond to the springs resting lengths. Therefore there is no 
+force present anymore. For each discrete object in the system, the link to its 
+neighbors, deﬁ ned by the 3D Delaunay triangulation is shown (grey). Note the 
+additional vertices that are not corresponding to a physical object. 
+
+
+--- Page 8 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 8
+Zubler and Douglas Simulation framework for neural development
+β xF=.∑  (11)
+In addition, we have a term for static friction that provides a 
+threshold for the initiation of movement. If the total force exceeds 
+the static friction, then the actual movement is computed using the 
+explicit Euler method: Multiplying the speed with the time step to 
+obtain the actual displacement:
+Δ= ⎛
+⎝⎜
+⎞
+⎠⎟ Δ.∑xF 1
+β t  (12)
+IMPLEMENTATION
+CX3D is written in Java because it is an object-oriented language; 
+it beneﬁ ts from many libraries (for visualization for instance); it 
+does not have to be recompiled to run on different platforms; and 
+it provides methods for distributing processes across multiple com-
+puters, which will be crucial for future development.
+Our software design is modular, keeping a clear separation 
+between the biological processes on the one hand, and the infra-
+structure needed to run the physics and computationally organize 
+the simulation on the other hand. Four abstract layers are used in 
+the representation of cells (Figures 6A,B and Appendix). In addi-
+tion, CX3D contains several utility packages that are not discussed 
+in this paper.
+T o design a particular cellular model, users must write modules 
+(small java classes implementing a special interface) that are inser-
+ted into the cells to engender their speciﬁ  c functionality. There 
+are two different types of modules: Local biology modules; and 
+cell modules.
+Local biology modules represent all the local biological proces-
+ses. Each one is attached to a particular physical object (one of the 
+spheres or cylinders used to represent the neuron) and reads from 
+it physical data such as current volume, tension, or concentration of 
+an extracellular substance. Likewise, the module sends instructions 
+to the physical object, for example to move, change its shape, or to 
+extend a new branch. For instance, the simplest module for per-
+forming chemotaxis would repeatedly execute the following three 
+steps: (1) query from the associated physical object the gradient of 
+an extracellular substance’s concentration, (2) compute a desired 
+movement, (3) transmit a movement direction and speed to the 
+physical object. CX3D would perform the displacement, update the 
+physical values (e.g. deﬁ ne a new length in the case of a cylinder), 
+and update the triangulation. If the movement had brought the 
+SpaceNode
+Triangulation 
+Package
+PhysicalNode
+PhysicalObject
+PhysicalCylinderPhysicalSphere
+Cell
+     CellElement
+NeuriteElementSomaElement
+CellModule
+LocalBiologyModule
+has one
+has a collection of
+derives from 
+      (class inheritance)Cell 314
+Cell 271
+A
+B CD
+EF
+FIGURE 6 | Program architecture of CX3D. (A) Java class diagram and 
+(B) cartoon representation of the four abstract layers used in the representation 
+of a cell in the CX3D framework: the Delaunay triangulation deﬁ ning a 
+neighborhood relation between space regions and physical objects (green); the 
+physical layer containing the classes representing the discrete space regions 
+and the physical objects contained in them (blue); the local biology layer, with 
+biological elements associated with the physical objects (red), and ﬁ nally the 
+higher level biological properties expressed at the cell level (white). See 
+Appendix for a detailed description of the java classes. (C–F) Local biology 
+modules specifying the simulation properties are associated with speciﬁ c cell 
+elements. When new objects are created, the local biology modules can be 
+automatically copied according to four different schemes: when cells divide, 
+when neurite elements branch, when new neurites are being formed from the 
+soma, and during neurite elongation.
+
+
+--- Page 9 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 9
+Zubler and Douglas Simulation framework for neural development
+object too close to another physical object, a symmetrical force will 
+be applied on both objects at the next time step, possibly pushing 
+them away from one another again. Local biology modules can 
+be copied automatically into new discrete cell elements in case of 
+soma division, new neurite extension, neurite branching, or neurite 
+elongation (Figures 6C–F).
+Cell modules are used to mo del biological processes affecting 
+the whole cell, such as cell cycles, or gene expression. Because they 
+characterize the entire cell, these modules cannot be linked to any 
+particular spatially located spheres or cylinders that represent the 
+spatial discretization of the cell.
+RESULTS
+CX3D provides a general framework for various types of neural 
+growth simulations. In this section we present ﬁ  ve examples of 
+different kinds of problems that could be simulated with CX3D. 
+Each example was obtained by writing appropriate local biology 
+modules and cell modules that provide the biological functiona-
+lity required for each case. The ﬁ  rst three examples are original 
+models, and the ﬁ nal two are previously published models now 
+re-implemented in CX3D.
+FORMATION OF A LAYERED CORTEX
+Our ﬁ rst example models the formation of a layered cortical-
+like structure (Figure 7 and Videos S1 and S2 in Supplementary 
+Material). During corticogenesis, neuron precursors are generated 
+by division of the progenitor cells in the ventricular and subven-
+tricular zone (
+Kriegstein and Noctor, 2004 ). These precursors 
+then migrate radially, climbing along long processes attached 
+to the radial glial cells (
+Rakic, 1972 ), from which they detach 
+before entering the cells that will form the future layer 1 (L1). It 
+is remarkable that each generation of neurons migrates through 
+all its predecessors, leading to an inside out formation of the 
+cortex, with ﬁ rst cells of layer six (L6), then ﬁ  ve (L5), four (L4) 
+and ﬁ nally three and two (here considered together as L2/3). 
+L1 cells are continuously pushed further away from the ventri-
+cular zone. The exact control mechanisms for the detachment 
+is not clear, but the protein reelin, produced by some L1 cells is 
+necessary. We simulated a model in which reelin is the only signal 
+present (
+Cooper, 2008).
+The simulation is initialized with an array of 8 by 8 radial glial 
+cells, each having a long process that extends vertically through a 
+volume of preplate cells (subplate cells and future layer one cells on 
+the top). These glial cells divide asymmetrically and form neuronal 
+precursors. Depending on time, they form ﬁ rst L6 cells, then L5, L4 
+and L2/3 (colored in blue, violet, red and green respectively). The 
+neuron precursors have inside their local biological modules the 
+instructions to execute the following sequence: (1) T o move ran-
+domly until they touch a radial ﬁ ber on which they ﬁ x themselves. 
+(2) T o migrate (distally) along the radial ﬁ ber. (3) T o leave the ﬁ ber 
+when they encounter an L1 cell, and thus stop their migration. Due 
+to the physical properties of the spheres, the neuron precursors split 
+the preplate and push the L1 cells, so progressively displacing the 
+stopping signal. The fact that we can reproduce the inside-out lami-
+nation of the cortex with this extremely simple set of instructions 
+highlights the importance of incorporating mechanical interactions 
+in the simulation of developmental processes.
+LAYER SPECIFIC DENDRITIC GROWTH
+The second example ( Figures 1 and 8  and Video S3  in 
+Supplementary Material) illustrates the use of diffusible  guidance 
+molecules and how they can be used to produce layer- speciﬁ  c 
+AB CD
+FIGURE 7 | Simulation of cortical layers formation. The ﬁ gure shows a 
+section through a volume of developing tissue. (A) Layer 6 neuron precursors 
+(blue) are produced by asymmetrical division of the progenitor cells (larger grey, 
+at the bottom). They migrate along radial glial processes (green ﬁ bers). (B) Once 
+the neuron precursors detect a contact with the top-most L1 cells (orange), they 
+stop their migration by detaching from the radial ﬁ bers. Due to the mechanical 
+interactions between cells, the ﬁ rst layer is pushed upward. (C) When L5 
+neurons are produced, they follow the same path, passing through L6 cells until 
+they contact L1 . (D) Similarly with L4 and L2/3. Each generation passes through 
+all the predecessors, to form a layered structure. Due to the large mechanical 
+forces, a few cells in this simulation end up in the wrong layer, as observed in 
+the cortex (
+Polleux et al., 2001).
+
+
+--- Page 10 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 10
+Zubler and Douglas Simulation framework for neural development
+ branching patterns of neurites ( Castellani and Bolz, 1997; 
+Dantzker and Callaway, 1998 ). The simulation begins with an 
+already-formed three layer cortex that could have been produ-
+ced by mechanisms similar to those of the previous example. 
+The layers are formed of three different types of cells (L6, L5 
+and L4), all secreting a diffusible, layer-speciﬁ  c substance (for 
+instance each L4 soma produces only the ‘L4’ substance, etc.). 
+These substances diffuse through the environment, establishing 
+chemical gradients that will guide the development of the axonal 
+and dendritic neurites from two test cells inserted in L6, leading 
+to a branching pattern that respects the layer speciﬁ city of pyra-
+midal cells of layer 6. Namely, a down-going main axonal shaft, 
+which produces side branches in L6 that move up to L4, where 
+they ramify, and an apical dendrite, also terminating in L4, but 
+starting to branch earlier than the axons.
+In this simulation, each cell type forming the layers contains a 
+single module, responsible for secreting the appropriate substance. 
+The diffusion is performed automatically by the physics engine of 
+CX3D. For the development of the branches, we wrote two small 
+modules modeling the growth-cone functions and inserted them 
+into the initial neurites. One of the modules elongates its neurite 
+by moving its cylinder point mass either down the gradient of 
+the L5 substance (for the axonal main trunk) or up the gradient 
+of the L4 substance (for all other branches). The other module 
+allows branching to occur with a probability that depends on the 
+local concentration of a speciﬁ c substance (L6 for the initial axon, 
+L4 for the others branches). Different concentration thresholds for 
+branching have been deﬁ ned for the axons and the dendrites, and 
+therefore the latter start their ramiﬁ cation earlier. Both modules are 
+copied at branch points into the two new daughter growth cones. 
+Neurite diameters decrease during elongation and at branch points, 
+and the growth stops when the diameter has become smaller than 
+a certain threshold.
+The purpose of this simulation was not to reproduce exactly the 
+morphological properties of speciﬁ c cell types, but rather to illu-
+strate the importance of long range inter-cellular communication 
+through secretion and detection of diffusible cues.
+DISSOCIATED CULTURE
+Much can be learned from dissociated cell cultures, because their 
+architecture is simpler than cells developing in-vivo, and because 
+they are more accessible to imaging technics. Also, by growing cells 
+on multiple electrode arrays it becomes possible to selectively record 
+from, and to simulate, elements of a network. Some research groups 
+have been interested in modeling this neuron–silicon interface, and 
+have made growth simulations of neurons on a plate (
+Massobrio 
+et al., 2007).
+By restricting the cell movements to a very thin section of 
+space, we can reproduce the 2.5D environment of cell cultures 
+on a Petri dish. Our next simulation ( Figure 9A and Video S4 in 
+Supplementary Material) shows 12 isolated cells on a plate, exten-
+ding an axon and several dendrites. As in the previous example, 
+each terminal neurite element contains a movement module and 
+a branching module responsible for the extension of the cells. The 
+main difference is that no guidance molecules are produced, so 
+leading to the formation of an isotropic network.
+This example illustrates two other features of CX3D. First, the 
+possibility to change the cell–cell physical force. In this example, by 
+increasing the range and the strength of attraction in the interac-
+tion between cylinders, we reproduce the fasciculation of neurites 
+often observed in cultures. Secondly, the formation of a neuronal 
+network: If an axonal neurite element comes into close contact 
+with a dendritic neurite element, a synapse is formed with a certain 
+probability between the two elements (
+Stepanyants et al., 2002). 
+Neurons and their connections deﬁ ne a network (Figure 9B), whose 
+description can be exported as an XML document that  conforms to 
+L4
+L5
+L6
+FIGURE 8 | Branching pattern based on extracellular signaling molecules. In 
+this simulation, we started with a column of a cortex-like tissue, with three layers 
+composed of speciﬁ c cell types (L6, L5 and L4, depicted in medium, dark and light 
+grey respectively). Each cell secretes a layer-speciﬁ c diffusible chemical, serving as 
+guidance cue for the layer speciﬁ c growth of the axonal and dendritic arbor of two 
+test cells. The usual layer preference of typical L6 pyramidal branch could be 
+reproduced: an apical dendrite (red) branching at the L5-L4 transition, and a down-
+going axon (black), with side branches in L6, moving up to ramify in L4.
+
+
+--- Page 11 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 11
+Zubler and Douglas Simulation framework for neural development
+the NeuroML (Goddard et al., 2001) description used for specifying 
+electrophysiological simulations. This bridge from developmental 
+to electrophysiological simulation offers a valuable tool for scienti-
+sts interested in studying electrical activity in developing networks. 
+Of course, it would be possible in future to extend CX3D to provide 
+direct simulation of electrophysiology.
+CONTACT INHIBITION
+Lateral inhibition is an important mechanism for selecting – in 
+an homogeneous population – individual cells that will adopt 
+speciﬁ c characteristics. One of the most studied pathway invol-
+ves the transmembrane proteins Delta and Notch, from which 
+Collier et al. (1996)  published a model: Notch is activated by 
+the expression of Delta on the neighboring cells, whereas Delta 
+is inhibited by the Notch level on the same cell. Additionally, 
+both proteins are subject to exponential decay. This gives rise 
+of a pattern of cells with a low Notch and high Delta proﬁ  le, 
+surrounded by cells with high Notch expression.
+Collier et al. (1996)  were mainly inspired by observations 
+on Drosophila, but the Delta-Notch system is commonly found 
+throughout neural systems development, including in the mam-
+malian cortex where it is used to determinate which cells will 
+acquire a neuronal or a glial fate. Therefore, we took it as a test 
+example of how other models can be re-implemented in our 
+framework. By doing so, the model originally developed on a 
+2D regular grid could be extended to a 3D agent-based ver-
+sion ( Figure 10). In addition, now that it is coded in CX3D, it 
+can be combined with other models in larger simulations. For 
+instance to select the cells that will divide in a tissue ( Video S5 
+in Supplementary Material).
+AB
+FIGURE 9 | Dissociated culture neurons forming a network. (A) Eleven 
+excitatory (grey) and one inhibitory (red) cells are randomly disposed in a 2.5D 
+environment. They extend 4–7 neurites; one of them, thinner and growing faster, 
+represents the axon. An attractive force between the cell elements induces a 
+tendency to fasciculate. After the growth is completed, synaptic connections are 
+formed randomly between neighboring axons and dendrites (black links). 
+(B) Graph representation of the circuit shown on the left, drawn from a 
+NeuroML description of the network, exported from CX3D after the simulation 
+(black arrows: excitatory projections; red arrows: inhibitory projections; line 
+thickness proportional to the number of synapses between cells).
+FIGURE 10 | Simulation of pattern formation by lateral inhibition (surface 
+molecules). The simulation starts with a homogeneous population of cells 
+expressing equal concentrations of the membrane bound ligand Delta (D) and 
+its receptor Notch (N). According to the model of (
+Collier et al., 1996), each 
+cell activates over time N in the neighboring cells, depending on its own 
+D level, while decreasing its own D concentration based on its N level. The 
+result is the selection by lateral inhibition of cells with a low N and high D. 
+Such cells are not contiguous. (Red color intensity proportional to N, 
+green proportional to D. Equal level of red and green intensity 
+appears yellow).
+
+
+--- Page 12 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 12
+Zubler and Douglas Simulation framework for neural development
+Cell elements in CX3D can express membrane-bound substances. 
+We designed a local biological module to regulate the  expression for 
+Delta (D) and Notch (N), according to the following dynamics:
+dN
+dt fD N
+dD
+dt gN D
+=−
+=−
+()
+()
+with f(x) = min(1,20x), g(x) = max(0,1 − x) and D is the average 
+value of Delta on all the cells in close contact. This example is another 
+illustration of the importance of modeling physics in a general pur-
+pose simulator (here to detect contact between close neighbors).
+INTERNAL RESOURCE COMPETITION
+For this last example, we demonstrate the implementation in CX3D 
+of a previously published model of neurite outgrowth. 
+Kiddie et al. 
+(2005) presented a 2D model based on a production-consumption 
+mechanism: the soma produces two substances, tubulin (T) and 
+microtubule associated proteins (MAPs), which diffuse intracel-
+lularly to the distal branches of the neuron. T accounts for exten-
+sion and retraction of growing neurites by polymerization and 
+depolymerization of microtubules. MAPs, after transformation into 
+several isoforms, regulate the branching probability by modifying 
+microtubule stability.
+T o implement their model in CX3D (Figure 11), we wrote an 
+intracellular secretion module for the soma production of T and 
+MAPs at a ﬁ xed rate, and a growth cone module which extends 
+or retracts based on the local concentration of T, and bifurca-
+tes with a probability depending on the concentration of MAPs. 
+The growth cone module is copied at each branching point. The 
+intracellular diffusion is processed automatically by the physics 
+engine of CX3D.
+This last example was well-suited to the CX3D framework 
+because it relies on local computation by independent agents 
+(in this particular case each growth cone’s behavior depends exclu-
+sively on its intracellular concentration of T and MAP), and because 
+it requires the modeling of physical processes (the intracellular 
+diffusion).
+PERFORMANCE TESTING
+The execution speed of a CX3D simulation depends on the type 
+of operations performed (in particular the proportion of physical 
+objects that are moving). T o test the performance of our framework, 
+we present the CPU time required per time step for three different 
+models. The simulation time step is 10
+−2 h, and the speed of actively 
+moving cell components is uniformly set at 100 µm/h. All tests were 
+performed on a MacBook Pro with a 2.4 GHz Intel Core 2 Duo 
+processor, running Java 1.6.0.
+The simulation of cell clustering shown in Figure 3G is close 
+to the worst case scenario, with each single physical object moving 
+at each time step, and each cell element containing a local biology 
+module. For 2000 cells and 400 additional triangulation vertices 
+(i.e. 2000 PhysicalObjects, LocalBiologyModules, CellElements 
+and Cells, and two substances diffusing across 2400 extracellular 
+volumes), the initialization, i.e. the creation of all objects with the 
+initial triangulation was done in 3.3 s, and the simulation of one 
+time step took 400 ms. The images taken at 300 and 800 time steps 
+are obtained respectively after 2 and 5 min 20 s. It took much more 
+time to have already formed clusters move and fusion into larger 
+cells assemblies; the last image taken after 6000 time steps required 
+40 min of simulation.
+The situation is much more favorable in our model of lateral 
+inhibition, where objects don’t move (and thus the triangulation 
+is not modiﬁ ed), and where the substances are membrane-bound 
+and thus don’t diffuse in the extracellular space. For 2000 cells and 
+no additional triangulation vertex, the simulation takes 63 ms per 
+time step. The pattern presented in Figure 10 is complete after 400 
+time steps, i.e. 25 s.
+Most simulations in practice correspond to intermediate cases, 
+in which only a fraction of the physical objects are actively moving, 
+as for instance in the model presented in Figure 8. For 1800 static 
+somata and 100 additional triangulation vertices, with three extra-
+cellular substances diffusing, the simulation takes initially 135 ms 
+per time step (at an early stage where the growing cells are compo-
+sed of 140 non-terminal cylinders plus nine terminal cylinders with 
+local biology modules in total). It requires 285 ms per time step at 
+a later stage where there are 840 non-terminal cylinders plus 585 
+terminal cylinders. The total simulation time was 85 s.
+DISCUSSION
+Current efforts in developmental neuroscience research focus on 
+reductive characterization of speciﬁ c biological processes, such as 
+biochemical pathways or gene expression patterns. These studies 
+are essential to understand the mechanisms of brain development. 
+However, even in the most studied systems, it is often difﬁ cult to 
+understand how the higher level process of brain development 
+emerges from interactions between these lower level mechanisms. 
+Simulation offers a means of studying these organizational processes 
+(
+van Ooyen, 2003). CX3D, with its physics engine, its multi-agency 
+FIGURE 11 | Simulation of branching pattern based on intracellular 
+protein concentrations. The ﬁ gure shows a 3D implementation in CX3D of 
+the neurite outgrowth model of (Kiddie et al., 2005). Tubulin is produced in the 
+soma, diffuses internally and is consumed distally for branch elongation. The 
+intracellular concentration is color coded (light pink: higher concentration). 
+Additionally, microtubule associated proteins are also secreted at the soma, 
+diffuse distally where they are transformed in several isoforms, regulating the 
+branching behavior.
+
+
+--- Page 13 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 13
+Zubler and Douglas Simulation framework for neural development
+and modular architecture is well suited for exploring these issues in 
+neural development. Users describe the simulation speciﬁ cations 
+by writing small mechanistic modules that are incorporated into 
+the cells, deﬁ ning the biological properties lo cally or at cell level. 
+Using this approach, one can study growth and development in 
+simulations of hundreds of cells.
+In self constructing systems, the environment (including phy-
+sical laws) plays an active role in constraining the local interac-
+tions between agents. For instance, our ﬁ  rst original simulation 
+(Figure 7) showed how a very simple sequence of instructions could 
+reproduce the inside-out migration pattern of cortical neurons; but 
+the division and migration of neural precursors would have failed 
+to produce a layered structure if the inter-cell physical interac-
+tions had not participated in displacing the L1 cells upward. This 
+result shows that CX3D could also be used for simulating other 
+situations where mechanical forces play a major role in nervous 
+systems development, for instance the formation of the neural tube 
+(
+Shinbrot, 2006), or cortical folding. In the latter case, a simulation 
+might help to distinguish between causes and consequences (see 
+for instance the different hypotheses linking cortical folding to 
+intra-areal connections or respective cell numbers in supra- and 
+infra-granular layers in gyrii and sulcii; 
+VanEssen, 1997; Hilgetag 
+and Barbas, 2006; Kriegstein et al., 2006).
+In the model presented in Figure 8, we could reproduce a layer-
+speciﬁ c branching pattern, because the biological modules active 
+in the terminal branches of the neurites could detect the diffusi-
+ble signaling molecules produced by other cells. Associated with 
+the possibility of expressing and detecting membrane substances, 
+it offers the possibility to investigate by simulation a number of 
+classical problems in developmental neuroscience, such as optical 
+tectum map formation (
+Goodhill and Richards, 1999; Willshaw, 
+2006), midline crossing ( Goodhill, 2003 ), and, of course, more 
+accurate models of cortical neuronal development.
+These simulation methods demonstrate how morphology and 
+function can arise out of implicit rules. For instance in our second 
+example (Figure 8), the desired shape of the adult neuron was not 
+explicitly speciﬁ ed in the code. Instead, local decisions on whether 
+to turn or to branch were taken independently in the growth cones, 
+based on local chemical conditions, which lead to the ﬁ  nal cell 
+architecture. If the guidance cues had been secreted at different 
+locations, or if they were absent, the resulting branching pattern 
+would have been completely modiﬁ ed. Due to its modularity CX3D 
+provides the ability to run the same biological models in different 
+test environments, which is a valuable tool for a modeler interested 
+in studying the relative importance of extrinsic and intrinsic factors. 
+The model for a cortical cell can be tested in a cortex-like layered 
+structure with several guidance cues, or in a sparse in vitro environ-
+ment like the one of Figure 9. This kind of approach is interesting, 
+in that it provides the modeler with two sets of constraints on a 
+single set of parameters in the growth cone module. The fact that 
+similar simulations can be run with various parameters, or after 
+having selectively de-activated speciﬁ c functions is also of interest 
+for the study of mutations. For instance, in a more elaborated model 
+of cortical plate formation incorporating various signaling molecu-
+les, it will be possible to suppress their activity totally or partially, 
+to try to reproduce well-known phenotypes (
+Assadi et al., 2003; 
+Herms et al., 2004), or maybe even to predict new ones.
+Our goal was to provide a general purpose simulation fra-
+mework for the simulation of the physical development of neuronal 
+networks. We showed how two models from the literature could 
+easily be implemented in CX3D. Indeed, we could rely on the phy-
+sics engine for technicalities like neighbor detection or diffusion, 
+and did not have to code them anew. An obvious advantage in using 
+the same framework for several types of simulations is that they 
+can easily be combined in a larger simulation. As an illustration, we 
+added a cell cycle to the Delta-Notch model of 
+Collier et al. (1996) 
+(Video S5 in Supplementary Material).
+FUTURE WORK
+We have given several examples of how CX3D can be used to simu-
+late growth of neurons in 3D space. Although we have the ability to 
+generate synapses at contact points between neurons, these synapses 
+are not functional, because our program does not yet incorporate 
+electrophysiology. However, where the electrophysiology is reque-
+sted, we provide the ability to export a description of a grown 
+network as an XML document with the NeuroML level 3 speciﬁ ca-
+tion
+2 (Goddard et al., 2001). These documents can be used to con-
+ﬁ gure a simulation in a point neuron electrophysiology simulator 
+such as PCSIM3 (Pecevski et al., 2009). Future versions of CX3D 
+could include an electrophysiology module directly inside neurites. 
+Alternatively, modules could implement an interface for online 
+communication with a coexisting electrophysiology simulator. This 
+feature would of course be of great interest, because of the direct 
+inﬂ uence of electrical activity on neurite outgrowth (
+Hutchins and 
+Kalil, 2008), or on interneuron migration ( de Lima et al., 2009 ); 
+and in a later phase to study phenomena like synaptic competi-
+tion (
+Turrigiano, 2008) and learning (Butz et al., 2009). A further 
+limitation of the present version of CX3D is that it runs on a single 
+processor, so limiting both the speed and the size of simulations. 
+However, we are currently developing a parallel implementation.
+APPENDIX
+PROGRAM ARCHITECTURE
+This section describes the general organization of the CX3D pla-
+tform by introducing the principal classes of each package.
+There are four abstract layers in the representation of a cell in 
+CX3D (Figures 6A,B). One purely technical with which the user 
+never interacts, one representing the physics of the simulation, 
+on which the user has to call some methods, and two layers with 
+which the user interacts by wr iting small modules describing 
+the model’s speciﬁ cations. Each layer correspond to a distinct 
+java package:
+(1) ini.cx3d.spatialOrganization: this layer deﬁ  nes the Delaunay 
+triangulation and median dual graph needed to spatially 
+organize the elements of the simulation, and decompose the 
+extracellular volume. We use the package Dyna3D develo-
+ped by Dennis Goehlsdorf
+4. V ertices are deﬁ ned by the class 
+SpaceNode, of which each discrete object or space volume 
+has one instance.
+2http://neuroml.org
+3http://www.igi.tugraz.at/pcsim
+4http://www.ini.uzh.ch/~dennis
+
+
+--- Page 14 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 14
+Zubler and Douglas Simulation framework for neural development
+(2) ini.cx3d.physics: the second layer represents the physical pro-
+cesses, both of the extracellular matrix (extracellular diffusion) 
+and of the neurons (mechanics and intracellular diffusion), 
+for which we use instances of the PhysicalSpace class, and 
+sub-classes of the abstract PhysicalObject, respectively. To 
+have the latter derived from the class deﬁ ning the extra-cellular 
+matrix volumes ensures that any object in the simulation, as 
+soon as it is instantiated, automatically comes with a minimal 
+deﬁ nition of the space it occupies. T o embody the neurons in 
+the simulation framework we discretize them into small sphe-
+res (for the somata) and cylinders (for the neurite segments) 
+with the classes PhysicalSphere and PhysicalCylinder. 
+They contain the methods needed for the simulation of the 
+mechanics and offer an interface for communication with the 
+biological modules so that the physical shape of the neurons 
+can be modiﬁ ed by growth, branching, retraction etc.
+(3) ini.cx3d.localBiology: the third layer speciﬁ  es the local 
+ biological properties of the simulation, namely the behavior of 
+the spheres and cylinders, with the classes SomaElement and 
+NeuriteElement respectively (both subclasses of the abstract 
+LocalBiologyObject). Instances of these are always asso-
+ciated with a particular PhysicalObject. These instances 
+contain modules written by the users to deﬁ  ne the speciﬁ c 
+rules governing the behavior of each discrete object in the 
+model he wants to simulate. These modules are classes that 
+implement the LocalBiologyModule interface.
+(4) ini.cx3d.cell: the fourth and last layer deﬁ nes the higher level 
+biological processes, inﬂ uencing the whole neuron. As for the 
+local biology level, it is composed of modules that the user 
+can write, implementing a special interface ( CellModule). 
+These modules are contained in the class Cell, of which 
+there is only one instance per neuron.
+Finally, the user should be familiar with the package ini.cx3d.
+Simulation, which contains two important classes:
+ECM contains a list of all the objects currently active in the simula-
+tion (instances of the classes described above). This class is also used 
+for adding supplementary vertices to the triangulation, to deﬁ ne 
+chemicals or chemical reactions, and to add boundary conditions.
+Scheduler contains methods to execute the simulation. That 
+means that it calls the run() method of each object. Consequently, 
+the physical objects process diffusion, compute their mechanical 
+interactions and move accordingly. The local biology objects and 
+the cells run all their modules (and thus the models are execu-
+ted). The triangulation, on the other hand, is not run by the 
+scheduler but only updated in case of vertex displacement, remo-
+val or insertion. The ﬁ rst time that the scheduling methods are 
+executed, a GUI window appears, and graphically displays the 
+physical objects.
+A COMMENTED EXAMPLE
+The usage of CX3D is described in a tutorial available on the 
+CX3D website
+5. We brieﬂ y illustrate the programming interface 
+by implementing a simpliﬁ ed version of the model presented in 
+Figure 11: The soma secretes the intracellular substance ‘tubulin’ 
+which  diffuses along the neurite branches. The neurite distal 
+segments (the growth cones) consume tubulin to move at a 
+speed proportional to its concentration, and bifurcate with a 
+constant probability.
+T o encode this simulation, we write three short java classes: 
+two modules (a java class implementing the nine methods of the 
+LocalBiologyModule interface, or extending the abstract class 
+AbstractLocalBiologyModule), and one additional class to 
+initialize the simulation.
+Recall that each module is located within a CellElement. 
+Instances of this ﬁ  rst module will be located in a soma, where 
+they secrete tubulin at a constant speed:
+public class InternalSecretor extends 
+ AbstractLocalBiologyModule {
+    
+// secretion rate (quantity/time):
+    private double secretionRate = 100;  
+    
+// (required by the super class):
+    public AbstractLocalBiologyModule getCopy() {
+        return new InternalSecretor();
+    }
+    
+// This method is executed at each time step:
+    secretion of tubulin in the extracellular space with 
+    the modifyIntracellularQuantity method of 
+    PhysicalObject.
+    public void run() {
+        super.cellElement.getPhysical().
+    modifyIntracellularQuantity("tubulin", secretionRate);
+    }
+}
+The second module represents the growth cone. There is one 
+instance of this class in each terminal neurite compartment. It 
+performs a smooth random walk (the direction is slightly per-
+turbed after each step), with a speed depending on the concen-
+tration of tubulin, which is also consumed in proportion to the 
+speed. In addition, the growth cones bifurcate occasionally, in 
+which case copies of the module are inserted into the new dau-
+ghter branches:
+public static class GrowthCone extends 
+ AbstractLocalBiologyModule{
+    // some parameters 
+    private static double speedFactor = 5000;
+    private static double consumptionFactor = 100;
+    private static double bifurcationProbability = 0.003;
+    // direction at previous time step:
+    private double[] previousDir;
+    // the initial direction is parallel to the cylinder axis
+    // therefore we override this method from the superclass:
+    public void setCellElement(CellElement cellElement){
+        super.cellElement = cellElement;
+        this.previousDir = cellElement.getPhysical().
+         getAxis();
+    }
+    // to ensure distribution in all terminal segments:
+    public AbstractLocalBiologyModule getCopy() {return 
+     new GrowthCone();}
+    public boolean isCopiedWhenNeuriteBranches() {return 
+     true;}
+    public boolean isDeletedAfterNeuriteHasBifurcated() 
+     {return true;}
+5http://www.ini.uzh.ch/projects/cx3d/
+
+
+--- Page 15 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 15
+Zubler and Douglas Simulation framework for neural development
+    // growth cone model
+    public void run() {
+        // getting the concentration and defining the speed
+        PhysicalObject cyl = super.cellElement.
+         getPhysical();
+        double concentration = cyl.
+         getIntracellularConcentration("tubulin");
+        double speed = concentration*speedFactor;
+        // movement and consumption
+        double[] direction = Matrix.add(previousDir, 
+         Matrix.randomNoise(0.1,3));
+        previousDir = Matrix.normalize(direction);
+        cyl.movePointMass(speed, direction);
+        cyl.modifyIntracellularQuantity("tubulin", 
+         -concentration*consumptionFactor);
+        // test for bifurcation
+        if(ECM.getRandomDouble()<bifurcationProbability)
+            ((NeuriteElement)(super.cellElement)).
+              bifurcate();
+    }
+}
+Now we can set up and run the simulation, i.e. write a class 
+to (1) deﬁ ne the substance ‘tubulin’; (2) create a cell (quadruple 
+Cell-SomaElement-PhysicalSphere-SpaceNode); (3) with 
+an initial neurite segment; (4) place the local biology modules; 
+and (5) start the scheduler:
+public class ProductionConsuption{
+    public static void main(String[] args) {
+        // (1) properties of the intracellular substance
+        double D = 1000;  // diffusion constant
+        double d = 0.01; // degradation constant
+        IntracellularSubstance tubulin = new 
+         IntracellularSubstance("tubulin",D,d);
+        tubulin.setVolumeDependant(false);
+        //    registering the substance with the ECM class
+        ECM.getInstance().
+         addNewIntracellularSubstanceTemplate(tubulin);
+        // (2) getting a cell (with the four abstract 
+               layers) at position (0,0,0)
+        Cell c = CellFactory.getCellInstance(new double[] 
+                 {0,0,0});
+        // (3) create a neurite (pointing along the z-axis)
+        NeuriteElement ne = soma.extendNewNeurite(new 
+         double[] {0,0,1});
+        ne.getPhysical().setDiameter(1.0);
+        // (4) insert production module in the cell’s soma
+        SomaElement soma = c.getSomaElement();
+        soma.addLocalBiologyModule(new InternalSecretor());
+        //     insert growth cone module into the neurite 
+               element
+        ne.addLocalBiologyModule(new GrowthCone());
+        // (5) run the simulation
+        Scheduler.simulate();  
+    }
+}
+This model is extremely simplistic, but it already exhibits intere-
+sting properties: The elongation speed decreases with the number 
+of terminal branches, but the bifurcation probability over time is 
+constant, and so the distance between two branch points beco-
+mes shorter. In addition the tortuosity also increases as the speed 
+decreases.
+ACKNOWLEDGMENTS
+We thank Dennis Goehlsdorf for providing the Delaunay trian-
+gulation, Matthew Cook, Jason Rolfe, Andreas Steimer for helpful 
+discussions on simulating diffusion, Sabina Pﬁ ster for her contribu-
+tions to biological models, Fabian Roth for help with the software 
+architecture, Albert Cardona for his expertise in Blender, Adrian 
+Whatley for his help with PCSIM, and Roman Bauer, Klaus Hepp, 
+Giacomo Indiveri, Kevan Martin, and Rudolf Zubler for useful 
+comments on the manuscript. This work was supported by the 
+EU grant 216593 “SECO” .
+SUPPLEMENTARY MATERIAL
+The Supplemental Material for this article can be found online 
+at http://www.frontiersin.org/computationalneuroscience/paper/
+10.3389/neuro.10/025.2009/
+REFERENCES
+Aeschlimann, M. (2000). Biophysical 
+Models of Axonal Path Finding. Ph.D. 
+Thesis, University of Lausanne.
+Alves, R., Antunes, F., and Salvador, A. 
+(2006). T ools for kinetic modeling of 
+biochemical networks. Nat. Biotechnol. 
+24, 667–672.
+Ascoli, G. A., Krichmar, J. L., Scorcioni, R., 
+Nasuto, S. J., and Senft, S. L. (2001). 
+Computer generation and quan-
+titative morphometric analysis of 
+virtual neurons. Anat. Embryol. 204, 
+283–301.
+Assadi, A. H., Zhang, G., Beffert, U., 
+McNeil, R. S., Renfro, A. L., Niu, S., 
+Quattrocchi, C. C., Antalffy, B. A., 
+Sheldon, M., Armstrong, D. D., Wynsh
+aw-Boris, A., Herz, J., D’Arcangelo, G., 
+and Clark, G. D. (2003). Interaction of 
+reelin signaling and lis1 in brain deve-
+lopment. Nat. Genet. 35, 270–276.
+Barth, T., and Ohlberger, M. (2004). 
+Encyclopedia of Computational 
+Mechanics, Volume 1, Fundamentals. 
+John Wiley & Sons, Ch. Finite Volume 
+Methods: Foundation and Analysis, 
+pp. 439–474.
+Bower, J. M., and Beeman, D. (1995). The 
+Book of Genesis: Exploring Realistic 
+Neural Models with the General Neural 
+Simulation System, Electronic Library 
+of Science. New Y ork, Springer-V erlag.
+Butz, M., Worgotter, F., and van Ooyen, A. 
+(2009). Activity-dependent structural 
+plasticity. Brain Res. Rev. 60, 287–305.
+Cai, A. Q., Landman, K. A., and Hughes, 
+B. D. (2006). Modelling directional 
+guidance and motility regulation in 
+cell migration. Bull. Math. Biol. 68, 
+25–52.
+Castellani, V ., and Bolz, J. (1997). 
+Membrane-associated molecules 
+regulate the formation of layer- speciﬁ c 
+cortical circuits. Proc. Natl. Acad. Sci. 
+U.S.A. 94, 7030–7035.
+Chilton, J. K. (2006). Molecular mecha-
+nisms of axon guidance. Dev. Biol. 
+292, 13–24.
+Collier, J. R., Monk, N. A., Maini, P . K., and 
+Lewis, J. H. (1996). Pattern formation 
+by lateral inhibition with feedback: a 
+mathematical model of delta-notch 
+intercellular signalling. J. Theor. Biol. 
+183, 429–446.
+Cooper, J. A. (2008). A mechanism for 
+inside-out lamination in the neocor-
+tex. Trends Neurosci. 31, 113–119.
+da Fontoura Costa, L., and Coelho, R. C. 
+(2005). Growth-driven percolations: 
+the dynamics of connectivity in neu-
+ronal systems. Eur. Phys. J. B Condens 
+Matter Complex Syst. 47, 571–581.
+Dantzker, J. L., and Callaway, E. M. (1998). 
+The development of local, layer-speci-
+ﬁ c visual cortical axons in the absence 
+of extrinsic inﬂ uences and intrinsic 
+activity. J. Neurosci. 18, 4145–4154.
+de Gennes, P .-G. (2007). Collective neu-
+ronal growth and self organization of 
+axons. Proc. Natl. Acad. Sci. U.S.A. 104, 
+4904–4906.
+de Lima, A. D., Gieseler, A., and Voigt, T. 
+(2009). Relationship between gabaer-
+gic interneurons migration and early 
+neocortical network activity. Dev. 
+Neurobiol. 69, 105–123.
+Dennerll, T. J., Joshi, H. C., Steel, V . L., 
+Buxbaum, R. E., and Heidemann, S. R. 
+(1988). T ension and compression in 
+the cytoskeleton of pc-12 neurites. ii: 
+Quantitative measurements.  J. Cell 
+Biol. 107, 665–674.
+Dennerll, T. J., Lamoureux, P .,  
+Buxbaum, R. E., and Heidemann, S. R. 
+(1989). The cytomechanics of axonal 
+elongation and retraction. J. Cell Biol. 
+109(Pt 1), 3073–3083.
+
+
+--- Page 16 ---
+Frontiers in Computational Neuroscience www.frontiersin.org  November 2009 | Volume 3 | Article 25 | 16
+Zubler and Douglas Simulation framework for neural development
+Goddard, N. H., Hucka, M., Howell, F., 
+Cornelis, H., Shankar, K., and 
+Beeman, D. (2001). T owards neu-
+roml: model description methods 
+for  collaborative modelling in neuro-
+science. Philos. Trans. R. Soc. Lond., B, 
+Biol. Sci. 356, 1209–1228.
+Goodhill, G. J. (2003). A theoretical model 
+of axon guidance by the robo code. 
+Neural. Comput. 15, 549–564.
+Goodhill, G. J., Gu, M., and Urbach, J. S. 
+(2004). Predicting axonal response to 
+molecular gradients with a computa-
+tional model of ﬁ lopodial dynamics. 
+Neural. Comput. 16, 2221–2243.
+Goodhill, G. J., and Richards, L. J. (1999). 
+Retinotectal maps: molecules, models 
+and misplaced data. Trends Neurosci. 
+22, 529–534.
+Hamilton, P . (1993). A language to 
+describe the growth of neurites. Biol. 
+Cybern. 68, 559–565.
+Hentschel, H. G., and van Ooyen, A. 
+(1999). Models of axon guidance and 
+bundling during development. Proc. 
+Biol. Sci. 266, 2231–2238.
+Herms, J., Anliker, B., Heber, S., Ring, S., 
+Fuhrmann, M., Kretzschmar, H., 
+Sisodia, S., and Müller, U. (2004). 
+Cortical dysplasia resembling human 
+type 2 lissencephaly in mice lacking 
+all three app family members. EMBO 
+J. 23, 4106–4115.
+Hilgetag, C. C., and Barbas, H. (2006). 
+Role of mechanical factors in the 
+morphology of the primate cerebral 
+cortex. PLoS Comput. Biol. 2, e22. doi: 
+10.1371/journal.pcbi.0020022.
+Hines, M. L., and Carnevale, N. T. (1997). 
+The neuron simulation environment. 
+Neural. Comput. 9, 1179–1209.
+Huang, H., Kamm, R. D., and Lee, R. T. 
+(2004). Cell mechanics and mechano-
+transduction: pathways, probes, and 
+physiology. Am. J. Physiol. Cell Physiol. 
+287, C1–C11.
+Hutchins, B. I., and Kalil, K. (2008). 
+Differential outgrowth of axons and 
+their branches is regulated by loca-
+lized calcium transients. J. Neurosci. 
+28, 143–153.
+Izhikevich, E. M., and Edelman, G. M. 
+(2008). Large-scale model of mam-
+malian thalamocortical systems. 
+Proc. Natl. Acad. Sci. U.S.A. 105, 
+3593–3598.
+Kageyama, R., Ohtsuka, T., Shimojo, H., 
+and Imayoshi, I. (2008). Dynamic 
+notch signaling in neural proge-
+nitor cells and a revised view of 
+lateral inhibition. Nat. Neurosci. 11, 
+1247–1251.
+Kiddie, G., McLean, D., Ooyen, A. V ., and 
+Graham, B. (2005). Development, 
+dynamics and pathology of  neuronal 
+networks: from molecules to functio-
+nal circuits, progress in brain research 
+147. In Biologically Plausible Models 
+of Neurite Outgrowth, J. Van Pelt, 
+M. Kamermans, C. N. Levelt, A. Van 
+Ooyen, G. J. A. Ramakers, and P . R. 
+Roelfsema, eds (Elsevier Science), pp. 
+67–80.
+Kliemann, W. (1987). A stochastic dyna-
+mical model for the characterization 
+of the geometrical structure of den-
+dritic processes. Bull. Math. Biol. 49, 
+135–152.
+Kriegstein, A., Noctor, S., and Martínez-
+Cerdeño, V . (2006). Patterns of neural 
+stem and progenitor cell division 
+may underlie evolutionary cortical 
+expansion. Nat. Rev. Neurosci. 7, 
+883–890.
+Kriegstein, A. R., and Noctor, S. C. (2004). 
+Patterns of neuronal migration in the 
+embryonic cortex. Trends Neurosci. 27, 
+392–399.
+Krottje, J. K., and van Ooyen, A. (2007). 
+A mathematical framework for mode-
+ling axon guidance. Bull. Math. Biol. 
+69, 3–31.
+Lamoureux, P ., Buxbaum, R. E., and 
+Heidemann, S. R. (1989). Direct evi-
+dence that growth cones pull. Nature 
+340, 159–162.
+Lamoureux, P ., Ruthel, G., Buxbaum, R. E., 
+and Heidemann, S. R. (2002). 
+Mechanical tension can specify axonal 
+fate in hippocampal neurons. J. Cell 
+Biol. 159, 499–508.
+Lindenmayer, A. (1968). Mathematical 
+models for cellular interactions in 
+development. parts 1 and 2. J. Theor. 
+Biol. 18, 280–315.
+Luczak, A. (2006). Spatial embedding of 
+neuronal trees modeled by diffusive 
+growth. J. Neurosci. Methods 
+157, 
+132–141.
+Markram, H. (2006). The blue brain project. 
+Nat. Rev. Neurosci. 7, 153–160.
+Maskery, S., and Shinbrot, T. (2005). 
+Deterministic and stochastic ele-
+ments of axonal guidance. Annu. Rev. 
+Biomed. Eng. 7, 187–221.
+Massobrio, P ., Massobrio, G., and 
+Martinoia, S. (2007). Multi-program 
+approach for simulating recorded 
+extracellular signals generated by neu-
+rons coupled to microelectrode arrays. 
+Neurocomputing 70, 2467–2476.
+Mulchandani, K. (1995). Morphological 
+modelling of neurons. Ph.D. Thesis, 
+T exas A&M University.
+Ng, H. N., and Grimsdale, R. L. (1996). 
+Computer graphics techniques for 
+modeling cloth. IEEE Comput. Graph. 
+Appl. 16, 28–41.
+Pattana, S. (2006). Division d’un milieu 
+cellulaire sous contraintes mecani-
+ques. utilisation de la mecanique des 
+materiaux granulaires. Ph.D. Thesis, 
+Université Montpellier II.
+Pecevski, D. A., Natschläger, T., and 
+Schuch, K. (2009). PCSIM: a parallel 
+simulation environment for neural 
+circuits fully integrated with Python. 
+Front. Neuroinformatics 3, doi: 
+10.3389/neuro.11.011.2009.
+Polleux, F., Dehay, C., Gofﬁ net, A., and 
+Kennedy, H. (2001). Pre- and post-
+mitotic events contribute to the pro-
+gressive acquisition of area-speciﬁ c 
+connectional fate in the neocortex. 
+Cereb. Cortex 11, 1027–1039.
+Rakic, P . (1972). Mode of cell migra-
+tion to the superﬁ cial layers of fetal 
+monkey neocortex. J. Comp. Neurol. 
+145, 61–83.
+Reber, M., Burrola, P ., and Lemke, G. 
+(2004). A relative signalling model for 
+the formation of a topographic neural 
+map. Nature 431, 847–853.
+Ryder, E. F., Bullard, L., Hone, J., 
+Olmstead, J., and Ward, M. O. 
+(1999). Graphical simulation of early 
+development of the cerebral cortex. 
+Comput. Methods Programs Biomed. 
+59, 107–114.
+Samsonovich, A. V ., and Ascoli, G. A. 
+(2005). Statistical determinants of 
+dendritic morphology in hippocampal 
+pyramidal neurons: a hidden markov 
+model. Hippocampus 15, 166–183.
+Samuels, D. C., Hentschel, H. G., and 
+Fine, A. (1996). The origin of neu-
+ronal polarization: a model of axon 
+formation. Philos. Trans. R. Soc. Lond., 
+B, Biol. Sci. 351, 1147–1156.
+Schaller, G., and Meyer-Hermann, M. 
+(2004). Kinetic and dynamic delau-
+nay tetrahedralizations in three 
+dimensions. Comput. Phys. Commun. 
+162, 9.
+Schaller, G., and Meyer-Hermann, M. 
+(2005). Multicellular tumor spheroid 
+in an off-lattice voronoi-delaunay cell 
+model. Phys. Rev. E. Stat. Nonlin. Soft 
+Matter Phys. 71(Pt 1), 051910.
+Shefi, O., Harel, A., Chklovskii, D. B., 
+Ben-Jacob, E., and Ayali, A. (2004). 
+Biophysical constraints on neuronal 
+branching. Neurocomputing 58–60, 
+487–495.
+Shinbrot, T. (2006). Simulated morpho-
+genesis of developmental folds due to 
+proliferative pressure. J. Theor. Biol. 
+242, 764–773.
+Stepanyants, A., Hirsch, J. A.,  
+Martinez, L. M., Kisvárday, Z. F., 
+Ferecskó, A. S., and Chklovskii, D. B. 
+(2008). Local potential connectivity 
+in cat primary visual cortex. Cereb. 
+Cortex 18, 13–28.
+Stepanyants, A., Hof, P . R., and Chklovskii, 
+D. B. (2002). Geometry and structu-
+ral plasticity of synaptic connectivity. 
+Neuron 34, 275–288.
+Stiefel, K. M., and Sejnowski, T. J. (2007). 
+Mapping function onto neuronal 
+morphology. J. Neurophysiol. 98, 
+513–526.
+Turrigiano, G. G. (2008). The self-tuning 
+neuron: synaptic scaling of excitatory 
+synapses. Cell 135, 422–435.
+VanEssen, D. C. (1997). A tension-based 
+theory of morphogenesis and compact 
+wiring in the central nervous system. 
+Nature 385, 313–318.
+van Ooyen, A. (2003). Modeling Neural 
+Development. The MIT Press.
+van Ooyen, A., and Willshaw, D. J. (1999). 
+Competition for neurotrophic factor 
+in the development of nerve connec-
+tions. Proc. Biol. Sci. 266, 883–892.
+van Pelt, J., and V erwer, R. W. (1983). 
+The exact probabilities of branching 
+ patterns under terminal and segmen-
+tal growth hypotheses. Bull. Math. 
+Biol. 45, 269–285.
+Ward, K., Bertails, F., Kim, T.-Y., Marschner, 
+S. R., Cani, M. P ., and Lin, M. C. (2007). 
+A survey on hair modeling: styling, 
+simulation, and rendering. IEEE Trans. 
+Vis. Comput. Graph 13, 213–234.
+Willshaw, D. (2006). Analysis of mouse 
+epha knockins and knockouts 
+suggests that retinal axons pro-
+gramme target cells to form ordered 
+ retinotopic maps. Development 133, 
+2705–2717.
+Conflict of Interest Statement:  The 
+authors declare that the research was 
+conducted in the absence of any com-
+mercial or financial relationships that 
+should be construed as a potential con-
+ﬂ ict of interest.
+Received: 05 June 2009; paper pen-
+ding published: 17 July 2009; accepted: 
+19 October 2009; published online: 20 
+November 2009.
+Citation: Zubler F and Douglas R (2009) 
+A framework for modeling the growth and 
+development of neurons and networks. 
+Front. Comput. Neurosci. 3:25. doi: 
+10.3389/neuro.10.025.2009
+Copyright © 2009 Zubler and Douglas. This 
+is an open-access article subject to an exclu-
+sive license agreement between the authors 
+and the Frontiers Research Foundation, 
+which permits unrestricted use, distribu-
+tion, and reproduction in any medium, 
+provided the original authors and source 
+are credited.

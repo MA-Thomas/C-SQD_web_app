@@ -1,29 +1,27 @@
 import Link from "next/link";
 
-import { PublicNav } from "../components/public-nav";
+import { SiteHeader } from "../components/site-header";
 
-/// Public registry shell: top navbar, full-width reading column, quiet
-/// footer. No backstage chrome.
+/// Public registry shell: sticky two-row header (brand + search, section
+/// tabs), full-width reading canvas, quiet footer.
 export default function PublicLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <div className="public-shell">
-      <PublicNav />
-      <main className="public-main">{children}</main>
-      <footer className="public-footer">
-        <div className="public-footer-inner">
-          <span>
-            C-SQD · public registry and method for epistemic audits
-          </span>
+    <div className="pub-shell">
+      <SiteHeader />
+      <main className="pub-main">{children}</main>
+      <footer className="pub-footer">
+        <div className="pub-footer-inner">
+          <span>C-SQD · public registry and method for epistemic audits</span>
           <nav aria-label="Footer">
             <Link href="/method">Method</Link>
             <Link href="/domains">Domains</Link>
-            <Link href="/commission">Commission an Audit</Link>
-            <Link href="/intake">Scholarly Works</Link>
-            <Link href="/browse">CRWE</Link>
+            <Link href="/criteria">Criteria</Link>
+            <Link href="/register">Register a work</Link>
+            <Link href="/commission">Commission an audit</Link>
           </nav>
         </div>
       </footer>

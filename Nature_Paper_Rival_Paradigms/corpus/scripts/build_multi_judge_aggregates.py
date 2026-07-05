@@ -5,7 +5,7 @@ Aggregation is driven by ``aggregation_sets.csv`` and is rubric-version aware. E
 aggregation set declares the rounds it covers (``eligible_round_ids``), the rubric
 version it uses, and the judge types it includes. Ratings are filtered to that set
 before pooling, so ratings produced under different rubric versions (for example the
-v0.1 0-2 seed scores and any later v0.2 0-4 scores) are never averaged together.
+v0.0-seed 0-2 scores and the v0.1-pilot 0-4 scores) are never averaged together.
 
 Sets whose ``eligible_round_ids`` is empty or still ``TBD`` are skipped as not yet
 runnable.
@@ -23,7 +23,11 @@ ROOT = Path(__file__).resolve().parents[1]
 MULTI = ROOT / "coding" / "multi_judge"
 
 # Dimension sets are rubric-version specific and must match build_blind_packets.py and
-# coding_guide.md. The statistical-inductivist scale was de-duplicated in v0.2.
+# coding_guide.md. Two versions exist after the consolidation rename:
+#   * v0.0-seed   - the original 0-2 seed rubric (7-dim statistical scale, no markers);
+#                   owns the frozen Codex seed round only.
+#   * v0.1-pilot  - the consolidated live rubric (0-4, de-duplicated 5-dim statistical
+#                   scale, plus the paradigm-marker language instrument).
 _CAUSAL_DIMS_COMMON = [
     "entity_specification",
     "causal_relation",
@@ -37,11 +41,12 @@ _CAUSAL_DIMS_COMMON = [
 ]
 
 RUBRIC_DIMENSIONS = {
-    "v0.1-pilot": {
+    "v0.0-seed": {
         "causal": list(_CAUSAL_DIMS_COMMON),
         "statistical": [
             "significance_dependence",
-            "prediction_dependence",
+            "terminal_model_warrant",
+            "covariate_control_warrant",
             "high_dimensional_search",
             "flexible_pipeline",
             "weak_mechanism",
@@ -49,23 +54,15 @@ RUBRIC_DIMENSIONS = {
             "limited_intervention",
         ],
     },
-    "v0.2-pilot": {
+    # Consolidated live rubric: de-duplicated statistical scale plus the paradigm-marker
+    # language instrument (move-coded, 0-4). cp_ dimensions are occasion-gated; NA (blank)
+    # cells are dropped from the mean by `numeric`.
+    "v0.1-pilot": {
         "causal": list(_CAUSAL_DIMS_COMMON),
         "statistical": [
             "significance_dependence",
-            "prediction_dependence",
-            "high_dimensional_search",
-            "flexible_pipeline",
-        ],
-    },
-    # v0.3 is additive: causal/statistical scales unchanged from v0.2; adds the
-    # paradigm-marker language instrument (move-coded, 0-4). cp_ dimensions are
-    # occasion-gated; NA (blank) cells are dropped from the mean by `numeric`.
-    "v0.3-pilot": {
-        "causal": list(_CAUSAL_DIMS_COMMON),
-        "statistical": [
-            "significance_dependence",
-            "prediction_dependence",
+            "terminal_model_warrant",
+            "covariate_control_warrant",
             "high_dimensional_search",
             "flexible_pipeline",
         ],
@@ -75,12 +72,21 @@ RUBRIC_DIMENSIONS = {
             "cp_generative_structure",
             "cp_counterfactual_intervention",
             "cp_assumption_vulnerability",
+            "cp_theory_relative_contrast",
             "si_terminal_certification",
             "si_association_framing",
             "si_accumulation_progress",
         ],
     },
 }
+
+RUBRIC_SCORE_MAX = {
+    "v0.0-seed": 2,
+    "v0.1-pilot": 4,
+}
+
+HIGH_SCORE_THRESHOLD = 3.0
+EXTREME_SCORE_THRESHOLD = 4.0
 
 
 def dims_for(rubric_version: str) -> tuple[list[str], list[str], list[str]]:
@@ -145,6 +151,101 @@ def numeric(value: str | None) -> float | None:
     if value is None or value == "":
         return None
     return float(value)
+
+
+def high_thresholds_active(rubric_version: str) -> bool:
+    return RUBRIC_SCORE_MAX.get(rubric_version, 4) >= 4
+
+
+def score_scale_features(
+    row: dict[str, str], dims: list[str], rubric_version: str
+) -> dict[str, float]:
+    values = [numeric(row.get(dim, "")) for dim in dims]
+    values = [value for value in values if value is not None]
+    if not values:
+        return {}
+
+    features = {
+        "scale_mean": statistics.mean(values),
+        "scale_max": max(values),
+    }
+    if high_thresholds_active(rubric_version):
+        high_count = sum(value >= HIGH_SCORE_THRESHOLD for value in values)
+        extreme_count = sum(value >= EXTREME_SCORE_THRESHOLD for value in values)
+        features.update(
+            {
+                "scale_count_high_ge3": float(high_count),
+                "scale_any_high_ge3": float(high_count > 0),
+                "scale_count_extreme_eq4": float(extreme_count),
+                "scale_any_extreme_eq4": float(extreme_count > 0),
+            }
+        )
+    return features
+
+
+def occasion_is_active(row: dict[str, str], dim: str) -> bool:
+    occasion = numeric(row.get(f"{dim}_occasion", ""))
+    return occasion == 1
+
+
+def should_aggregate_dimension(
+    instrument: str, dim: str, row: dict[str, str]
+) -> bool:
+    if (
+        instrument == "paradigm_marker"
+        and dim.startswith("cp_")
+        and f"{dim}_occasion" in row
+    ):
+        return occasion_is_active(row, dim)
+    return True
+
+
+def marker_derived_features(
+    row: dict[str, str], marker_dims: list[str], rubric_version: str
+) -> dict[str, float]:
+    if not high_thresholds_active(rubric_version):
+        return {}
+
+    cp_values = [
+        numeric(row.get(dim, ""))
+        for dim in marker_dims
+        if dim.startswith("cp_") and occasion_is_active(row, dim)
+    ]
+    cp_values = [value for value in cp_values if value is not None]
+
+    si_values = [
+        numeric(row.get(dim, ""))
+        for dim in marker_dims
+        if dim.startswith("si_")
+    ]
+    si_values = [value for value in si_values if value is not None]
+
+    features: dict[str, float] = {}
+    if cp_values:
+        cp_high_count = sum(value >= HIGH_SCORE_THRESHOLD for value in cp_values)
+        cp_extreme_count = sum(value >= EXTREME_SCORE_THRESHOLD for value in cp_values)
+        features.update(
+            {
+                "cp_marker_max_applicable": max(cp_values),
+                "cp_marker_count_high_ge3": float(cp_high_count),
+                "cp_marker_any_high_ge3": float(cp_high_count > 0),
+                "cp_marker_count_extreme_eq4": float(cp_extreme_count),
+                "cp_marker_any_extreme_eq4": float(cp_extreme_count > 0),
+            }
+        )
+    if si_values:
+        si_high_count = sum(value >= HIGH_SCORE_THRESHOLD for value in si_values)
+        si_extreme_count = sum(value >= EXTREME_SCORE_THRESHOLD for value in si_values)
+        features.update(
+            {
+                "si_marker_max": max(si_values),
+                "si_marker_count_high_ge3": float(si_high_count),
+                "si_marker_any_high_ge3": float(si_high_count > 0),
+                "si_marker_count_extreme_eq4": float(si_extreme_count),
+                "si_marker_any_extreme_eq4": float(si_extreme_count > 0),
+            }
+        )
+    return features
 
 
 def eligibility_filter(agg_set: dict[str, str], round_meta: dict[str, dict[str, str]]):
@@ -235,7 +336,12 @@ def aggregate_scores(
                     "paradigm_marker",
                     marker_path,
                     marker_dims
-                    + ["cp_marker_mean", "si_marker_mean", "cp_exclusion_rate"],
+                    + [
+                        "cp_marker_mean",
+                        "cp_applicable_count",
+                        "si_marker_mean",
+                        "cp_exclusion_rate",
+                    ],
                 )
             )
 
@@ -245,9 +351,25 @@ def aggregate_scores(
                 if not keep(row):
                     continue
                 for dim in dims:
+                    if not should_aggregate_dimension(instrument, dim, row):
+                        continue
                     value = numeric(row.get(dim, ""))
                     if value is None:
                         continue
+                    item = dict(row)
+                    item["instrument"] = instrument
+                    item["dimension"] = dim
+                    item["value"] = value
+                    grouped[(row["paper_id"], instrument, dim)].append(item)
+                if instrument == "causal_abstraction":
+                    derived = score_scale_features(row, causal_dims, rubric_version)
+                elif instrument == "statistical_inductivist_dependence":
+                    derived = score_scale_features(row, stat_dims, rubric_version)
+                elif instrument == "paradigm_marker":
+                    derived = marker_derived_features(row, marker_dims, rubric_version)
+                else:
+                    derived = {}
+                for dim, value in derived.items():
                     item = dict(row)
                     item["instrument"] = instrument
                     item["dimension"] = dim

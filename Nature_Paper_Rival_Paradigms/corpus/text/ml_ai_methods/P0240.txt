@@ -1,0 +1,772 @@
+--- Page 1 ---
+Learning Neural Networks with
+Adaptive Regularization
+Han Zhao∗†, Yao-Hung Hubert Tsai∗†, Ruslan Salakhutdinov†, Geoffrey J. Gordon†‡
+†Carnegie Mellon University,‡Microsoft Research Montreal
+{han.zhao,yaohungt,rsalakhu}@cs.cmu.edu
+geoff.gordon@microsoft.com
+Abstract
+Feed-forward neural networks can be understood as a combination of an interme-
+diate representation and a linear hypothesis. While most previous works aim to
+diversify the representations, we explore the complementary direction by perform-
+ing an adaptive and data-dependent regularization motivated by the empirical Bayes
+method. Speciﬁcally, we propose to construct a matrix-variate normal prior (on
+weights) whose covariance matrix has a Kronecker product structure. This struc-
+ture is designed to capture the correlations in neurons through backpropagation.
+Under the assumption of this Kronecker factorization, the prior encourages neurons
+to borrow statistical strength from one another. Hence, it leads to an adaptive
+and data-dependent regularization when training networks on small datasets. To
+optimize the model, we present an efﬁcient block coordinate descent algorithm
+with analytical solutions. Empirically, we demonstrate that the proposed method
+helps networks converge to local optima with smaller stable ranks and spectral
+norms. These properties suggest better generalizations and we present empirical
+results to support this expectation. We also verify the effectiveness of the approach
+on multiclass classiﬁcation and multitask regression problems with various net-
+work structures. Our code is publicly available at: https://github.com/
+yaohungt/Adaptive-Regularization-Neural-Network .
+1 Introduction
+Although deep neural networks have been widely applied in various domains [19, 25, 27], usually its
+parameters are learned via the principle of maximum likelihood, hence its success crucially hinges
+on the availability of large scale datasets. When training rich models on small datasets, explicit
+regularization techniques are crucial to alleviate overﬁtting. Previous works have explored various
+regularization [39] and data augmentation [19, 38] techniques to learn diversiﬁed representations.
+In this paper, we look into an alternative direction by proposing an adaptive and data-dependent
+regularization method to encourage neurons of the same layer to share statistical strength through
+exploiting correlations between data and gradients. The goal of our method is to prevent overﬁtting
+when training (large) networks on small dataset. Our key insight stems from the famous argument
+by Efron [8] in the literature of the empirical Bayes method: It is beneﬁcial to learn from the
+experience of others. The empirical Bayes methods provide us a guiding principle to learn model
+parameters even if we do not have complete information about prior distribution. From an algorithmic
+perspective, we argue that the connection weights of neurons in the same layer (row/column vectors
+of the weight matrix) will be correlated with each other through the backpropagation learning. Hence,
+by learning the correlations of the weight matrix, a neuron can “borrow statistical strength” from
+other neurons in the same layer, which essentially increases the effective sample size during learning.
+∗Equal contribution.
+33rd Conference on Neural Information Processing Systems (NeurIPS 2019), Vancouver, Canada.
+
+
+--- Page 2 ---
+As an illustrating example, consider a simple setting where the input x ∈ Rd is fully connected to a
+hidden layer h ∈ Rp, which is further fully connected to the single output ˆy ∈ R. Let σ(·) be the
+nonlinear activation function, e.g., ReLU [33],W ∈ Rp×d be the connection matrix between the
+input layer and the hidden layer, and a ∈ Rp be the vector connecting the output and the hidden layer.
+Without loss of generality, ignoring the bias term in each layer, we have: ˆy = aT h, h = σ(W x).
+Consider using the usualℓ2 loss functionℓ(ˆy,y ) = 1
+2 |ˆy −y|2 and take the derivative ofℓ(ˆy,y ) w.r.t.
+W . We obtain the update formula in backpropagation asW ←W −α(ˆy −y)(a ◦ h′) xT , where
+h′ is the component-wise derivative of h w.r.t. its input argument, andα >0 is the learning rate.
+Realize that (a ◦ h′) xT is a rank 1 matrix, and the component of h′ is either 0 or 1. Hence, the
+update for each row vector of W is linearly proportional to x. Similar observation also holds for
+each column vector ofW , so it implies that the row/column vectors ofW are correlated with each
+other through learning. Although in this example we only discuss a one-hidden-layer network, it is
+straightforward to verify that the gradient update formula for general feed-forward networks admits
+the same rank one structure. The above observation leads us to the following question:
+Can we deﬁne a prior distribution overW that captures the correlations through
+the learning process for better generalization?
+Our Contributions To answer the above question, we develop an adaptive regularization method
+for neural nets inspired by the empirical Bayes method. Motivated by the example above, we propose
+a matrix-variate normal prior whose covariance matrix admits a Kronecker product structure to
+capture the correlations between different neurons. Using tools from convex analysis, we present
+an efﬁcient block coordinate descent algorithm with closed-form solutions to optimize the model.
+Empirically, we show the proposed method helps the network converge to local optima with smaller
+stable ranks and spectral norms, and we verify the effectiveness of the approach on both multiclass
+classiﬁcation and multitask regression problems with various network structures.
+2 Preliminary
+Notation and Setup We use lowercase letter to represent scalar and lowercase bold letter to denote
+vector. Capital letter, e.g.,X, is reserved for matrix. Calligraphic letter, such as D, is used to denote
+set. We write Tr(A) as the trace of a matrix A, det(A) as the determinant of A and vec(A) as
+A’s vectorization by column. [n] is used to represent the set {1,...,n } for any integer n. Other
+notations will be introduced whenever needed. Suppose we have access to a training set D ofn pairs
+of data instances (xi,yi),i ∈ [n]. We consider the supervised learning setting where xi ∈ X ⊆ Rd
+andyi ∈ Y . Let p(y | x, w) be the conditional distribution of y given x with parameter w. The
+parametric form of the conditional distribution is assumed be known. In this paper, we assume the
+model parameter w is sampled from a prior distribution p(w | θ) with hyperparameterθ. On the
+other hand, given D, the posterior distribution of w is denoted byp(w | D,θ ).
+The Empirical Bayes Method To compute the predictive distribution, we need access to the value
+of the hyperparameterθ. However, complete information about the hyperparameterθ is usually not
+available in practice. To this end, empirical Bayes method [1, 9, 10, 12, 36] proposes to estimateθ
+from the data directly using the marginal distribution:
+ˆθ = arg max
+θ
+p(D | θ) = arg max
+θ
+∫
+p(D | w) ·p(w |θ)dw. (1)
+Under speciﬁc choice of the likelihood functionp(x,y | w) and the prior distributionp(w |θ), e.g.,
+conjugate pairs, we can solve the above integral in closed form. In certain cases we can even obtain
+an analytic solution of ˆθ, which can then be plugged into the prior distribution. At a high level, by
+learning the hyperparameterθ in the prior distribution directly from data, the empirical Bayes method
+provides us a principled and data-dependent way to obtain an estimator of w. In fact, when both the
+prior and the likelihood functions are normal, it has been formally shown that the empirical Bayes
+estimators, e.g., the James-Stein estimator [23] and the Efron-Morris estimator [11], dominate the
+classic maximum likelihood estimator (MLE) in terms of quadratic loss for every choice of the model
+parameter w. At a colloquial level, the success of the empirical Bayes method can be attributed to
+the effect of “borrowing statistical strength” [8], which also makes it a powerful tool in multitask
+learning [28, 43] and meta-learning [15].
+2
+
+
+--- Page 3 ---
+Figure 1: Illustration for Bayes/ Empirical Bayes, and our proposed adaptive regularization.
+3 Learning with Adaptive Regularization
+In this section we ﬁrst propose an adaptive regularization (AdaReg) method, which is inspired by the
+empirical Bayes method, for learning neural networks. We then combine our observation in Sec. 1
+to develop an efﬁcient adaptive learning algorithm with matrix-variate normal prior. Through our
+derivation, we provide several connections and interpretations with other learning paradigms.
+3.1 The Proposed Adaptive Regularization
+When the likelihood functionp(D | w) is implemented as a neural network, the marginalization in(1)
+over model parameter w cannot be computed exactly. Nevertheless, instead of performing expensive
+Monte-Carlo simulation, we propose to estimate both the model parameter w and the hyperparameter
+θ in the prior simultaneously from the joint distribution p(D, w | θ) = p(D | w) ·p(w | θ).
+Speciﬁcally, given an estimateˆw of the model parameter, by maximizing the joint distribution w.r.t.
+θ, we can obtain ˆθ as an approximation of the maximum marginal likelihood estimator. As a result,
+we can use ˆθ to further reﬁne the estimate ˆw by maximizing the posterior distribution as follows:
+ˆw ← max
+w
+p(w | D) = max
+w
+p(D | w) ·p(w | ˆθ). (2)
+The maximizer of (2) can in turn be used in an updated joint distribution. Formally, we can deﬁne the
+following optimization problem that characterizes our Adaptive Regularization (AdaReg) framework:
+max
+w
+max
+θ
+logp(D | w) + logp(w |θ). (3)
+It is worth connecting the optimization problem (3) to the classic maximum a posteriori (MAP)
+inference and also discuss their difference. If we drop the inner optimization over the hyperparameter
+θ in the prior distribution. Then for any ﬁxed valueˆθ, (3) reduces to MAP with the prior deﬁned by
+the speciﬁc choice ofˆθ, and the maximizer ˆw corresponds to the mode of the posterior distribution
+given by ˆθ. From this perspective, the optimization problem in (3) actually deﬁnes a series of MAP
+inference problems, and the sequence { ˆwj(ˆθj)}j deﬁnes a solution path towards the ﬁnal model
+parameter. On the algorithmic side, the optimization problem (3) also suggests a natural block
+coordinate descent algorithm where we alternatively optimize over w andθ until the convergence of
+the objective function. An illustration of the framework is shown in Fig. 1.
+3.2 Neural Network with Matrix-Normal Prior
+Inspired by the observation from Sec. 1, we propose to deﬁne a matrix-variate normal distribution [16]
+over the connection weight matrixW :W ∼ MN (0p×d, Σr, Σc), where Σr ∈ Sp
+++ and Σc ∈ Sd
+++
+are the row and column covariance matrices, respectively.2 Equivalently, one can understand the
+matrix-variate normal distribution overW as a multivariate normal distribution with a Kronecker
+product covariance structure over vec(W ): vec(W ) ∼ N (0p×d, Σc ⊗ Σr). It is then easy to check
+that the marginal prior distributions over the row and column vectors ofW are given by:
+Wi: ∼ N (0d, [Σr]ii · Σc), W :j ∼ N (0p, [Σc]jj · Σr).
+2The probability density function is given byp(W | Σr, Σc) =
+exp(− Tr(Σ−1
+r WΣ−1
+c W T )/2)
+(2π)pd/2 det(Σr)d/2 det(Σc)p/2 .
+3
+
+
+--- Page 4 ---
+We point out that the Kronecker product structure of the covariance matrix exactly captures our prior
+about the connection matrixW : the fan-in/fan-out of neurons in the same layer (row/column vectors
+ofW ) are correlated with the same correlation matrix in the prior, and they only differ at the scales.
+For illustration purpose, let us consider the simple feed-forward network discussed in Sec. 1. Consider
+a reparametrization of the model by deﬁning Ωr := Σ−1
+r and Ωc := Σ−1
+c to be the corresponding
+precision matrices and plug in the prior distribution into the our AdaReg framework (see (3)). After
+routine algebraic simpliﬁcations, we reach the following concrete optimization problem:
+min
+W,a
+min
+Ωr,Ωc
+1
+2n
+∑
+i∈[n]
+(ˆy(xi;W, a) −yi)2 +λ||Ω1/2
+r W Ω1/2
+c ||2
+F −λ
+(
+d log det(Ωr) +p log det(Ωc)
+)
+subject to uIp ⪯ Ωr ⪯vIp, uId ⪯ Ωc ⪯vId (4)
+whereλ is a constant that only depends onp andd, 0<u ≤v anduv = 1. Note that the constraint
+is necessary to guarantee the feasible set to be compact so that the optimization problem is well
+formulated and a minimum is attainable. 3 It is not hard to show that in general the optimization
+problem (4) is not jointly convex in terms of {a,W, Ωr, Ωc}, and this holds even if the activation
+function is linear. However, as we will show later, for any ﬁxeda,W , the reparametrization makes
+the partial optimization over Ωr and Ωc bi-convex. More importantly, we can derive an efﬁcient
+algorithm that ﬁnds the optimalΩr(Ωc) for any ﬁxeda,W, Ωc(Ωr) inO(max{d3,p 3}) time with
+closed form solutions. This allows us to apply our algorithm to networks of large sizes, where
+a typical hidden layer can contain thousands of nodes. Note that this is in contrast to solving a
+general semi-deﬁnite programming (SDP) problem using black-box algorithm, e.g., the interior-point
+method [32], which is computationally intensive and hard to scale to networks with moderate sizes.
+Before we delve into the details on solving (4), it is instructive to discuss some of its connections and
+differences to other learning paradigms.
+Maximum-A-Posteriori Estimation. Essentially, for model parameterW , (4) deﬁnes a sequence of
+MAP problems where each MAP is indexed by the pair of precision matrices(Ω(t)
+r , Ω(t)
+c ) at iterationt.
+Equivalently, at each stage of the optimization, we can interpret(4) as placing a matrix variate normal
+prior onW where the precision matrix in the prior is given by Ω(t)
+r ⊗ Ω(t)
+c . From this perspective, if
+we ﬁxΩ(t)
+r =Ip and Ω(t)
+c =Id, ∀t, then (4) naturally reduces to learning withℓ2 regularization [26].
+More generally, for non-diagonal precision matrices, the regularization term forW becomes:
+||Ω1/2
+r W Ω1/2
+c ||2
+F = ||vec(Ω1/2
+r W Ω1/2
+c )||2
+2 = ||(Ω1/2
+c ⊗ Ω1/2
+r ) vec(W )||2
+2,
+and this is exactly the Tikhonov regularization [13] imposed onW where the Tikhonov matrix Γ is
+given by Γ := Ω1/2
+c ⊗Ω1/2
+r . But instead of manually designing the regularization matrixΓ to improve
+the conditioning of the estimation problem, we propose to also learn both precision matrices (so Γ as
+well) from data. From an algorithmic perspective, ΓT Γ = Ωc ⊗Ωr serves as a preconditioning matrix
+w.r.t. model parameterW to reshape the gradient according to the geometry of the data [7, 17, 18].
+Volume Minimization. Let us consider the log det(·) function over the positive deﬁnite cone. It
+is well known that the log-determinant function is concave [ 3]. Hence for any pair of matrices
+A1,A 2 ∈ Sm
+++, the following inequality holds:
+log det(A1) ≤ log det(A2) + ⟨∇ log det(A2),A 1 −A2⟩ = log det(A2) + Tr(A−1
+2 A1) −m. (5)
+Applying the above inequality twice by ﬁxing A1 = W ΩcWT/2d,A 2 = Σ r and A1 =
+WT ΩrW/2p,A 2 = Σc respectively leads to the following inequalities:
+d log det(W ΩcWT/2d) ≤ −d log det(Ωr) + 1
+2 Tr(ΩrW ΩcWT ) −dp,
+p log det(WT ΩrW/2p) ≤ −p log det(Ωc) + 1
+2 Tr(ΩrW ΩcWT ) −dp.
+Realize Tr(ΩrW ΩcWT ) = ||Ω1/2
+r W Ω1/2
+c ||2
+F . Summing the above two inequalities leads to:
+d log det(W ΩcWT )+p log det(WT ΩrW ) ≤ ||Ω1/2
+r W Ω1/2
+c ||2
+F −
+(
+d log det(Ωr)+p log det(Ωc)
+)
++c, (6)
+wherec is a constant that only depends ond andp. Recall that | det(ATA)| computes the squared
+volume of the parallelepiped spanned by the column vectors of A. Hence (6) gives us a natural
+3The constraintuv = 1 is only for the ease of presentation in the following part and can be readily removed.
+4
+
+
+--- Page 5 ---
+interpretation of the objective function in (4): the regularizer essentially upper bounds the log-volume
+of the two parallelpipeds spanned by the row and column vectors ofW . But instead of measuring the
+volume using standard Euclidean inner product, it also takes into account the local curvatures deﬁned
+by Σr and Σc, respectively. For vectors with ﬁxed lengths, the volume of the parallelepiped spanned
+by them becomes smaller when they are more linearly correlated, either positively or negatively. At a
+colloquial level, this means that the regularizer in (4) forces fan-in/fan-out of neurons at the same
+layer to be either positively or negatively correlated with each other, and this corresponds exactly to
+the effect of sharing statistical strengths.
+3.3 The Algorithm
+In this section we describe a block coordinate descent algorithm to optimize the objective function
+in (4) and detail how to efﬁciently solve the matrix optimization subproblems in closed form using
+tools from convex analysis. Due to space limit, we defer proofs and detailed derivation to appendix.
+Given a pair of constants 0<u ≤v, we deﬁne the following thresholding functionT[u,v](x):
+T[u,v](x) := max{u, min{v,x }}. (7)
+We summarize our block coordinate descent algorithm to solve (4) in Alg. 1. In each iteration, Alg. 1
+takes a ﬁrst-order algorithmA, e.g., the stochastic gradient descent, to optimize the parameters of the
+neural network by backpropagation. It then proceeds to compute the optimal solutions for Ωr and Ωc
+using INVTHRESHOLD as a sub-procedure. Alg. 1 terminates when a stationary point is found.
+We now proceed to show that the procedure INVTHRESHOLD ﬁnds the optimal solution given all the
+other variables ﬁxed. Due to the symmetry betweenΩr and Ωc in (4), we will only prove this for Ωr,
+and similar arguments can be applied to Ωc as well. Fix bothW , Ωc and ignore all the terms that do
+not depend on Ωr, the sub-problem on optimizing Ωr becomes:
+min
+Ωr
+Tr(ΩrW ΩcWT ) −d log det(Ωr), subject to uIp ⪯ Ωr ⪯vIp. (8)
+It is not hard to show that the optimization problem(9) is convex. Deﬁne the constraint setC := {A ∈
+Sp
+++ |uIp ⪯A ⪯vIp} and the indicator function IC(A) = 0 iffA ∈ C else ∞. Given the convexity
+of (9), we can use the indicator function to ﬁrst transform (9) into the following unconstrained one:
+min
+Ωr
+Tr(ΩrW ΩcWT ) −d log det(Ωr) + IC(Ωr). (9)
+Then we can use the ﬁrst-order optimality condition to characterize the optimal solution:
+0 ∈∂
+(1
+d Tr(ΩrW ΩcWT ) − log det(Ωr) + IC(Ωr)
+)
+=W ΩcWT/d − Ω−1
+r + NC(Ωr),
+where NC(A) := {B ∈ Sp | Tr(BT (Z −A)) ≤ 0, ∀Z ∈ C} is the normal cone w.r.t. C atA. The
+following key lemma characterizes the structure of the normal cone:
+Lemma 1. Let Ωr ∈ C , then NC(Ωr) = −NC(Ω−1
+r ).
+Equivalently, combining Lemma 1 with the optimality condition, we have
+W ΩcWT/d − Ω−1
+r ∈ NC(Ω−1
+r ).
+Geometrically, this means that the optimum Ω−1
+r is the Euclidean projection ofW ΩcWT/d onto C.
+Hence in order to solve (9), it sufﬁces if we can solve the following Euclidean projection problem
+efﬁciently, where˜Ωr ∈ Sp is a given real symmetric matrix:
+min
+Ωr
+||Ωr −˜Ωr||2
+F, subject to uIp ⪯ Ωr ⪯vIp. (10)
+Perhaps a little bit surprising, we can ﬁnd the optimal solution to the above Euclidean projection
+problem efﬁciently in closed form:
+Theorem 1. Let˜Ωr ∈ Sp with eigendecomposition as˜Ωr =QΛQT and ProjC(·) be the Euclidean
+projection operator onto C, then ProjC(˜Ωr) =QT[u,v](Λ)QT .
+Corollary 1. LetW ΩcWT be eigendecomposed asQdiag(r)QT , then the optimal solution to (9) is
+given byQT[u,v](d/r)QT .
+Similar arguments can be made to derive the solution for Ωc in (4). The ﬁnal algorithm is very
+simple as it only contains one SVD, hence its time complexity isO(max{d3,p 3}). Note that the total
+number of parameters in the network is at least Ω(dp), hence the algorithm is efﬁcient as it scales
+sub-quadratically in terms of number of parameters in the network.
+5
+
+
+--- Page 6 ---
+Algorithm 1 Block Coordinate Descent for Adaptive Regularization
+Input: Initial valueφ(0) := {a(0),W (0)}, Ω(0)
+r ∈ Sp
+++ and Ω(0)
+c ∈ Sd
+++, ﬁrst-order optimization algorithmA.
+1: fort = 1,..., ∞ until convergence do
+2: Fix Ω(t−1)
+r , Ω(t−1)
+c , optimizeφ(t) by backpropagation and algorithm A
+3: Ω(t)
+r ← INVTHRESHOLD (W (t)Ω(t−1)
+c W (t)T,d,u,v )
+4: Ω(t)
+c ← INVTHRESHOLD (W (t)T Ω(t)
+r W (t),p,u,v )
+5: end for
+6: procedure INVTHRESHOLD (∆,m,u,v )
+7: Compute SVD: Qdiag(r)QT = SVD(∆)
+8: Hard thresholding r′ ← T[u,v](m/r)
+9: returnQdiag(r′)QT
+10: end procedure
+4 Experiments
+In this section we demonstrate the effectiveness of AdaReg in learning practical deep neural networks
+on real-world datasets. We report generalization, optimization as well as stability results.
+4.1 Experimental Setup
+Multiclass Classiﬁcation (MNIST & CIFAR10): In this experiment, we show that AdaReg provides
+an effective regularization on the network parameters. To this end, we use a convolutional neural
+network as our baseline model. To show the effect of regularization, we gradually increase the
+training set size. In MNIST we use the step from 60 to 60,000 (11 different experiments) and in
+CIFAR10 we consider the step from 5,000 to 50,000 (10 different experiments). For each training
+set size, we repeat the experiments for 10 times. The mean along with its standard deviation are
+shown as the statistics. Moreover, since both the optimization and generalization of neural networks
+are sensitive to the size of minibatches [14, 24], we study two minibatch settings for 256 and 2048,
+respectively. In our method, we place a matrix-variate normal prior over the weight matrix of the last
+softmax layer, and we use Alg. 1 to optimize both the model weights and two covariance matrices.
+Multitask Regression (SARCOS): SARCOS relates to an inverse dynamics problem for a seven
+degree-of-freedom (DOF) SARCOS anthropomorphic robot arm [ 41]. The goal of this task is to
+map from a 21-dimensional input space (7 joint positions, 7 joint velocities, 7 joint accelerations) to
+the corresponding 7 joint torques. Hence there are 7 tasks and the inputs are shared among all the
+tasks. The training set and test set contain 44,484 and 4,449 examples, respectively. Again, we apply
+AdaReg on the last layer weight matrix, where each row corresponds to a separate task vector.
+We compare AdaReg with classic regularization methods in the literature, including weight decay,
+dropout [39], batch normalization (BN) [ 22] and the DeCov method [ 6]. We also note that we
+ﬁx all the hyperparameters such as learning rate to be the same for all the methods. We report
+evaluation metrics on test set as a measure of generalization. To understand how the proposed
+adaptive regularization helps in optimization, we visualize the trajectory of the loss function during
+training. Lastly, we also present the inferred correlation of the weight matrix for qualitative study.
+4.2 Results and Analysis
+Multiclass Classiﬁcation (MNIST & CIFAR10): Results on the multiclass classiﬁcation for dif-
+ferent training sizes are show in Fig. 2. For both MNIST and CIFAR10, we ﬁnd AdaReg, Weight
+Decay, and Dropout are the effective regularization methods, while Batch Normalization and DeCov
+vary in different settings. Batch Normalization suffers from large batch size in CIFAR10 (comparing
+Fig. 2 (c) and (d)) but is not sensitive to batch size in MNIST (comparing Fig. 2 (a) and (b)). The
+performance deterioration in large batch size of Batch Normalization is also observed by [21]. DeCov,
+on the other hand, improves the generalization in MNIST with batch size 256 (see Fig. 2 (a)), while
+it demonstrates only comparable or even worse performance in other settings. To conclude, as
+training set size grows, AdaReg consistently performs better generalization as comparing to other
+regularization methods. We also note that AdaReg is not sensitive to the size of minibatches while
+most of the methods suffer from large minibatches. In appendix, we show the combination of AdaReg
+with other generalization methods can usually lead to even better results.
+6
+
+
+--- Page 7 ---
+Table 1: Explained variance of different methods on 7 regression tasks from the SARCOS dataset.
+Method 1st 2nd 3rd 4th 5th 6th 7th
+MTL 0.4418 0.3472 0.5222 0.5036 0.6024 0.4727 0.5298
+MTL-Dropout 0.4413 0.3271 0.5202 0.5063 0.6036 0.4711 0.5345
+MTL-BN 0.4768 0.3770 0.5396 0.5216 0.6117 0.4936 0.5479
+MTL-DeCoV 0.4027 0.3137 0.4703 0.4515 0.5229 0.4224 0.4716
+MTL-AdaReg 0.4769 0.3969 0.5485 0.5308 0.6202 0.5085 0.5561
+(a) MNIST (Batch Size: 256) (b) MNIST (Batch Size: 2048) (c) CIFAR10 (Batch Size: 256) (d) CIFAR10 (Batch Size: 2048) 
+AdaReg AdaReg
+Figure 2: Generalization performance on MNIST and CIFAR10. AdaReg improves generalization under both
+minibatch settings.
+0 20 40 60 80 100
+Iteration
+101
+102
+103
+Cross-entropy Loss
+CNN-train
+CNN-test
+CNN-AdaReg-train
+CNN-AdaReg-test
+(a) T/B: 600/256
+0 20 40 60 80 100
+Iteration
+101
+102
+103
+104
+Cross-entropy Loss
+CNN-train
+CNN-test
+CNN-AdaReg-train
+CNN-AdaReg-test (b) T/B: 6000/256
+0 50 100 150 200 250
+Iteration
+101
+102
+103
+Cross-entropy Loss
+CNN-train
+CNN-test
+CNN-AdaReg-train
+CNN-AdaReg-test (c) T/B: 600/2048
+0 50 100 150 200 250
+Iteration
+102
+103
+104
+Cross-entropy Loss
+CNN-train
+CNN-test
+CNN-AdaReg-train
+CNN-AdaReg-test (d) T/B: 6000/2048
+Figure 3: Optimization trajectory of AdaReg on MNIST with training size/batch size on training and
+test sets. AdaReg helps to converge to better local optima. Note the log-scale ony-axis.
+Multitask Regression (SARCOS): In this experiment we are interested in investigating whether
+AdaReg can lead to better generalization for multiple related regression problems. To do so, we
+report the explained variance as a normalized metric, e.g., one minus the ratio between mean squared
+error and the variance of different methods in Table 1. The larger the explained variance, the better
+the predictive performance. In this case we observe a consistent improvement of AdaReg over other
+competitors on all the 7 regression tasks. We would like to emphasize that all the experiments
+share exactly the same experimental protocol, including network structure, optimization algorithm,
+training iteration, etc, so that the performance differences can only be explained by different ways of
+regularizations. For better visualization, we also plot the result in appendix.
+Optimization: It has recently been empirically shown that BN helps optimization not by reducing
+internal covariate shift, but instead by smoothing the landscape of the loss function [37]. To understand
+how AdaReg improves generalization, in Fig. 3, we plot the values of the cross entropy loss function
+on both the training and test sets during optimization using Alg. 1. The experiment is performed
+in MNIST with batch size 256/2048. In this experiment, we ﬁx the number of outer loop to be 2/5
+and each block optimization over network weights contains 50 epochs. Because of the stochastic
+optimization over model weights, we can see several unstable peaks in function value around iteration
+50 when trained with AdaReg, which corresponds to the transition phase between two consecutive
+outer loops with different row/column covariance matrices. In all the cases AdaReg converges to
+better local optima of the loss landscape, which lead to better generalization on the test set as well
+because they have smaller loss values on the test set when compared with training without AdaReg.
+Stable rank and spectral norm: Given a matrixW , the stable rank ofW , denoted as srank(W ), is
+deﬁned assrank(W ) := ||W ||2
+F/||W ||2
+2. As its name suggests, the stable rank is more stable than
+the rank because it is largely unaffected by tiny singular values. It has recently been shown [ 34,
+Theorem 1] that the generalization error of neural networks crucially depends on both the stable ranks
+and the spectral norms of connection matrices in the network. Speciﬁcally, it can be shown that the
+generalization error is upper bounded by O
+(√∏L
+j=1 ||Wj||2
+2
+∑L
+j=1 srank(Wj)/n
+)
+, whereL is the
+7
+
+
+--- Page 8 ---
+102
+103
+104
+Train Size
+3
+4
+5
+6Stable Rank
+CNN
+CNN-WeightDecay
+CNN-AdaReg
+(a) MNIST: S. rank
+102
+103
+104
+Train Size
+0.4
+0.6
+0.8
+1.0
+1.2
+1.4Spectral Norm
+CNN
+CNN-WeightDecay
+CNN-AdaReg (b) MNIST: S. norm
+10000 20000 30000 40000 50000
+Train Size
+2
+3
+4
+5
+6
+7Stable Rank
+CNN
+CNN-WeightDecay
+CNN-AdaReg (c) CIFAR10: S. rank
+10000 20000 30000 40000 50000
+Train Size
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+3.0
+3.5Spectral Norm
+CNN
+CNN-WeightDecay
+CNN-AdaReg (d) CIFAR10: S. norm
+Figure 4: Comparisons of stable ranks (S. rank) and spectral norms (S. norm) from different methods
+on MNIST and CIFAR10.x-axis corresponds to the training size.
+0 1 2 3 4 5 6 7 8 9
+0123456789
+0.8
+0.4
+0.0
+0.4
+0.8
+(a) CNN, Acc: 89.34
+0 1 2 3 4 5 6 7 8 9
+0123456789
+0.8
+0.4
+0.0
+0.4
+0.8 (b) AdaReg, Acc: 92.50
+0 1 2 3 4 5 6 7 8 9
+0123456789
+0.8
+0.4
+0.0
+0.4
+0.8 (c) CNN, Acc: 98.99
+0 1 2 3 4 5 6 7 8 9
+0123456789
+0.8
+0.4
+0.0
+0.4
+0.8 (d) AdaReg, Acc: 99.19
+Figure 5: Correlation matrix of the weight matrix in the softmax layer. The left two correspond to
+dataset with training size 600 and the right two with size 60,000. Acc means the test set accuracy.
+number of layers in the network. Essentially, this upper bound suggests that smaller spectral norm
+(smoother function mapping) and stable rank (skewed spectrum) leads to better generalization.
+To understand why AdaReg improves generalization, in Fig. 4, we plot both the stable rank and the
+spectral norm of the weight matrix in the last layer of the CNNs used in our MNIST and CIFAR10
+experiments. We compare 3 methods: CNN without any regularization, CNN trained with weight
+decay and CNN with AdaReg. For each setting we repeat the experiments for 5 times, and we plot
+the mean along with its standard deviation. From Fig. 4a and Fig. 4c it is clear that AdaReg leads to a
+signiﬁcant reduction in terms of the stable rank when compared with weight decay, and this effect
+is consistent in all the experiments with different training size. Similarly, in Fig. 4b and Fig. 4d we
+plot the spectral norm of the weight matrix. Again, both weight decay and AdaReg help reduce the
+spectral norm in all settings, but AdaReg plays a more signiﬁcant role than the usual weight decay.
+Combining the experiments with the generalization upper bound introduced above, we can see that
+training with AdaReg leads to an estimator ofW that has lower stable rank and smaller spectral norm,
+which explains why it achieves a better generalization performance.
+Furthermore, this observation holds on the SARCOS datasets as well. For the SARCOS dataset, the
+weight matrix being regularized is of dimension 100 × 7. Again, we compare the results using three
+methods: MTL, MTL-WeightDecay and MTL-AdaReg. As can be observed from Table 2, compared
+with the weight decay regularization, AdaReg substantially reduces both the stable rank and the
+spectral norm of learned weight matrix, which also helps to explain why MTL-AdaReg generalizes
+better compared with MTL and MTL-WeightDecay.
+Table 2: Stable rank and spectral norm on SARCOS.
+MTL MTL-WeightDecay MTL-AdaReg
+Stable Rank 4.48 4.83 2.88
+Spectral Norm 0.96 0.92 0.70
+Correlation Matrix: To verify that AdaReg imposes the effect of “sharing statistical strength”
+during training, we visualize the weight matrix of the softmax layer by computing the corresponding
+correlation matrix, as shown in Fig. 5. In Fig. 5, darker color means stronger correlation. We conduct
+two experiments with training size 600 and 60,000 respectively. As we can observe, training with
+AdaReg leads to weight matrix with stronger correlations, and this effect is more evident when the
+training set is large. This is consistent with our analysis of sharing statistical strengths. As a sanity
+check, from Fig. 5 we can also see that similar digits, e.g., 1 and 7, share a positive correlation while
+dissimilar ones, e.g., 1 and 8, share a negative correlation.
+8
+
+
+--- Page 9 ---
+5 Related Work
+The Empirical Bayes Method vs Bayesian Neural Networks Despite the name, empirical Bayes
+method is in fact a frequentist approach to obtain estimator with favorable properties. On the other
+hand, truly Bayesian inference would instead put a posterior distribution over model weights to
+characterize the uncertainty during training [2, 20, 30]. However, due to the complexity of nonlinear
+neural networks, analytic posterior is not available, hence strong independent assumptions over model
+weight have to be made in order to achieve computationally tractable variational solution. Typically,
+both the prior and the variational posterior are assumed to fully factorize over model weights. As an
+exception, Louizos and Welling [29], Sun et al. [40] seek to learn Bayesian neural nets where they
+approximate the intractable posterior distribution using matrix-variate Gaussian distribution. The
+prior for weights are still assumed to be known and ﬁxed. As a comparison, we use matrix-variate
+Gaussian as the prior distribution and we learn the hyperparameter in the prior from data. Hence our
+method does not belong to Bayesian neural nets: we instead use the empirical Bayes principle to
+derive adaptive regularization method in order to have better generalization, as done in [4, 35].
+Regularization Techniques in Deep Learning Different kinds of regularization approaches
+have been studied and designed for neural networks, e.g., weight decay [ 26], early stopping [ 5],
+Dropout [39] and the more recent DeCov [ 6] method. BN was proposed to reduce the internal
+covariate shift during training, but recently it has been empirically shown to actually smooth the land-
+scape of the loss function [37]. As a comparison, we propose AdaReg as an adaptive regularization
+method, with the aim to reduce overﬁtting by allowing neurons to share statistical strengths. From
+the optimization perspective, learning the row and column covariance matrices help to converge to
+better local optimum that also generalizes better.
+Kronecker Factorization in Optimization The Kronecker factorization assumption has also been
+applied in the literature of neural networks to approximate the Fisher information matrix in second-
+order optimization methods [31, 42]. The main idea here is to approximate the curvature of the loss
+function’s landscape, in order to achieve better convergence speed compared with ﬁrst-order method
+while maintaining the tractability of such computation. Different from these work, here in our method
+we assume a Kronecker factorization structure on the covariance matrix of the prior distribution, not
+the Fisher information matrix of the log-likelihood function. Furthermore, we also derive closed-form
+solutions to optimize these factors without any kind of approximations.
+6 Conclusion
+Inspired by empirical Bayes method, in this paper we propose an adaptive regularization (AdaReg)
+with matrix-variate normal prior for model parameters in deep neural networks. The prior encourages
+neurons to borrow statistical strength from other neurons during the learning process, and it provides
+an effective regularization when training networks on small datasets. To optimize the model, we
+design an efﬁcient block coordinate descent algorithm to learn both model weights and the covariance
+structures. Empirically, on three datasets we demonstrate that AdaReg improves generalization by
+ﬁnding better local optima with smaller spectral norms and stable ranks. We believe our work takes
+an important step towards exploring the combination of ideas from the empirical Bayes literature
+and rich prediction models like deep neural networks. One interesting direction for future work is
+to extend the current approach to online setting where we only have access to one training instance
+at a time, and to analyze the property of such method in terms of regret analysis with adaptive
+optimization methods.
+Acknowledgments
+HZ and GG would like to acknowledge support from the DARPA XAI project, contract
+#FA87501720152 and an Nvidia GPU grant. YT and RS were supported in part by DARPA
+grant FA875018C0150, DARPA SAGAMORE HR00111990016, Ofﬁce of Naval Research grant
+N000141812861, AFRL CogDeCON, and Apple. YT and RS would also like to acknowledge
+NVIDIA’s GPU support. Last, we thank Denny Wu for suggestions on exploring and analyzing our
+algorithm in terms of stable rank.
+9
+
+
+--- Page 10 ---
+References
+[1] José M Bernardo and Adrian FM Smith. Bayesian theory, 2001.
+[2] Charles Blundell, Julien Cornebise, Koray Kavukcuoglu, and Daan Wierstra. Weight uncertainty
+in neural networks. arXiv preprint arXiv:1505.05424, 2015.
+[3] Stephen Boyd and Lieven Vandenberghe. Convex optimization. Cambridge university press,
+2004.
+[4] Philip J Brown, James V Zidek, et al. Adaptive multivariate ridge regression. The Annals of
+Statistics, 8(1):64–74, 1980.
+[5] Rich Caruana, Steve Lawrence, and C Lee Giles. Overﬁtting in neural nets: Backpropagation,
+conjugate gradient, and early stopping. In Advances in neural information processing systems,
+pages 402–408, 2001.
+[6] Michael Cogswell, Faruk Ahmed, Ross Girshick, Larry Zitnick, and Dhruv Batra. Reducing
+overﬁtting in deep networks by decorrelating representations. arXiv preprint arXiv:1511.06068,
+2015.
+[7] John Duchi, Elad Hazan, and Yoram Singer. Adaptive subgradient methods for online learning
+and stochastic optimization. Journal of Machine Learning Research, 12(Jul):2121–2159, 2011.
+[8] Bradley Efron. Large-scale inference: empirical Bayes methods for estimation, testing, and
+prediction, volume 1. Cambridge University Press, 2012.
+[9] Bradley Efron and Trevor Hastie. Computer age statistical inference, volume 5. Cambridge
+University Press, 2016.
+[10] Bradley Efron and Carl Morris. Stein’s estimation rule and its competitors—an empirical Bayes
+approach. Journal of the American Statistical Association, 68(341):117–130, 1973.
+[11] Bradley Efron and Carl Morris. Stein’s paradox in statistics. Scientiﬁc American, 236(5):
+119–127, 1977.
+[12] Andrew Gelman, John B Carlin, Hal S Stern, David B Dunson, Aki Vehtari, and Donald B
+Rubin. Bayesian data analysis. CRC press, 2013.
+[13] Gene H Golub, Michael Heath, and Grace Wahba. Generalized cross-validation as a method for
+choosing a good ridge parameter. Technometrics, 21(2):215–223, 1979.
+[14] Priya Goyal, Piotr Dollár, Ross Girshick, Pieter Noordhuis, Lukasz Wesolowski, Aapo Kyrola,
+Andrew Tulloch, Yangqing Jia, and Kaiming He. Accurate, large minibatch sgd: training
+imagenet in 1 hour. arXiv preprint arXiv:1706.02677, 2017.
+[15] Erin Grant, Chelsea Finn, Sergey Levine, Trevor Darrell, and Thomas Grifﬁths. Recasting
+gradient-based meta-learning as hierarchical bayes. arXiv preprint arXiv:1801.08930, 2018.
+[16] Arjun K Gupta and Daya K Nagar. Matrix variate distributions. Chapman and Hall/CRC, 2018.
+[17] Vineet Gupta, Tomer Koren, and Yoram Singer. A uniﬁed approach to adaptive regularization
+in online and stochastic optimization. arXiv preprint arXiv:1706.06569, 2017.
+[18] Elad Hazan, Amit Agarwal, and Satyen Kale. Logarithmic regret algorithms for online convex
+optimization. Machine Learning, 69(2-3):169–192, 2007.
+[19] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image
+recognition. In Proceedings of the IEEE conference on computer vision and pattern recognition,
+pages 770–778, 2016.
+[20] José Miguel Hernández-Lobato and Ryan Adams. Probabilistic backpropagation for scalable
+learning of bayesian neural networks. In International Conference on Machine Learning, pages
+1861–1869, 2015.
+10
+
+
+--- Page 11 ---
+[21] Elad Hoffer, Itay Hubara, and Daniel Soudry. Train longer, generalize better: closing the
+generalization gap in large batch training of neural networks. InAdvances in Neural Information
+Processing Systems, pages 1731–1741, 2017.
+[22] Sergey Ioffe and Christian Szegedy. Batch normalization: Accelerating deep network training
+by reducing internal covariate shift. arXiv preprint arXiv:1502.03167, 2015.
+[23] William James and Charles Stein. Estimation with quadratic loss. In Proceedings of the fourth
+Berkeley symposium on mathematical statistics and probability , volume 1, pages 361–379,
+1961.
+[24] Nitish Shirish Keskar, Dheevatsa Mudigere, Jorge Nocedal, Mikhail Smelyanskiy, and Ping
+Tak Peter Tang. On large-batch training for deep learning: Generalization gap and sharp minima.
+arXiv preprint arXiv:1609.04836, 2016.
+[25] Alex Krizhevsky and Geoffrey Hinton. Learning multiple layers of features from tiny images.
+2009.
+[26] Anders Krogh and John A Hertz. A simple weight decay can improve generalization. In
+Advances in neural information processing systems, pages 950–957, 1992.
+[27] Yann LeCun, Yoshua Bengio, and Geoffrey Hinton. Deep learning. nature, 521(7553):436,
+2015.
+[28] Mingsheng Long, Zhangjie Cao, Jianmin Wang, and S Yu Philip. Learning multiple tasks
+with multilinear relationship networks. In Advances in Neural Information Processing Systems,
+pages 1594–1603, 2017.
+[29] Christos Louizos and Max Welling. Structured and efﬁcient variational deep learning with
+matrix gaussian posteriors. InInternational Conference on Machine Learning, pages 1708–1716,
+2016.
+[30] David JC MacKay. A practical bayesian framework for backpropagation networks. Neural
+computation, 4(3):448–472, 1992.
+[31] James Martens and Roger Grosse. Optimizing neural networks with kronecker-factored ap-
+proximate curvature. In International conference on machine learning , pages 2408–2417,
+2015.
+[32] Sanjay Mehrotra. On the implementation of a primal-dual interior point method. SIAM Journal
+on optimization, 2(4):575–601, 1992.
+[33] Vinod Nair and Geoffrey E Hinton. Rectiﬁed linear units improve restricted boltzmann machines.
+In Proceedings of the 27th international conference on machine learning (ICML-10) , pages
+807–814, 2010.
+[34] Behnam Neyshabur, Srinadh Bhojanapalli, David McAllester, and Nathan Srebro. A pac-
+bayesian approach to spectrally-normalized margin bounds for neural networks. arXiv preprint
+arXiv:1707.09564, 2017.
+[35] Samuel D Oman. A different empirical bayes interpretation of ridge and stein estimators.
+Journal of the Royal Statistical Society: Series B (Methodological), 46(3):544–557, 1984.
+[36] Herbert Robbins. An empirical bayes approach to statistics. Technical report, Columbia
+University, New York City, United States, 1956.
+[37] Shibani Santurkar, Dimitris Tsipras, Andrew Ilyas, and Aleksander Madry. How does batch
+normalization help optimization?(no, it is not about internal covariate shift). arXiv preprint
+arXiv:1805.11604, 2018.
+[38] Karen Simonyan and Andrew Zisserman. Very deep convolutional networks for large-scale
+image recognition. arXiv preprint arXiv:1409.1556, 2014.
+[39] Nitish Srivastava, Geoffrey Hinton, Alex Krizhevsky, Ilya Sutskever, and Ruslan Salakhutdinov.
+Dropout: A simple way to prevent neural networks from overﬁtting.The Journal of Machine
+Learning Research, 15(1):1929–1958, 2014.
+11
+
+
+--- Page 12 ---
+[40] Shengyang Sun, Changyou Chen, and Lawrence Carin. Learning structured weight uncertainty
+in bayesian neural networks. In Artiﬁcial Intelligence and Statistics, pages 1283–1292, 2017.
+[41] Sethu Vijayakumar and Stefan Schaal. Locally weighted projection regression: Incremental
+real time learning in high dimensional space. In Proceedings of the Seventeenth International
+Conference on Machine Learning, pages 1079–1086. Morgan Kaufmann Publishers Inc., 2000.
+[42] Guodong Zhang, Shengyang Sun, David Duvenaud, and Roger Grosse. Noisy natural gradient
+as variational inference. arXiv preprint arXiv:1712.02390, 2017.
+[43] Han Zhao, Otilia Stretcu, Alex Smola, and Geoff Gordon. Efﬁcient multitask feature and
+relationship learning. In Proceedings of the Thirty-Fifth Conference on Uncertainty in Artiﬁcial
+Intelligence. AUAI Press, 2019.
+12
