@@ -8,12 +8,18 @@
 
 pub mod article_access;
 pub mod article_retrieval;
+pub mod claim_audit;
 pub mod scholarly_object;
 
 pub use article_access::{ArticleAccessSummary, ArticleDisplayStrategy, ArticleRightsStatus};
 pub use article_retrieval::{
     ArticleRetrievalResult, ArticleRetrievalSet, ArticleRetrievalSource,
     ArticleVersionGroupSummary, ArticleVersionKind,
+};
+pub use claim_audit::{
+    AuditEpisodeInvolvementSummary, AuditTargetSummary, ClaimAuditIndexEntry, ClaimAuditRole,
+    ClaimAuditScholarlyObjectSummary, EvidenceArtifactSummary, InvolvementAuditState,
+    WorkAuditInvolvement, WorkRoleInAudit,
 };
 pub use scholarly_object::{
     ArticleVersionSummary, AuditWorkStatus, ExternalArticleLocationSummary,

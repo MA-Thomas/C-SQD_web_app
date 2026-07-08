@@ -140,6 +140,9 @@ impl Authored for EpisodeMembership {
 pub enum FactRole {
     Commission,
     ElementReview,
+    /// A warrant-assertion fact: a claim-bearing link between an attached
+    /// evidence artifact and the target claim (claim-scoped audits memo).
+    Warrant,
     Solicitation,
     SolicitationLifecycle,
     Response,
@@ -155,6 +158,7 @@ impl FactRole {
         match self {
             Self::Commission => "commission",
             Self::ElementReview => "element_review",
+            Self::Warrant => "warrant",
             Self::Solicitation => "solicitation",
             Self::SolicitationLifecycle => "solicitation_lifecycle",
             Self::Response => "response",
@@ -174,6 +178,7 @@ impl TryFrom<&str> for FactRole {
         match value {
             "commission" => Ok(Self::Commission),
             "element_review" => Ok(Self::ElementReview),
+            "warrant" => Ok(Self::Warrant),
             "solicitation" => Ok(Self::Solicitation),
             "solicitation_lifecycle" => Ok(Self::SolicitationLifecycle),
             "response" => Ok(Self::Response),

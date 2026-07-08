@@ -2,7 +2,7 @@
 
 This repo contains the C-SQD web app: a Next.js frontend, Rust API, and local PostgreSQL database for public and commissioned epistemic audit infrastructure.
 
-The current MVP presents C-SQD first as a public audit registry and method for Academic Peer Review. Sponsor, reviewer, and operations workflows still exist as backstage surfaces behind identity and role state.
+The current MVP presents C-SQD first as a public audit registry and method for claim-scoped audits. Academic Peer Review is the first implemented adapter and discovery surface; sponsor, reviewer, and operations workflows still exist as backstage surfaces behind identity and role state.
 
 ## 1. Clone The Repo
 
@@ -67,9 +67,11 @@ postgresql://csqd:csqd@localhost:55432/csqd
 
 The repo uses port `55432` to avoid colliding with a normal local Postgres on `5432`.
 
-## 5. Run The App
+## 5. View A Local Live Version
 
-Use two terminals.
+After the database setup finishes, use two terminal windows from the repo root.
+
+Leave both terminals open while viewing the site.
 
 Terminal 1, backend API:
 
@@ -89,16 +91,21 @@ Open:
 http://localhost:3000
 ```
 
+The local site is live while those two commands are running. When frontend files change, the browser usually refreshes automatically. If the page shows API errors, check that Terminal 1 is still running.
+
 Useful pages:
 
 - `/` public registry home
-- `/discover` public scholarly work discovery
-- `/public-audits` public SynthesisReviews and ElementReview depth
+- `/claims` claim audit index
+- `/claims/:id` scoped claim audit page
+- `/discover` directed discovery of public audit records and works
+- `/audits` delivered public SynthesisReviews and ElementReview depth
 - `/method` C-SQD method explainer
 - `/commission` commission a deeper audit
-- `/intake` Search / Register scholarly work metadata adapter
-- `/browse` CRWE criterion browse
-- `/scholarly-objects/:id` public audit subject page
+- `/register` Search / Register scholarly work metadata adapter
+- `/criteria` CRWE criterion reference
+- `/works/:id` public work page and audit involvement surface
+- `/works/:id/review` ElementReview submission for a work
 - `/audit-episodes/:id` authenticated episode workspace gate
 - `/sponsor-console` authenticated sponsor console gate
 - `/reviewer-queue` authenticated reviewer queue gate
@@ -131,14 +138,14 @@ http://localhost:3001
 
 Read these first:
 
-- `C_SQD_NEW_GTM.pdf`: current go-to-market strategy.
-- `FEN_for_CSQD_GTM.pdf`: rendered current FEN schema / GTM ontology.
-- `FEN_Schema_for_CSQD_GTM.tex`: source for the current FEN schema.
+- `C-SQD_NEW_GTM.tex`: current go-to-market strategy.
+- `FEN_Schema_for_CSQD_GTM.tex`: canonical FEN schema / GTM ontology source.
+- `CLAIM_SCOPED_AUDITS_MEMO.md`: claim-scoped academic audit clarification.
 - `NEXT_STEPS.md`: current engineering roadmap.
 - `build_decisions.md`: stack and architecture decisions.
 - `interpretation.md`: notes connecting earlier source materials.
 
-Older documents, including the previous `CSQD_NEW.pdf`, `FEN_Schema_for_CSQD.pdf`, and MVP docs, live in:
+Older rendered PDFs and MVP docs live in:
 
 ```text
 old_mvp_docs/
@@ -152,6 +159,8 @@ They are useful history, but the project has moved beyond the narrow MVP.
 apps/web/          Next.js frontend
 services/api/      Rust API service
 crates/domain/     Shared Rust domain types
+crates/academic-adapter/
+                   Academic publishing adapter types
 db/migrations/     Database migrations
 db/seeds/          Demo seed data
 infra/             Docker Compose config
@@ -175,7 +184,8 @@ For a quick database/API smoke test:
 ```sh
 scripts/setup_db.sh
 curl http://localhost:8080/api/domain-instantiations
-curl http://localhost:8080/api/audit-objects
+curl http://localhost:8080/api/audit-subjects
+curl http://localhost:8080/api/claim-audits
 ```
 
 ## 10. Mental Model
@@ -185,11 +195,12 @@ C-SQD is not just an academic peer review app.
 It is general commissioned epistemic audit infrastructure:
 
 - **DomainInstantiation**: a configured audit domain.
-- **AuditSubject**: referenced metadata for the artifact or claim being evaluated.
+- **AuditSubject**: referenced metadata for the scoped claim, claim-warrant bundle, or artifact-attached claim under evaluation.
 - **Fact**: an atomic epistemic or administrative act.
+- **Evidence artifact**: a paper or work attached to an audit episode for inspection; attachment is neutral and does not count as support.
 - **AuditEpisode**: a coherent commissioned audit question over time.
 - **EpisodeMembership**: the provenance-bearing link between a fact and an episode.
 - **SynthesisReview**: an authored interpretation of an audit episode.
 - **Evaluation tuple**: a derived view of scrutiny and uptake.
 
-Academic Publishing is the first implemented adapter. Future domains should reuse the same FEN infrastructure.
+Academic Publishing is the first implemented adapter. Papers remain searchable and linkable, but they are usually evidence surfaces rather than the audit's epistemic target. Future domains should reuse the same FEN infrastructure.

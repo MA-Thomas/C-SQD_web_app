@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ElementReviewForm } from "../../../../components/element-review-form";
-import { getScholarlyObject } from "../../../../lib/csqd-api";
+import { getEvidenceArtifacts, getScholarlyObject } from "../../../../lib/csqd-api";
 import {
   criterionNodeId,
   factKind,
@@ -10,6 +10,7 @@ import {
   getPublicAuditSummaryForObject,
   payloadRecord,
 } from "../../../../lib/public-audit";
+import { warrantsFromFacts } from "../../../../lib/warrants";
 
 type PageProps = {
   params: Promise<{
@@ -18,12 +19,13 @@ type PageProps = {
   searchParams: Promise<{
     criterion?: string;
     synthesis?: string;
+    warrant?: string;
   }>;
 };
 
 export default async function SubmitReviewPage({ params, searchParams }: PageProps) {
   const { id } = await params;
-  const { criterion, synthesis } = await searchParams;
+  const { criterion, synthesis, warrant } = await searchParams;
   const object = await getScholarlyObject(id);
 
   if (!object) {
@@ -46,6 +48,12 @@ export default async function SubmitReviewPage({ params, searchParams }: PagePro
     ).length,
   }));
   const synthesisMode = synthesis === "1";
+  const openEpisode =
+    summary.episodes.find((episode) => episode.status === "active") ?? null;
+  const evidenceArtifacts = openEpisode
+    ? await getEvidenceArtifacts(openEpisode.id)
+    : [];
+  const warrants = warrantsFromFacts(summary.facts);
 
   return (
     <>
@@ -73,11 +81,24 @@ export default async function SubmitReviewPage({ params, searchParams }: PagePro
           label: episode.label,
           status: episode.status,
         }))}
+        evidenceArtifacts={evidenceArtifacts.map((summaryItem) => ({
+          id: summaryItem.artifact.id,
+          title: summaryItem.title,
+        }))}
         nodes={nodeOptions}
         preselectedCriterion={criterion ?? null}
+        preselectedWarrant={warrant ?? null}
         subjectPath={`/works/${object.id}`}
         subjectTitle={object.title}
         synthesisMode={synthesisMode}
+        warrants={warrants.map((item) => ({
+          id: item.factId,
+          label:
+            item.artifactClaim.length > 110
+              ? `${item.artifactClaim.slice(0, 107)}…`
+              : item.artifactClaim,
+          evidenceArtifactId: item.evidenceArtifactId,
+        }))}
       />
     </>
   );

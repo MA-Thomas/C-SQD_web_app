@@ -2,7 +2,7 @@
 
 Date: June 11, 2026
 
-Source precedence: `C_SQD_NEW_GTM.pdf` -> `FEN_for_CSQD_GTM.pdf` / `FEN_Schema_for_CSQD_GTM.tex` -> `UI_UX_STRATEGY_MEMO.md` -> `interpretation.md` -> `NEXT_STEPS.md`.
+Source precedence: `C-SQD_NEW_GTM.tex` -> `FEN_Schema_for_CSQD_GTM.tex` -> `CLAIM_SCOPED_AUDITS_MEMO.md` -> `UI_UX_STRATEGY_MEMO.md` -> `interpretation.md` -> `NEXT_STEPS.md`.
 
 The plan is two tracks. Backend phases B0–B6 and frontend phases F0–F7. Cross-track dependencies are listed per phase. F0 and F2 can start immediately, in parallel with B0.
 
@@ -252,4 +252,4 @@ These are now resolved as implemented:
 
 1. Auth mechanism for B2: **magic-link** (chosen). Password path not built.
 2. Featured-review mechanism in B5: **`CurationDecision` fact** (chosen), with petitions as input. Implemented as the `CurationDecision` `FactPayload` variant.
-3. Whether `EpisodeParticipation`, `FeaturePetition`, `CWEPetition` (and `CurationDecision`) belong in the FEN schema document itself — **resolved.** `FEN_Schema_for_CSQD_GTM.tex` already defines all four variants in the `FactPayload` enum, field-for-field with `crates/domain/src/fact.rs`, along with the supporting enums and the `Participation`/`Petition`/`Curation` membership roles. Schema source and code are in sync. (Open only: re-render `FEN_for_CSQD_GTM.pdf` from the `.tex` if it predates these variants, since the rendered PDF outranks the tex in source precedence.)
+3. Whether `EpisodeParticipation`, `FeaturePetition`, `CWEPetition` (and `CurationDecision`) belong in the FEN schema document itself — **resolved.** `FEN_Schema_for_CSQD_GTM.tex` already defines all four variants in the `FactPayload` enum, field-for-field with `crates/domain/src/fact.rs`, along with the supporting enums and the `Participation`/`Petition`/`Curation` membership roles. Schema source and code are in sync.

@@ -108,6 +108,11 @@ define_id!(
     /// Identifies a reviewer expertise tag.
     TagId
 );
+define_id!(
+    /// Identifies an evidence-artifact attachment to an audit episode
+    /// (`EpisodeEvidenceArtifact`).
+    EvidenceArtifactId
+);
 
 #[cfg(feature = "sqlx")]
 mod sqlx_impls {
@@ -157,6 +162,7 @@ mod sqlx_impls {
     impl_sqlx_id!(UserId);
     impl_sqlx_id!(OrganizationId);
     impl_sqlx_id!(TagId);
+    impl_sqlx_id!(EvidenceArtifactId);
 }
 
 #[cfg(test)]

@@ -20,29 +20,74 @@ type NodeOption = {
   existingReviewCount: number;
 };
 
+type EvidenceArtifactOption = {
+  id: string;
+  title: string;
+};
+
+type WarrantOption = {
+  /// The warrant-assertion fact id.
+  id: string;
+  /// Short display label: the artifact claim, truncated.
+  label: string;
+  /// The evidence-artifact link the warrant runs through, if any.
+  evidenceArtifactId: string | null;
+};
+
+/// The artifact link a warrant runs through, so selecting a warrant can also
+/// target its artifact.
+function warrantArtifact(
+  warrants: WarrantOption[],
+  warrantId: string | null,
+): string | null {
+  if (!warrantId) {
+    return null;
+  }
+
+  return (
+    warrants.find((option) => option.id === warrantId)?.evidenceArtifactId ??
+    null
+  );
+}
+
 /// The unsolicited contribution flow. Ensures a public episode exists (start
 /// one when needed), then submits the review with the session identity. The
 /// backend marks the result unsolicited (no solicitation reference).
 export function ElementReviewForm({
   auditSubjectId,
   episodes,
+  evidenceArtifacts = [],
   nodes,
   preselectedCriterion,
+  preselectedWarrant = null,
   subjectPath,
   subjectTitle,
   synthesisMode,
+  warrants = [],
 }: {
   auditSubjectId: string | null;
   episodes: Array<Pick<AuditEpisode, "id" | "label" | "status">>;
+  /// Evidence artifacts attached to the open episode; the review may target
+  /// one of them (claim-scoped audits memo).
+  evidenceArtifacts?: EvidenceArtifactOption[];
   nodes: NodeOption[];
   preselectedCriterion: string | null;
+  /// Warrant-assertion fact to pre-target (deep link from a warrant card).
+  preselectedWarrant?: string | null;
   subjectPath: string;
   subjectTitle: string;
   synthesisMode: boolean;
+  /// Active warrant assertions in the episode; the review may scrutinize one
+  /// directly — the unit the claim-scoped audit question turns on.
+  warrants?: WarrantOption[];
 }) {
   const { user, loading } = useSession();
   const router = useRouter();
   const [criterion, setCriterion] = useState(preselectedCriterion ?? "");
+  const [warrant, setWarrant] = useState(preselectedWarrant ?? "");
+  const [evidenceArtifact, setEvidenceArtifact] = useState(
+    warrantArtifact(warrants, preselectedWarrant) ?? "",
+  );
   const [finding, setFinding] = useState("inconclusive");
   const [severity, setSeverity] = useState("");
   const [confidence, setConfidence] = useState("");
@@ -171,6 +216,8 @@ export function ElementReviewForm({
           confidence: confidence || null,
           limitations: limitations || null,
           recommendations: recommendations || null,
+          evidence_artifact: evidenceArtifact || null,
+          warrant: warrant || null,
           content,
           featured: false,
           solicitation: null,
@@ -238,6 +285,53 @@ export function ElementReviewForm({
       </label>
       {selectedNode ? (
         <p className="criterion-description">{selectedNode.description}</p>
+      ) : null}
+
+      {evidenceArtifacts.length > 0 ? (
+        <label>
+          Evidence artifact under inspection (optional)
+          <select
+            onChange={(event) => setEvidenceArtifact(event.target.value)}
+            value={evidenceArtifact}
+          >
+            <option value="">Whole subject — no single artifact</option>
+            {evidenceArtifacts.map((artifact) => (
+              <option key={artifact.id} value={artifact.id}>
+                {artifact.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
+
+      {warrants.length > 0 ? (
+        <label>
+          Warrant link under scrutiny (optional)
+          <select
+            onChange={(event) => {
+              setWarrant(event.target.value);
+
+              const artifactId = warrantArtifact(warrants, event.target.value);
+
+              if (artifactId) {
+                setEvidenceArtifact(artifactId);
+              }
+            }}
+            value={warrant}
+          >
+            <option value="">No single warrant — artifact or whole subject</option>
+            {warrants.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <small className="muted-copy">
+            Scrutinizing a warrant asks the central audit question directly:
+            does this stated reason for the artifact bearing on the target
+            claim survive inspection? Selecting one also targets its artifact.
+          </small>
+        </label>
       ) : null}
 
       <div className="review-form-row">

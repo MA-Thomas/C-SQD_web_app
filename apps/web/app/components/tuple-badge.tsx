@@ -47,7 +47,7 @@ export function TupleBadge({
   if (!tuple) {
     return (
       <div
-        aria-label="Evaluation tuple: not yet evaluated"
+        aria-label="Claim audit tuple: not yet evaluated"
         className={`tuple-badge tuple-none tuple-${size}`}
         role="group"
       >
@@ -60,7 +60,7 @@ export function TupleBadge({
     <div
       className={`tuple-badge tuple-${size}`}
       role="group"
-      aria-label="Evaluation tuple"
+      aria-label="Claim audit tuple"
       title={advanced ? "E(A | R, T_eval) -> (N, M, S, L, U)" : undefined}
     >
       {TUPLE_ITEMS.map((item) => {

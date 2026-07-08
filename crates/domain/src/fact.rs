@@ -46,8 +46,35 @@ pub struct CreateEpisodeElementReviewRequest {
     pub limitations: Option<String>,
     pub recommendations: Option<String>,
     pub content: String,
+    /// Optional evidence-artifact target: which attached artifact this
+    /// review inspects (claim-scoped audits memo).
+    #[serde(default)]
+    pub evidence_artifact: Option<String>,
+    /// Optional warrant target: the WarrantAssertion fact whose claim-bearing
+    /// link this review scrutinizes.
+    #[serde(default)]
+    pub warrant: Option<FactId>,
     #[serde(default)]
     pub featured: bool,
+}
+
+/// Request to assert a warrant link: why an attached evidence artifact is
+/// supposed to bear on the target claim. Warrants are facts so they are
+/// authored, timestamped, and challengeable — the central audit question is
+/// whether these links survive scrutiny.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateEpisodeWarrantRequest {
+    pub asserted_by: Option<UserId>,
+    /// The `episode_evidence_artifacts` link this warrant runs through.
+    pub evidence_artifact: Option<String>,
+    /// The claim the artifact itself actually makes.
+    pub artifact_claim: String,
+    /// The kind of inference connecting the artifact claim to the target claim.
+    pub inference_type: InferenceType,
+    /// The assumptions required for the artifact claim to bear on the target.
+    #[serde(default)]
+    pub assumptions: Option<String>,
+    pub rationale: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,8 +114,34 @@ pub enum FactPayload {
         limitations: Option<String>,
         #[serde(default)]
         recommendations: Option<String>,
+        /// Which attached evidence artifact this review inspects, when the
+        /// review targets an artifact rather than the subject as a whole
+        /// (claim-scoped audits memo).
+        #[serde(default)]
+        evidence_artifact: Option<String>,
+        /// The WarrantAssertion fact under scrutiny, when the review audits a
+        /// specific claim-bearing link.
+        #[serde(default)]
+        warrant: Option<FactId>,
         content: String,
         featured: bool,
+    },
+    /// A warrant link: the assertion that an attached evidence artifact makes
+    /// a claim that bears on the target claim via a stated inference. Papers
+    /// do not vote — their evidentiary contribution is earned when these
+    /// links survive element-review scrutiny.
+    WarrantAssertion {
+        asserted_by: UserId,
+        /// The `episode_evidence_artifacts` link this warrant runs through.
+        evidence_artifact: Option<String>,
+        /// The claim the artifact itself actually makes.
+        artifact_claim: String,
+        /// The kind of inference connecting the artifact claim to the target.
+        inference_type: InferenceType,
+        /// Assumptions required for the artifact claim to bear on the target.
+        #[serde(default)]
+        assumptions: Option<String>,
+        rationale: Option<String>,
     },
     #[serde(rename = "er_solicitation")]
     ERSolicitation {
@@ -147,6 +200,17 @@ pub enum FactPayload {
     },
 }
 
+/// How an artifact claim is supposed to connect to the target claim.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InferenceType {
+    Statistical,
+    Causal,
+    Mechanistic,
+    ExternalValidity,
+    Other,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ParticipationAction {
@@ -193,6 +257,7 @@ pub enum FactPayloadKind {
     #[serde(rename = "cwe_petition")]
     CwePetition,
     CurationDecision,
+    WarrantAssertion,
 }
 
 impl FactPayload {
@@ -200,6 +265,7 @@ impl FactPayload {
         match self {
             Self::AuditCommission { .. } => FactPayloadKind::AuditCommission,
             Self::ElementReview { .. } => FactPayloadKind::ElementReview,
+            Self::WarrantAssertion { .. } => FactPayloadKind::WarrantAssertion,
             Self::ERSolicitation { .. } => FactPayloadKind::ErSolicitation,
             Self::SolicitationEvent { .. } => FactPayloadKind::SolicitationEvent,
             Self::SubmitterResponse { .. } => FactPayloadKind::SubmitterResponse,
@@ -223,6 +289,7 @@ impl FactPayloadKind {
             Self::FeaturePetition => "feature_petition",
             Self::CwePetition => "cwe_petition",
             Self::CurationDecision => "curation_decision",
+            Self::WarrantAssertion => "warrant_assertion",
         }
     }
 }
@@ -241,6 +308,7 @@ impl TryFrom<&str> for FactPayloadKind {
             "feature_petition" => Ok(Self::FeaturePetition),
             "cwe_petition" => Ok(Self::CwePetition),
             "curation_decision" => Ok(Self::CurationDecision),
+            "warrant_assertion" => Ok(Self::WarrantAssertion),
             other => Err(format!("unknown fact payload kind: {other}")),
         }
     }

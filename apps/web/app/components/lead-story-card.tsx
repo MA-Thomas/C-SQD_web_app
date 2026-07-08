@@ -52,7 +52,7 @@ export function LeadStoryCard({
             {challenges} challenge{challenges === 1 ? "" : "s"}
           </Link>
         ) : null}
-        <Link href={workHref}>Full coverage</Link>
+        <Link href={workHref}>Open work record</Link>
       </div>
     </article>
   );

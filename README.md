@@ -79,15 +79,15 @@ http://localhost:3000
 
 ## Key Documents
 
-- `C_SQD_NEW_GTM.pdf`: current go-to-market strategy.
-- `FEN_for_CSQD_GTM.pdf`: rendered current FEN schema / GTM ontology.
-- `FEN_Schema_for_CSQD_GTM.tex`: source for the current FEN schema.
+- `C-SQD_NEW_GTM.tex`: current go-to-market strategy.
+- `FEN_Schema_for_CSQD_GTM.tex`: canonical FEN schema / GTM ontology source.
+- `CLAIM_SCOPED_AUDITS_MEMO.md`: claim-scoped academic audit clarification.
 - `interpretation.md`: working interpretation and source precedence.
 - `NEXT_STEPS.md`: current engineering roadmap.
 - `build_decisions.md`: stack and architecture decisions; partly MVP-era, now superseded by `interpretation.md`, `NEXT_STEPS.md`, and the new GTM/FEN documents for ontology and roadmap.
 - `README_FOR_EUNICE.md`: concise onboarding guide for new collaborators.
 
-Older documents, including `CSQD_NEW.pdf`, `FEN_Schema_for_CSQD.pdf`, and MVP documents in `old_mvp_docs/`, are useful history but no longer authoritative when they conflict with the GTM/FEN documents above.
+Older rendered PDFs and MVP documents in `old_mvp_docs/` are useful history but no longer authoritative when they conflict with the GTM/FEN sources above.
 
 ## Verification
 

@@ -3,6 +3,7 @@ pub mod audit_subject;
 pub mod common;
 pub mod domain_instantiation;
 pub mod eval_tuple;
+pub mod evidence;
 pub mod fact;
 pub mod health;
 pub mod ids;
@@ -17,7 +18,9 @@ pub use audit_episode::{
     CreateEpisodeRelationRequest, EpisodeMembership, EpisodeMembershipStatus, EpisodeRelation,
     EpisodeRelationType, EpisodeStatus, FactRole,
 };
-pub use audit_subject::{AuditSubject, AuditSubjectType, CreateAuditSubjectRequest};
+pub use audit_subject::{
+    AuditSubject, AuditSubjectType, CreateAuditSubjectRequest, ScopeCondition,
+};
 pub use common::{
     Authored, ExternalRef, ExternalSystem, Money, Principal, Provenance, Temporal, Timestamp,
 };
@@ -29,16 +32,22 @@ pub use domain_instantiation::{
 pub use eval_tuple::{
     compute_eval_tuple, EvalTuple, EvalTupleContext, EvalTupleObservations, ReviewerCommunityFilter,
 };
+pub use evidence::{
+    derive_artifact_bearing, ArtifactBearing, AttachEvidenceArtifactRequest,
+    EpisodeEvidenceArtifact, EvidenceArtifactStatus, EvidenceRole,
+};
 pub use fact::{
     CWEPetitionKind, ConfidenceLevel, CreateEpisodeElementReviewRequest,
-    CreateEpisodeSolicitationEventRequest, CreateEpisodeSolicitationRequest, CurationOutcome,
-    CurationTarget, Fact, FactPayload, FactPayloadKind, FactStatus, Finding as FactFinding,
-    FindingSeverity as FactFindingSeverity, ParticipationAction, ResponseType as FactResponseType,
+    CreateEpisodeSolicitationEventRequest, CreateEpisodeSolicitationRequest,
+    CreateEpisodeWarrantRequest, CurationOutcome, CurationTarget, Fact, FactPayload,
+    FactPayloadKind, FactStatus, Finding as FactFinding, FindingSeverity as FactFindingSeverity,
+    InferenceType, ParticipationAction, ResponseType as FactResponseType,
 };
 pub use health::ApiHealth;
 pub use ids::{
-    AuditEpisodeId, AuditSubjectId, CWENodeId, CommunityId, DomainInstantiationId, FactId,
-    MembershipId, OrganizationId, RelationId, SectionId, SynthesisReviewId, TagId, UserId,
+    AuditEpisodeId, AuditSubjectId, CWENodeId, CommunityId, DomainInstantiationId,
+    EvidenceArtifactId, FactId, MembershipId, OrganizationId, RelationId, SectionId,
+    SynthesisReviewId, TagId, UserId,
 };
 pub use organization::{Organization, OrganizationType};
 pub use solicitation::{PaymentCondition, PaymentScheme, SolicitationEvent, SolicitationEventType};

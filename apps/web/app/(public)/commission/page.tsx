@@ -17,7 +17,12 @@ type PageProps = {
   }>;
 };
 
+/// The scoped claim leads: papers, models, and datasets are audited as
+/// artifacts only when the target genuinely is the artifact. For claim
+/// audits, papers attach to the episode as evidence artifacts instead
+/// (claim-scoped audits memo).
 const subjectTypes = [
+  "scoped_claim",
   "research_manuscript",
   "preprint",
   "dataset",
@@ -70,9 +75,11 @@ export default async function CommissionPage({ searchParams }: PageProps) {
           <p className="pub-kicker">Commission</p>
           <h1>Commission an Audit</h1>
           <p>
-            Fund a structured, decomposed audit of a paper, model, dataset,
-            protocol, or claim. Scope it by criterion; delivery lands as an
-            audit report on the public or private record.
+            Fund a structured, decomposed audit of a bounded claim — or of a
+            paper, model, dataset, or protocol directly. State the target
+            claim and its scope conditions, attach papers as evidence
+            artifacts to be inspected, and scope the audit by criterion.
+            Delivery lands as an audit report on the public or private record.
           </p>
         </div>
       </header>
@@ -107,7 +114,7 @@ export default async function CommissionPage({ searchParams }: PageProps) {
             <label>
               New subject type
               <select
-                defaultValue={selectedSubject?.subject_type ?? "research_manuscript"}
+                defaultValue={selectedSubject?.subject_type ?? "scoped_claim"}
                 name="subject_type"
               >
                 {subjectTypes.map((subjectType) => (
@@ -122,11 +129,37 @@ export default async function CommissionPage({ searchParams }: PageProps) {
               <input
                 defaultValue={selectedSubject?.title ?? ""}
                 name="subject_title"
-                placeholder="Audit subject title"
+                placeholder="Short title for the audit subject"
                 type="text"
               />
             </label>
           </div>
+
+          <label>
+            Target claim
+            <textarea
+              defaultValue={selectedSubject?.claim_statement ?? ""}
+              name="claim_statement"
+              placeholder='The bounded claim under audit, e.g. "Biomarker X predicts response to treatment Y in population Z"'
+              rows={3}
+            />
+          </label>
+
+          <label>
+            Scope conditions
+            <textarea
+              name="scope_conditions"
+              placeholder={
+                "One per line, as label: value\npopulation: adults aged 40-70\noutcome: 12-month treatment response"
+              }
+              rows={4}
+            />
+            <small className="muted-copy">
+              The explicit conditions under which the claim is evaluated —
+              population, intervention, measurement, outcome, timeframe.
+              Required for scoped-claim subjects along with the target claim.
+            </small>
+          </label>
 
           <label>
             Episode label
@@ -240,6 +273,12 @@ export default async function CommissionPage({ searchParams }: PageProps) {
                 <dt>Subject</dt>
                 <dd>{selectedSubject?.title ?? "New audit subject"}</dd>
               </div>
+              {selectedSubject?.claim_statement ? (
+                <div>
+                  <dt>Target claim</dt>
+                  <dd>{selectedSubject.claim_statement}</dd>
+                </div>
+              ) : null}
               <div>
                 <dt>Type</dt>
                 <dd>
@@ -270,8 +309,10 @@ export default async function CommissionPage({ searchParams }: PageProps) {
             <h3>How it works</h3>
             <p className="muted-copy">
               Commissioning creates a sponsor record, an AuditEpisode, and a
-              provenance-bearing commission fact. Delivery state is tracked in
-              the sponsor console; public visibility follows the
+              provenance-bearing commission fact. For claim audits, attach
+              papers to the episode as evidence artifacts afterwards — they
+              are inspected, not counted as votes. Delivery state is tracked
+              in the sponsor console; public visibility follows the
               confidentiality setting.
             </p>
           </div>
@@ -291,8 +332,12 @@ async function commissionAction(formData: FormData) {
   if (!subjectId) {
     const subject = await createAuditSubject({
       domain_instantiation_id: domainInstantiationId,
-      subject_type: stringField(formData, "subject_type") || "other",
+      subject_type: stringField(formData, "subject_type") || "scoped_claim",
       title: nullableStringField(formData, "subject_title"),
+      claim_statement: nullableStringField(formData, "claim_statement"),
+      scope_conditions: parseScopeConditions(
+        stringField(formData, "scope_conditions"),
+      ),
     });
 
     subjectId = subject?.id ?? "";
@@ -331,7 +376,15 @@ async function commissionAction(formData: FormData) {
   revalidatePath("/reviewer-queue");
   revalidatePath("/library");
   revalidatePath("/register");
+  revalidatePath(`/claims/${subjectId}`);
   revalidatePath(`/audit-episodes/${result.episode.id}`);
+
+  // Claim audits land on the claim page — the epistemic center — where
+  // evidence artifacts can be attached to the new episode.
+  if (!existingSubjectId && stringField(formData, "subject_type") === "scoped_claim") {
+    redirect(`/claims/${subjectId}`);
+  }
+
   redirect(`/audit-episodes/${result.episode.id}`);
 }
 
@@ -345,6 +398,26 @@ function preferredDomain(domains: DomainInstantiationSummary[]) {
 
 function stringField(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
+}
+
+/// One condition per line as "label: value".
+function parseScopeConditions(raw: string) {
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      const separator = line.indexOf(":");
+
+      if (separator <= 0) {
+        return [];
+      }
+
+      const label = line.slice(0, separator).trim();
+      const value = line.slice(separator + 1).trim();
+
+      return label && value ? [{ label, value }] : [];
+    });
 }
 
 function nullableStringField(formData: FormData, name: string) {

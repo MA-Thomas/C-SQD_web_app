@@ -134,11 +134,18 @@ export type ArticleRetrievalResponse = {
   error: string | null;
 };
 
+export type ScopeCondition = {
+  label: string;
+  value: string;
+};
+
 export type AuditSubject = {
   id: string;
   domain_instantiation_id: string;
   subject_type: string;
   title: string | null;
+  claim_statement: string | null;
+  scope_conditions: ScopeCondition[];
   external_refs: unknown[];
   registered_by: unknown;
   registered_at: string;
@@ -176,6 +183,8 @@ export type CreateAuditSubjectRequest = {
   domain_instantiation_id: string;
   subject_type: string;
   title: string | null;
+  claim_statement?: string | null;
+  scope_conditions?: ScopeCondition[];
   external_refs?: unknown[];
   registered_by?: unknown;
 };
@@ -211,8 +220,139 @@ export type CreateEpisodeElementReviewRequest = {
   confidence: string | null;
   limitations: string | null;
   recommendations: string | null;
+  /** Attached evidence artifact this review inspects, if any. */
+  evidence_artifact?: string | null;
+  /** Warrant-assertion fact this review scrutinizes, if any. */
+  warrant?: string | null;
   content: string;
   featured: boolean;
+};
+
+// ── Claim-scoped audits: evidence artifacts + warrants ──────────
+
+export type EvidenceRole = "evidence" | "background";
+
+export type ArtifactBearing =
+  | "not_yet_inspected"
+  | "warrants_unaudited"
+  | "problems_found"
+  | "inconclusive"
+  | "survives_scrutiny";
+
+export type EpisodeEvidenceArtifact = {
+  id: string;
+  episode_id: string;
+  scholarly_object_id: string;
+  role: EvidenceRole;
+  note: string | null;
+  attached_by: unknown;
+  attached_at: string;
+  status: unknown;
+};
+
+export type EvidenceArtifactSummary = {
+  artifact: EpisodeEvidenceArtifact;
+  scholarly_object_id: string;
+  title: string;
+  authors: string[];
+  source_name: string;
+  publication_year: number | null;
+  canonical_url: string;
+  bearing: ArtifactBearing;
+  warrant_count: number;
+  review_count: number;
+};
+
+export type AuditTargetSummary = {
+  subject_id: string;
+  subject_type: string;
+  title: string | null;
+  claim_statement: string | null;
+  scope_conditions: ScopeCondition[];
+};
+
+export type AuditEpisodeInvolvementSummary = {
+  id: string;
+  label: string;
+  status: string;
+};
+
+export type WorkRoleInAudit =
+  | {
+      kind: "direct_subject";
+    }
+  | {
+      kind: "evidence";
+      artifact_id: string;
+      bearing: ArtifactBearing;
+      warrant_count: number;
+      review_count: number;
+    }
+  | {
+      kind: "background";
+      artifact_id: string;
+      bearing: ArtifactBearing;
+      warrant_count: number;
+      review_count: number;
+    };
+
+export type InvolvementAuditState = {
+  status_label: string;
+  tuple: EvalTuple | null;
+  latest_synthesis: SynthesisReview | null;
+  element_review_count: number;
+  synthesis_review_count: number;
+  challenge_count: number;
+};
+
+export type WorkAuditInvolvement = {
+  episode: AuditEpisodeInvolvementSummary;
+  audit_target: AuditTargetSummary;
+  work_role: WorkRoleInAudit;
+  audit_state: InvolvementAuditState;
+};
+
+export type ClaimAuditRole =
+  | {
+      kind: "explicit_scoped_claim";
+    }
+  | {
+      kind: "work_as_claim";
+    };
+
+export type ClaimAuditScholarlyObjectSummary = {
+  id: string;
+  object_type: string;
+  title: string;
+  authors: string[];
+  source_name: string;
+  publication_year: number | null;
+  canonical_url: string;
+};
+
+export type ClaimAuditIndexEntry = {
+  subject: AuditTargetSummary;
+  claim_role: ClaimAuditRole;
+  primary_episode: AuditEpisodeInvolvementSummary;
+  audit_state: InvolvementAuditState;
+  scholarly_object: ClaimAuditScholarlyObjectSummary | null;
+  evidence_artifact_count: number;
+};
+
+export type InferenceType =
+  | "statistical"
+  | "causal"
+  | "mechanistic"
+  | "external_validity"
+  | "other";
+
+export type CreateEpisodeWarrantRequest = {
+  asserted_by?: string | null;
+  evidence_artifact?: string | null;
+  artifact_claim: string;
+  inference_type: InferenceType;
+  assumptions?: string | null;
+  rationale?: string | null;
 };
 
 export type PaymentScheme = {
@@ -358,6 +498,63 @@ export async function createEpisodeElementReview(
     `/api/audit-episodes/${episodeId}/facts/element-review`,
     request,
   );
+}
+
+export async function getEvidenceArtifacts(
+  episodeId: string,
+): Promise<EvidenceArtifactSummary[]> {
+  return fetchJson<EvidenceArtifactSummary[]>(
+    `/api/audit-episodes/${episodeId}/evidence-artifacts`,
+    [],
+  );
+}
+
+export async function attachEvidenceArtifact(
+  episodeId: string,
+  body: {
+    scholarly_object_id: string;
+    role?: EvidenceRole;
+    note?: string | null;
+  },
+): Promise<EvidenceArtifactSummary | null> {
+  return apiSend<EvidenceArtifactSummary>(
+    `/api/audit-episodes/${episodeId}/evidence-artifacts`,
+    {
+      scholarly_object_id: body.scholarly_object_id,
+      role: body.role ?? "evidence",
+      note: body.note ?? null,
+    },
+  );
+}
+
+export async function retractEvidenceArtifact(
+  episodeId: string,
+  artifactId: string,
+): Promise<{ retracted: boolean } | null> {
+  return apiSend<{ retracted: boolean }>(
+    `/api/audit-episodes/${episodeId}/evidence-artifacts/${artifactId}/retract`,
+    {},
+  );
+}
+
+export async function submitWarrantAssertion(
+  episodeId: string,
+  request: CreateEpisodeWarrantRequest,
+): Promise<Fact | null> {
+  return apiSend<Fact>(`/api/audit-episodes/${episodeId}/facts/warrant`, request);
+}
+
+export async function getWorkAuditInvolvements(
+  scholarlyObjectId: string,
+): Promise<WorkAuditInvolvement[]> {
+  return fetchJson<WorkAuditInvolvement[]>(
+    `/api/scholarly-objects/${scholarlyObjectId}/audit-involvements`,
+    [],
+  );
+}
+
+export async function getClaimAuditIndex(): Promise<ClaimAuditIndexEntry[]> {
+  return fetchJson<ClaimAuditIndexEntry[]>("/api/claim-audits", []);
 }
 
 export async function createEpisodeSolicitation(

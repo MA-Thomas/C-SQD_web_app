@@ -12,10 +12,11 @@ use csqd_domain::{
     CWEPetitionKind, CommissionAuditEpisodeRequest, CommissionAuditEpisodeResult,
     CreateAuditSubjectRequest, CreateEpisodeElementReviewRequest, CreateEpisodeRelationRequest,
     CreateEpisodeSolicitationEventRequest, CreateEpisodeSolicitationRequest,
-    CreateSynthesisReviewRelationRequest, CreateSynthesisReviewRequest, CurationOutcome,
-    CurationTarget, DomainInstantiationDetail, DomainInstantiationSummary, EpisodeRelation,
-    EvalTuple, Fact, FactId, FactResponseType, Principal, ReviewerProfile, Role, SessionUser,
-    SynthesisReview, SynthesisReviewRelation, TimelineEntry, User,
+    CreateEpisodeWarrantRequest, CreateSynthesisReviewRelationRequest,
+    CreateSynthesisReviewRequest, CurationOutcome, CurationTarget, DomainInstantiationDetail,
+    DomainInstantiationSummary, EpisodeRelation, EvalTuple, Fact, FactId, FactResponseType,
+    Principal, ReviewerProfile, Role, SessionUser, SynthesisReview, SynthesisReviewRelation,
+    TimelineEntry, User,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -130,6 +131,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/audit-episodes/:id/facts/element-review",
             post(create_episode_element_review),
+        )
+        .route(
+            "/api/audit-episodes/:id/facts/warrant",
+            post(create_episode_warrant),
         )
         .route(
             "/api/audit-episodes/:id/facts/solicitation",
@@ -522,6 +527,32 @@ async fn create_episode_element_review(
     }
 
     let fact = audit_episodes::create_element_review_fact(&state.db, &id, request).await?;
+
+    Ok(Json(fact))
+}
+
+/// Warrant assertions record why an attached evidence artifact is supposed
+/// to bear on the target claim (claim-scoped audits memo). Any signed-in
+/// participant may assert one; overriding the author is an operator
+/// affordance, mirroring element reviews.
+async fn create_episode_warrant(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(mut request): Json<CreateEpisodeWarrantRequest>,
+) -> Result<Json<Fact>, ApiError> {
+    let session = require_session(&state, &headers).await?;
+
+    match &request.asserted_by {
+        Some(asserted_by) if asserted_by != &session.user_id => {
+            require_role(&session, Role::Operator)?;
+        }
+        _ => {
+            request.asserted_by = Some(session.user_id.clone());
+        }
+    }
+
+    let fact = audit_episodes::create_warrant_fact(&state.db, &id, request).await?;
 
     Ok(Json(fact))
 }

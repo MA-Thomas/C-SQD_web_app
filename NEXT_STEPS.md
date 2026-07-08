@@ -12,28 +12,28 @@ Academic Publishing / Search-Register remains useful infrastructure and should b
 
 Use this order when documents conflict:
 
-1. `C_SQD_NEW_GTM.pdf`
-2. `FEN_for_CSQD_GTM.pdf`
-3. `FEN_Schema_for_CSQD_GTM.tex`
+1. `C-SQD_NEW_GTM.tex`
+2. `FEN_Schema_for_CSQD_GTM.tex`
+3. `CLAIM_SCOPED_AUDITS_MEMO.md`
 4. `interpretation.md`
 5. `build_decisions.md` for stack and local architecture choices
-6. Older documents in `old_mvp_docs/`
+6. Older rendered PDFs and MVP documents in `old_mvp_docs/`
 
-Older documents are historical only when they conflict with the commissioned-audit GTM or GTM FEN schema.
+Older documents are historical only when they conflict with the commissioned-audit GTM or GTM FEN schema sources.
 
 ## Current Ontology
 
 The active backend vocabulary is:
 
 - `DomainInstantiation`: configured audit domain and CWE/evaluation-tuple owner.
-- `AuditSubject`: durable referenced metadata for the artifact or claim under evaluation.
+- `AuditSubject`: durable referenced metadata for the scoped claim, claim-warrant bundle, or artifact-attached claim under evaluation.
 - `Fact`: immutable atomic epistemic or administrative act.
 - `AuditEpisode`: coherent commissioned audit question over time.
 - `EpisodeMembership`: provenance-bearing claim that a fact belongs to an episode.
 - `SynthesisReview`: authored interpretation of an audit episode.
 - `EvaluationTuple`: derived view `E(A | R, T_eval) -> (N, M, S, L, U)`.
 
-Academic Publishing concepts such as `ScholarlyObject` are intake/access adapters over this substrate, not universal C-SQD primitives.
+Academic Publishing concepts such as `ScholarlyObject` are intake/access adapters and discovery surfaces over this substrate, not universal C-SQD primitives or the default audit target.
 
 ## Current Product Slice
 
@@ -113,9 +113,8 @@ Remaining / deferred:
    makes one call.
 8. ✅ `FEN_Schema_for_CSQD_GTM.tex` already documents the participation/petition/
    curation `FactPayload` variants (field-for-field with `crates/domain/src/fact.rs`),
-   so schema source and code are in sync. Only residual: re-render
-   `FEN_for_CSQD_GTM.pdf` from the `.tex` if the rendered PDF predates these
-   variants (the PDF outranks the tex in source precedence).
+   so schema source and code are in sync. There is no longer a rendered PDF
+   artifact in the source-precedence chain.
 
 ## Visual Experience
 

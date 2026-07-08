@@ -1,5 +1,6 @@
 use csqd_domain::{
     AuditSubject, AuditSubjectType, CreateAuditSubjectRequest, ExternalRef, Principal,
+    ScopeCondition,
 };
 use serde_json::{json, Value};
 use sqlx::{postgres::PgRow, PgPool, Row};
@@ -12,6 +13,8 @@ const SUBJECT_COLUMNS: &str = r#"
             subject_type,
             subject_type_detail,
             title,
+            claim_statement,
+            scope_conditions,
             external_refs,
             registered_by,
             registered_at
@@ -41,6 +44,8 @@ pub async fn create(
 
     let external_refs = serde_json::to_value(&request.external_refs)
         .map_err(|error| RepositoryError::Domain(format!("invalid external refs: {error}")))?;
+    let scope_conditions = serde_json::to_value(&request.scope_conditions)
+        .map_err(|error| RepositoryError::Domain(format!("invalid scope conditions: {error}")))?;
     let registered_by = serde_json::to_value(request.registered_by.unwrap_or(Principal::Platform))
         .map_err(|error| RepositoryError::Domain(format!("invalid principal: {error}")))?;
 
@@ -51,6 +56,8 @@ pub async fn create(
             subject_type,
             subject_type_detail,
             title,
+            claim_statement,
+            scope_conditions,
             external_refs,
             registered_by
         )
@@ -59,8 +66,10 @@ pub async fn create(
             $2,
             $3,
             $4,
-            $5::jsonb,
-            $6::jsonb
+            $5,
+            $6::jsonb,
+            $7::jsonb,
+            $8::jsonb
         )
         RETURNING {SUBJECT_COLUMNS}
         "#
@@ -69,6 +78,8 @@ pub async fn create(
     .bind(request.subject_type.db_kind())
     .bind(request.subject_type.db_detail())
     .bind(request.title.as_deref().map(str::trim))
+    .bind(request.claim_statement.as_deref().map(str::trim))
+    .bind(scope_conditions)
     .bind(external_refs)
     .bind(registered_by)
     .fetch_one(db)
@@ -221,6 +232,30 @@ fn validate_create_audit_subject_request(
         ));
     }
 
+    // A scoped claim is the audit object: it must be stated precisely enough
+    // that reviewers can ask what would count as support, challenge,
+    // limitation, or non-applicability (claim-scoped audits memo).
+    if matches!(request.subject_type, AuditSubjectType::ScopedClaim)
+        && request
+            .claim_statement
+            .as_deref()
+            .map_or(true, |value| value.trim().is_empty())
+    {
+        return Err(RepositoryError::Domain(
+            "a scoped-claim audit subject requires a claim statement".to_string(),
+        ));
+    }
+
+    if request
+        .scope_conditions
+        .iter()
+        .any(|condition| condition.label.trim().is_empty() || condition.value.trim().is_empty())
+    {
+        return Err(RepositoryError::Domain(
+            "scope conditions require both a label and a value".to_string(),
+        ));
+    }
+
     Ok(())
 }
 
@@ -287,6 +322,7 @@ fn academic_subject_type_for_object_type(object_type: &str) -> &'static str {
 fn row_to_audit_subject(row: PgRow) -> Result<AuditSubject, RepositoryError> {
     let subject_type: String = row.get("subject_type");
     let subject_type_detail: Option<String> = row.get("subject_type_detail");
+    let scope_conditions: Value = row.get("scope_conditions");
     let external_refs: Value = row.get("external_refs");
     let registered_by: Value = row.get("registered_by");
 
@@ -299,6 +335,10 @@ fn row_to_audit_subject(row: PgRow) -> Result<AuditSubject, RepositoryError> {
         )
         .map_err(RepositoryError::Domain)?,
         title: row.get("title"),
+        claim_statement: row.get("claim_statement"),
+        scope_conditions: serde_json::from_value::<Vec<ScopeCondition>>(scope_conditions).map_err(
+            |error| RepositoryError::Domain(format!("invalid scope conditions: {error}")),
+        )?,
         external_refs: serde_json::from_value::<Vec<ExternalRef>>(external_refs)
             .map_err(|error| RepositoryError::Domain(format!("invalid external refs: {error}")))?,
         registered_by: serde_json::from_value::<Principal>(registered_by)

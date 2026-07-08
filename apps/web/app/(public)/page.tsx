@@ -213,7 +213,7 @@ export default async function HomePage() {
 
       <section className="pub-section">
         <div className="pub-section-head">
-          <h2>How to read the evaluation tuple</h2>
+          <h2>How to read the claim audit tuple</h2>
           <Link href="/method#evaluation-tuple">Read the method</Link>
         </div>
         <div className="pub-tuple-explainer">

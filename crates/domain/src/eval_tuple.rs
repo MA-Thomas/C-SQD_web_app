@@ -127,7 +127,11 @@ pub fn compute_eval_tuple(
 
                 l += solicited_weight * expertise_weight(ctx, submitted_by);
             }
-            FactPayload::ERSolicitation { .. }
+            // Warrant assertions are the links under scrutiny, not scrutiny
+            // itself: they shape the audit graph but only element reviews of
+            // them move N/M/L.
+            FactPayload::WarrantAssertion { .. }
+            | FactPayload::ERSolicitation { .. }
             | FactPayload::SolicitationEvent { .. }
             | FactPayload::SubmitterResponse { .. }
             | FactPayload::EpisodeParticipation { .. }
@@ -297,6 +301,8 @@ mod tests {
                 confidence: None,
                 limitations: None,
                 recommendations: None,
+                evidence_artifact: None,
+                warrant: None,
                 content: "review".to_string(),
                 featured: false,
             },

@@ -2,6 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ActionRail } from "../../../components/action-rail";
+import {
+  AuditObjectDisclosure,
+  WorkRecordDisclosure,
+} from "../../../components/audit-object-disclosure";
+import { BearingPill } from "../../../components/bearing-pill";
 import { CriterionCluster } from "../../../components/criterion-cluster";
 import { CrweCoverageMatrix } from "../../../components/crwe-coverage-matrix";
 import { DissentBlock } from "../../../components/dissent-block";
@@ -17,7 +22,9 @@ import {
   getDomainInstantiation,
   getScholarlyObject,
   getSynthesisReviewRelations,
+  getWorkAuditInvolvements,
   type SynthesisReviewRelation,
+  type WorkAuditInvolvement,
 } from "../../../lib/csqd-api";
 import {
   factKind,
@@ -28,6 +35,7 @@ import {
   publicAuditStatusLabel,
   stringValue,
 } from "../../../lib/public-audit";
+import { evalTupleValues } from "../../../lib/tuple-items";
 
 type PageProps = {
   params: Promise<{
@@ -49,9 +57,10 @@ export default async function WorkPage({ params }: PageProps) {
     notFound();
   }
 
-  const [summary, fallbackNodes] = await Promise.all([
+  const [summary, fallbackNodes, involvements] = await Promise.all([
     getPublicAuditSummaryForObject(object),
     getAcademicCweNodes(),
+    getWorkAuditInvolvements(object.id),
   ]);
   const domain = object.audit_subject_id
     ? await getDomainInstantiation(
@@ -90,7 +99,7 @@ export default async function WorkPage({ params }: PageProps) {
           <div className="pub-card-kicker">
             <StatusPill status={status} />
             <span>{formatLabel(object.object_type)}</span>
-            <span>Public audit subject</span>
+            <span>Scholarly work record</span>
           </div>
           <h1>{object.title}</h1>
           <p className="pub-work-authors">{object.authors.join(", ")}</p>
@@ -109,6 +118,7 @@ export default async function WorkPage({ params }: PageProps) {
           {object.abstract_text ? (
             <p className="pub-work-abstract">{object.abstract_text}</p>
           ) : null}
+          <WorkRecordDisclosure />
           <div className="pub-work-tuple">
             <TupleBadge tuple={summary.tuple} />
           </div>
@@ -212,6 +222,73 @@ export default async function WorkPage({ params }: PageProps) {
           />
         </section>
 
+        <section className="pub-panel" id="audit-involvements">
+          <div className="pub-panel-head">
+            <div>
+              <p className="pub-kicker">Registry</p>
+              <h2>Audits Involving This Work</h2>
+            </div>
+            <span className="pub-panel-count">{involvements.length} audits</span>
+          </div>
+          <p className="muted-copy">
+            Every audit this work participates in — as the subject of a
+            single-work audit, or attached as an evidence artifact to a
+            claim-scoped audit. Attachment is not endorsement: an artifact
+            earns its bearing through audited warrants.
+          </p>
+          {involvements.length === 0 ? (
+            <div className="pub-empty">
+              <h3>No audit involvements yet</h3>
+              <p>
+                This work has not been attached to any claim-scoped audit or
+                audited directly.
+              </p>
+            </div>
+          ) : (
+            <div className="pub-facts">
+              {involvements.map((involvement) => (
+                <div
+                  className="pub-location-row"
+                  key={`${involvement.episode.id}-${involvementLabel(involvement)}`}
+                >
+                  <div>
+                    <strong>
+                      {involvement.audit_target.claim_statement ??
+                        involvement.audit_target.title ??
+                        involvement.episode.label}
+                    </strong>
+                    <span>
+                      {involvementMeta(involvement)}
+                      {roleBearing(involvement) ? (
+                        <>
+                          {" "}
+                          <BearingPill bearing={roleBearing(involvement)!} />
+                        </>
+                      ) : null}
+                    </span>
+                    <span>{involvementCounts(involvement)}</span>
+                    <AuditObjectDisclosure
+                      subjectType={involvement.audit_target.subject_type}
+                      workRole={involvement.work_role}
+                    />
+                    {involvement.audit_state.tuple ? (
+                      <TupleBadge
+                        size="compact"
+                        tuple={evalTupleValues(involvement.audit_state.tuple)}
+                      />
+                    ) : null}
+                  </div>
+                  {involvement.audit_target.subject_type === "scoped_claim" ? (
+                    <Link href={`/claims/${involvement.audit_target.subject_id}`}>
+                      Open claim audit
+                    </Link>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         <section className="pub-panel" id="audit-trail">
           <div className="pub-panel-head">
             <div>
@@ -291,4 +368,52 @@ export default async function WorkPage({ params }: PageProps) {
       />
     </div>
   );
+}
+
+function involvementLabel(involvement: WorkAuditInvolvement) {
+  switch (involvement.work_role.kind) {
+    case "direct_subject":
+      return "Direct audit subject";
+    case "evidence":
+      return "Attached as evidence";
+    case "background":
+      return "Attached as background";
+  }
+}
+
+function involvementMeta(involvement: WorkAuditInvolvement) {
+  return [
+    involvementLabel(involvement),
+    involvement.audit_state.status_label,
+  ].join(" · ");
+}
+
+function roleBearing(involvement: WorkAuditInvolvement) {
+  switch (involvement.work_role.kind) {
+    case "direct_subject":
+      return null;
+    case "evidence":
+    case "background":
+      return involvement.work_role.bearing;
+  }
+}
+
+/// Counts from the server-derived audit_state, so the card answers "how much
+/// scrutiny has this audit seen?" without another fetch. For evidence roles,
+/// warrant/review counts scoped to this artifact are appended.
+function involvementCounts(involvement: WorkAuditInvolvement) {
+  const { audit_state: state, work_role: role } = involvement;
+  const parts = [
+    `${state.element_review_count} reviews`,
+    `${state.synthesis_review_count} reports`,
+    `${state.challenge_count} challenges`,
+  ];
+
+  if (role.kind === "evidence" || role.kind === "background") {
+    parts.push(
+      `this work: ${role.warrant_count} warrants · ${role.review_count} reviews`,
+    );
+  }
+
+  return parts.join(" · ");
 }

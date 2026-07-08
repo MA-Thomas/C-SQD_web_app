@@ -4,7 +4,17 @@ const methodSections = [
   {
     id: "audit-subjects",
     title: "Audit Subjects",
-    copy: "An audit subject is the durable object under review: a paper, preprint, dataset, code repository, protocol, report, or scholarly claim. Academic metadata supports the subject, but audit actions attach to the subject record.",
+    copy: "An audit subject is what the audit is epistemically about. The default subject is a scoped claim: a bounded assertion with explicit scope conditions — population, intervention, measurement, outcome. Papers, preprints, datasets, code, protocols, and reports can also be audited directly, and in a single-paper audit the target claim sits close to a manuscript claim. Academic metadata supports the subject, but audit actions attach to the subject record.",
+  },
+  {
+    id: "evidence-artifacts",
+    title: "Evidence Artifacts",
+    copy: "Papers attached to a claim audit are evidence artifacts to be examined, not votes to be counted. Publication does not convert a paper's claims into validated evidence: each artifact's measurements, assumptions, methods, and relevance to the target claim still need inspection. Attachment is neutral — an artifact's bearing on the claim is derived from audited warrants, never assumed.",
+  },
+  {
+    id: "warrants",
+    title: "Warrant Links",
+    copy: "A warrant link records why an attached artifact is supposed to bear on the target claim: the claim the artifact actually makes, the inference type connecting it to the target (statistical, causal, mechanistic, external validity), and the assumptions that inference requires. The central audit question is not how many papers appear to favor the claim, but which warrant links survive scrutiny.",
   },
   {
     id: "elementreviews",
@@ -23,8 +33,8 @@ const methodSections = [
   },
   {
     id: "evaluation-tuple",
-    title: "Evaluation Tuple",
-    copy: "The public tuple summarizes the audit record with friendly labels: Problems, Ethical concerns, Stakes, Scrutiny depth, and Uptake. It is a derived view over the immutable audit record — recomputable for any reviewer community and reference time. The expert notation is E(A | R, T_eval) -> (N, M, S, L, U).",
+    title: "Claim Audit Tuple",
+    copy: "The public tuple summarizes the audit state of the claim under audit — not how good a manuscript is, and never a count of supporting publications. Friendly labels: Problems, Ethical concerns, Stakes, Scrutiny depth, and Uptake. It is a derived view over the immutable audit record — recomputable for any reviewer community and reference time. The expert notation is E(A | R, T_eval) -> (N, M, S, L, U), anchored on the claim under audit.",
   },
   {
     id: "challenges",
@@ -93,7 +103,10 @@ export default function MethodPage() {
             <dl className="pub-def-list">
               <div>
                 <dt>Problems</dt>
-                <dd>Non-ethical problems surfaced by ElementReviews.</dd>
+                <dd>
+                  Audited non-ethical problems in the claim&apos;s warrants,
+                  surfaced by ElementReviews.
+                </dd>
               </div>
               <div>
                 <dt>Ethical concerns</dt>
@@ -101,7 +114,7 @@ export default function MethodPage() {
               </div>
               <div>
                 <dt>Stakes</dt>
-                <dd>How consequential the subject is for the domain.</dd>
+                <dd>How consequential the target claim is for the domain.</dd>
               </div>
               <div>
                 <dt>Scrutiny depth</dt>

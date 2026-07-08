@@ -10,6 +10,7 @@ import { useSession } from "../lib/session";
 const TABS = [
   { href: "/", label: "Home", exact: true },
   { href: "/discover", label: "Discover" },
+  { href: "/claims", label: "Claims" },
   { href: "/audits", label: "Audit Reports" },
   { href: "/criteria", label: "Criteria" },
   { href: "/domains", label: "Domains" },

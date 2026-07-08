@@ -4,11 +4,11 @@ use csqd_domain::{
     AuditEpisodeSummary, AuditSubjectType, CWECriterionId, CWENodeId, CWEPetitionKind,
     CommissionAuditEpisodeRequest, CommissionAuditEpisodeResult, CreateEpisodeElementReviewRequest,
     CreateEpisodeSolicitationEventRequest, CreateEpisodeSolicitationRequest,
-    CreateSynthesisReviewRequest, CurationOutcome, CurationTarget, DomainConfig,
-    DomainInstantiationId, EpisodeMembership, EpisodeMembershipStatus, EpisodeStatus, EvalTuple,
-    EvalTupleContext, EvalTupleObservations, ExternalRef, Fact, FactId, FactPayload, FactRole,
-    FactStatus, NarrativeStatus, Organization, OrganizationType, ParticipationAction, Principal,
-    Provenance, ReviewerCommunityFilter, SynthesisReview, SynthesisReviewSection,
+    CreateEpisodeWarrantRequest, CreateSynthesisReviewRequest, CurationOutcome, CurationTarget,
+    DomainConfig, DomainInstantiationId, EpisodeMembership, EpisodeMembershipStatus, EpisodeStatus,
+    EvalTuple, EvalTupleContext, EvalTupleObservations, ExternalRef, Fact, FactId, FactPayload,
+    FactRole, FactStatus, NarrativeStatus, Organization, OrganizationType, ParticipationAction,
+    Principal, Provenance, ReviewerCommunityFilter, SynthesisReview, SynthesisReviewSection,
     SynthesisReviewSectionType, TagId, UserId,
 };
 use serde_json::{json, Value};
@@ -260,6 +260,17 @@ pub async fn create_element_review_fact(
             .await?;
     }
 
+    // Optional claim-scoped targets: the review may inspect one attached
+    // evidence artifact, or scrutinize one warrant-assertion link.
+    let evidence_artifact = trimmed_optional(request.evidence_artifact);
+    if let Some(artifact_id) = &evidence_artifact {
+        super::evidence_artifacts::ensure_active_link(db, episode_id, artifact_id).await?;
+    }
+
+    if let Some(warrant) = &request.warrant {
+        validate_episode_fact_kind(db, episode_id, warrant.as_str(), "warrant_assertion").await?;
+    }
+
     let principal = Principal::User {
         user_id: submitted_by.clone(),
     };
@@ -277,6 +288,8 @@ pub async fn create_element_review_fact(
         confidence: request.confidence,
         limitations: trimmed_optional(request.limitations),
         recommendations: trimmed_optional(request.recommendations),
+        evidence_artifact,
+        warrant: request.warrant,
         content: request.content.trim().to_string(),
         featured: request.featured,
     };
@@ -292,6 +305,71 @@ pub async fn create_element_review_fact(
             role: FactRole::ElementReview,
             principal_value: &principal_value,
             source_system: "csqd_episode_review_api",
+        },
+    )
+    .await?;
+    tx.commit().await?;
+
+    Ok(fact)
+}
+
+/// Asserts a warrant link: why an attached evidence artifact is supposed to
+/// bear on the target claim (claim-scoped audits memo). Warrants are facts —
+/// authored, timestamped, challengeable — and carry no credibility until
+/// element reviews scrutinize them.
+pub async fn create_warrant_fact(
+    db: &PgPool,
+    episode_id: &str,
+    request: CreateEpisodeWarrantRequest,
+) -> Result<Fact, RepositoryError> {
+    if request.artifact_claim.trim().is_empty() {
+        return Err(RepositoryError::Domain(
+            "a warrant assertion requires the artifact claim it runs through".to_string(),
+        ));
+    }
+
+    let episode_context = find_episode_context(db, episode_id).await?;
+    let evidence_artifact = request
+        .evidence_artifact
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
+
+    if let Some(artifact_id) = &evidence_artifact {
+        super::evidence_artifacts::ensure_active_link(db, episode_id, artifact_id).await?;
+    }
+
+    let asserted_by = request
+        .asserted_by
+        .clone()
+        .filter(|value| !value.as_str().trim().is_empty())
+        .unwrap_or_else(|| UserId::new(DEMO_REVIEWER_USER_ID));
+    let principal = Principal::User {
+        user_id: asserted_by.clone(),
+    };
+    let principal_value = serde_json::to_value(&principal)
+        .map_err(|error| RepositoryError::Domain(format!("invalid principal: {error}")))?;
+    let payload = FactPayload::WarrantAssertion {
+        asserted_by,
+        evidence_artifact,
+        artifact_claim: request.artifact_claim.trim().to_string(),
+        inference_type: request.inference_type,
+        assumptions: trimmed_optional(request.assumptions),
+        rationale: trimmed_optional(request.rationale),
+    };
+
+    let mut tx = db.begin().await?;
+    let fact = insert_fact_with_membership(
+        &mut tx,
+        InsertEpisodeFact {
+            subject_id: episode_context.subject_id.clone(),
+            domain_instantiation_id: episode_context.domain_instantiation_id.clone(),
+            episode_id: episode_id.to_string(),
+            payload: &payload,
+            role: FactRole::Warrant,
+            principal_value: &principal_value,
+            source_system: "csqd_warrant_api",
         },
     )
     .await?;

@@ -7,23 +7,29 @@
 
 use axum::{
     extract::{Path, Query, State},
+    http::HeaderMap,
     routing::{get, post},
     Json, Router,
 };
 use csqd_academic_adapter::{
-    ArticleAccessSummary, ArticleRetrievalResult, ArticleRetrievalSet, LibraryItemSummary,
-    ProblemAreaWorkSummary, ScholarlyObjectDetail, ScholarlyObjectSummary,
+    ArticleAccessSummary, ArticleRetrievalResult, ArticleRetrievalSet, ClaimAuditIndexEntry,
+    EvidenceArtifactSummary, LibraryItemSummary, ProblemAreaWorkSummary, ScholarlyObjectDetail,
+    ScholarlyObjectSummary, WorkAuditInvolvement,
 };
+use csqd_domain::{AttachEvidenceArtifactRequest, Principal};
 use serde::Deserialize;
+use serde_json::json;
 
 use crate::{
     error::ApiError,
     repositories::{
-        article_access, article_retrieval, doi_retrieval, public_summary, pubmed_retrieval,
-        scholarly_objects, title_retrieval, user_library,
+        article_access, article_retrieval, claim_audits, doi_retrieval, evidence_artifacts,
+        public_summary, pubmed_retrieval, scholarly_objects, title_retrieval, user_library,
     },
     state::AppState,
 };
+
+use super::require_session;
 
 #[derive(Debug, Deserialize)]
 struct ArticleRetrievalQuery {
@@ -70,6 +76,7 @@ pub fn router() -> Router<AppState> {
             "/api/peer-review/problem-area-works",
             get(browse_problem_area_works),
         )
+        .route("/api/claim-audits", get(list_claim_audits))
         .route("/api/scholarly-objects", get(list_scholarly_objects))
         .route("/api/work-search", get(search_work_summaries))
         .route(
@@ -77,6 +84,18 @@ pub fn router() -> Router<AppState> {
             get(get_article_access),
         )
         .route("/api/scholarly-objects/:id", get(get_scholarly_object))
+        .route(
+            "/api/scholarly-objects/:id/audit-involvements",
+            get(list_work_audit_involvements),
+        )
+        .route(
+            "/api/audit-episodes/:id/evidence-artifacts",
+            get(list_episode_evidence_artifacts).post(attach_episode_evidence_artifact),
+        )
+        .route(
+            "/api/audit-episodes/:id/evidence-artifacts/:artifact_id/retract",
+            post(retract_episode_evidence_artifact),
+        )
         .route(
             "/api/public/scholarly-objects/:id/summary",
             get(get_public_scholarly_object_summary),
@@ -200,6 +219,74 @@ async fn get_article_access(
     let access = article_access::find_for_scholarly_object(&state.db, &id).await?;
 
     Ok(Json(access))
+}
+
+// ── Evidence artifacts (claim-scoped audits memo) ───────────────
+
+/// Every audit that involves this work — as subject or as attached evidence.
+/// Keeps the paper page a first-class discovery surface without making the
+/// paper the audit's epistemic target.
+async fn list_work_audit_involvements(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<WorkAuditInvolvement>>, ApiError> {
+    let involvements =
+        evidence_artifacts::list_involvements_for_scholarly_object(&state.db, &id).await?;
+
+    Ok(Json(involvements))
+}
+
+async fn list_claim_audits(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<ClaimAuditIndexEntry>>, ApiError> {
+    let entries = claim_audits::list_index(&state.db).await?;
+
+    Ok(Json(entries))
+}
+
+async fn list_episode_evidence_artifacts(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<EvidenceArtifactSummary>>, ApiError> {
+    let artifacts = evidence_artifacts::list_summaries_for_episode(&state.db, &id).await?;
+
+    Ok(Json(artifacts))
+}
+
+async fn attach_episode_evidence_artifact(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(mut request): Json<AttachEvidenceArtifactRequest>,
+) -> Result<Json<EvidenceArtifactSummary>, ApiError> {
+    let session = require_session(&state, &headers).await?;
+    request.attached_by = Some(Principal::User {
+        user_id: session.user_id.clone(),
+    });
+
+    let artifact = evidence_artifacts::attach(&state.db, &id, request).await?;
+
+    Ok(Json(artifact))
+}
+
+async fn retract_episode_evidence_artifact(
+    State(state): State<AppState>,
+    Path((id, artifact_id)): Path<(String, String)>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, ApiError> {
+    let session = require_session(&state, &headers).await?;
+
+    evidence_artifacts::retract(
+        &state.db,
+        &id,
+        &artifact_id,
+        Principal::User {
+            user_id: session.user_id.clone(),
+        },
+    )
+    .await?;
+
+    Ok(Json(json!({ "retracted": true })))
 }
 
 // ── Public summaries keyed by scholarly object ──────────────────

@@ -10,14 +10,14 @@ C-SQD is now being built as **general epistemic audit infrastructure** for commi
 
 Use this order when documents conflict:
 
-1. `C_SQD_NEW_GTM.pdf`
-2. `FEN_for_CSQD_GTM.pdf`
-3. `FEN_Schema_for_CSQD_GTM.tex`
+1. `C-SQD_NEW_GTM.tex`
+2. `FEN_Schema_for_CSQD_GTM.tex`
+3. `CLAIM_SCOPED_AUDITS_MEMO.md`
 4. `NEXT_STEPS.md` for current engineering execution
 5. `build_decisions.md` for stack and architecture choices
-6. Older documents: `CSQD_NEW.pdf`, `FEN_Schema_for_CSQD.pdf`, and `old_mvp_docs/`
+6. Older rendered PDFs and MVP documents in `old_mvp_docs/`
 
-Older documents are useful history, especially for platform ambition and marketplace framing, but they should not override the current commissioned-audit GTM or the GTM FEN schema.
+Older documents are useful history, especially for platform ambition and marketplace framing, but they should not override the current commissioned-audit GTM or the GTM FEN schema sources.
 
 ## Core Interpretation
 
@@ -41,7 +41,7 @@ Academic Publishing remains the first implemented adapter. Its scholarly intake,
 Use the following interpretation when designing backend and UI behavior:
 
 - `DomainInstantiation`: a configured epistemic audit domain, such as Academic Peer Review or Clinical Trial Protocol Review.
-- `AuditSubject`: referenced metadata for the paper, model, dataset, protocol, report, or claim under evaluation.
+- `AuditSubject`: referenced metadata for the scoped claim, claim-warrant bundle, decision-relevant assertion, or artifact-attached claim under evaluation.
 - `Fact`: an atomic, timestamped, provenance-bearing epistemic or administrative act.
 - `AuditEpisode`: a coherent commissioned audit question over time.
 - `EpisodeMembership`: a provenance-bearing claim that a fact belongs to an episode.
@@ -63,7 +63,7 @@ But these should be interpreted as Academic Publishing surfaces over the general
 
 For example:
 
-- A `ScholarlyObject` is an Academic Publishing metadata adapter over `AuditSubject`.
+- A `ScholarlyObject` is an Academic Publishing metadata adapter and discovery surface for papers that may be attached to audits as evidence artifacts.
 - An `ElementReview` is a `FactPayload` attached to an `AuditEpisode` through `EpisodeMembership`.
 - A commission is an `AuditCommission` fact and an episode membership, not a separate product primitive.
 - A synthesis review is a first-class `SynthesisReview` attached to an `AuditEpisode`.
@@ -167,4 +167,4 @@ Do not prioritize a sophisticated document reader ahead of the core audit workfl
 
 When in doubt, build C-SQD as multi-domain epistemic audit infrastructure.
 
-Treat Academic Publishing as the first adapter. Treat articles and manuscripts as important audit subjects, not as the product itself. Use native article display when rights permit, link out when rights require it, and keep facts, audit episodes, provenance, synthesis reviews, and evaluation tuples at the center of the platform.
+Treat Academic Publishing as the first adapter. Treat articles and manuscripts as important evidence artifacts and discovery surfaces, not as the product itself or the default audit target. Use native article display when rights permit, link out when rights require it, and keep scoped claims, facts, audit episodes, provenance, synthesis reviews, and evaluation tuples at the center of the platform.

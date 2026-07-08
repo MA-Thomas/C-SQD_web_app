@@ -2,6 +2,8 @@
 /// Lives outside any "use client" module so both server components (the
 /// homepage explainer) and client components (TupleBadge) can import it.
 
+import { type EvalTuple } from "./csqd-api";
+
 export type TupleValues = {
   problems: number;
   ethicalConcerns: number;
@@ -20,12 +22,30 @@ export type TupleItemSpec = {
   valence: "concern" | "record";
 };
 
+/// Display mapping from the backend's raw (N, M, S, L, U) tuple to the
+/// friendly-keyed shape TupleBadge renders. Pure renaming — the values are
+/// computed in Rust (`compute_eval_tuple`) and never adjusted here.
+export function evalTupleValues(tuple: EvalTuple | null): TupleValues {
+  if (!tuple) {
+    return null;
+  }
+
+  return {
+    problems: tuple.n,
+    ethicalConcerns: tuple.m,
+    stakes: tuple.s,
+    scrutinyDepth: tuple.l,
+    uptake: tuple.u,
+  };
+}
+
 export const TUPLE_ITEMS: TupleItemSpec[] = [
   {
     key: "problems",
     label: "Problems",
     symbol: "N",
-    definition: "Non-ethical problems surfaced by ElementReviews. Zero is best.",
+    definition:
+      "Audited non-ethical problems in the claim's warrants, surfaced by ElementReviews. Zero is best.",
     valence: "concern",
   },
   {
@@ -39,7 +59,7 @@ export const TUPLE_ITEMS: TupleItemSpec[] = [
     key: "stakes",
     label: "Stakes",
     symbol: "S",
-    definition: "How consequential the subject is for the domain.",
+    definition: "How consequential the target claim is for the domain.",
     valence: "record",
   },
   {

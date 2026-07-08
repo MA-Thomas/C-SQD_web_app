@@ -31,6 +31,7 @@ export function WorkCard({
       <div className="pub-card-kicker">
         <StatusPill status={status} />
         <span>{formatLabel(object.version_kind)}</span>
+        <span>Work record</span>
         {group.versionCount > 1 ? <span>{group.versionCount} versions</span> : null}
       </div>
       <h3>
@@ -56,7 +57,7 @@ export function WorkCard({
         ) : null}
       </div>
       <div className="pub-card-actions">
-        <Link href={workHref}>Full audit record</Link>
+        <Link href={workHref}>Open work record</Link>
         <Link href={`${workHref}/review`}>Review one criterion</Link>
       </div>
     </article>
