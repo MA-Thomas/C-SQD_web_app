@@ -41,6 +41,17 @@ To rebuild the local database from scratch:
 scripts/setup_db.sh --reset
 ```
 
+Local setup applies the demo seeds (example audits, sponsors, reports) so
+the app is browsable during development. **Pilot and production databases
+must run clean:**
+
+```sh
+scripts/setup_db.sh --reset --no-seeds
+```
+
+If a shared environment does carry seed data, set `NEXT_PUBLIC_DEMO_MODE=1`
+so every public page is banner-labeled as demonstration data.
+
 Run the API:
 
 ```sh
@@ -88,6 +99,57 @@ http://localhost:3000
 - `README_FOR_EUNICE.md`: concise onboarding guide for new collaborators.
 
 Older rendered PDFs and MVP documents in `old_mvp_docs/` are useful history but no longer authoritative when they conflict with the GTM/FEN sources above.
+
+## Auth Modes And Deployment Flags
+
+Local development defaults to **dev-auth mode**: magic sign-in links are
+returned in the API response (and shown on the sign-in page) instead of being
+emailed. In any deployment other people can reach, set:
+
+```sh
+CSQD_DEV_AUTH=0        # links go to the API log only, until email delivery is wired
+CSQD_SECURE_COOKIES=1  # Secure session cookies (HTTPS deployments)
+CSQD_API_BIND=0.0.0.0  # container/hosted bind address (default: 127.0.0.1)
+```
+
+Write endpoints (subject registration, commissioning, external article
+retrieval, library) require a signed-in session. The library is scoped to the
+session user. Magic-link issuance is throttled per address (3 per 15-minute
+window).
+
+Email delivery (magic links, inquiry/solicitation/review notifications) is
+provider-agnostic: set `CSQD_EMAIL_PROVIDER` (resend or postmark),
+`CSQD_EMAIL_API_KEY`, and `CSQD_EMAIL_FROM`. Without a provider, outbound
+mail is logged, so all flows stay exercisable locally.
+
+Container builds live in `infra/Dockerfile.api` and `infra/Dockerfile.web`;
+CI (format, check, test, type-check, lint, build) runs via
+`.github/workflows/ci.yml`.
+
+## Commercial Model
+
+Commissioning is two-stage. `/commission` shows a public inquiry form
+(stage one — recorded in `commission_inquiries`, triaged in Operations);
+the full scoped commission form appears for signed-in users (stage two).
+Money movement is recorded as facts on the audit record — `invoice_issued`,
+`payment_received`, `reviewer_payout` — via the episode workspace's
+commercial panel (operator-only). An episode counts as **funded** when an
+active `payment_received` fact exists: a derived view, like the evaluation
+tuple, which deliberately ignores all commercial facts.
+
+Role grants (sponsor/reviewer/operator) and account display names are
+managed in Operations → Accounts and `/account` respectively.
+
+## Smoke Test
+
+With the local stack running (dev-auth mode):
+
+```sh
+scripts/smoke_test.sh
+```
+
+exercises health → auth → registration → commission → inquiry → eval tuple
+→ public summary → operator gating, end to end.
 
 ## Verification
 

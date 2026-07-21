@@ -14,6 +14,10 @@ use super::{users, RepositoryError};
 
 const MAGIC_LINK_TTL_MINUTES: i64 = 15;
 const SESSION_TTL_DAYS: i64 = 30;
+/// Maximum sign-in links issuable per email inside one TTL window. A cheap,
+/// dependency-free brake on link-request abuse; per-IP limiting belongs at
+/// the reverse proxy.
+const MAGIC_LINK_MAX_PER_WINDOW: i64 = 3;
 
 pub struct IssuedMagicLink {
     pub email: String,
@@ -34,6 +38,27 @@ pub async fn request_magic_link(
     email: &str,
 ) -> Result<IssuedMagicLink, RepositoryError> {
     let user = users::find_or_create_by_email(db, email).await?;
+
+    let recent: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM auth_magic_links
+        WHERE email = $1
+          AND created_at > now() - make_interval(mins => $2)
+        "#,
+    )
+    .bind(&user.email)
+    .bind(MAGIC_LINK_TTL_MINUTES as i32)
+    .fetch_one(db)
+    .await?;
+
+    if recent >= MAGIC_LINK_MAX_PER_WINDOW {
+        return Err(RepositoryError::RateLimited(
+            "too many sign-in links requested for this address; wait a few minutes and try again"
+                .to_string(),
+        ));
+    }
+
     let token = generate_token();
     let token_hash = hash_token(&token);
     let expires_at = Utc::now() + Duration::minutes(MAGIC_LINK_TTL_MINUTES);

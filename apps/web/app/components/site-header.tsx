@@ -7,13 +7,14 @@ import { Suspense, useEffect, useState } from "react";
 import { useAdvancedMode } from "../lib/advanced-mode";
 import { useSession } from "../lib/session";
 
+/// Five tabs: the visitor's core loop (read → explore → understand → buy).
+/// Claims, Criteria, and Domains remain first-class pages, reachable from
+/// Discover, Method, and the footer — they are reference depth, not
+/// primary navigation.
 const TABS = [
   { href: "/", label: "Home", exact: true },
   { href: "/discover", label: "Discover" },
-  { href: "/claims", label: "Claims" },
   { href: "/audits", label: "Audit Reports" },
-  { href: "/criteria", label: "Criteria" },
-  { href: "/domains", label: "Domains" },
   { href: "/method", label: "Method" },
   { href: "/commission", label: "Commission" },
 ];
@@ -52,7 +53,10 @@ export function SiteHeader() {
           </button>
           {loading ? null : user ? (
             <div className="pub-session">
-              <Link href="/library">{user.display_name}</Link>
+              <Link href="/account" title="Account settings">
+                {user.display_name}
+              </Link>
+              <Link href="/library">Library</Link>
               {hasRole("sponsor") ? <Link href="/sponsor-console">Sponsor</Link> : null}
               {hasRole("reviewer") ? <Link href="/reviewer-queue">Reviewer</Link> : null}
               {hasRole("operator") ? <Link href="/operations">Operations</Link> : null}

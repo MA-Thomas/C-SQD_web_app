@@ -12,7 +12,8 @@ use csqd_domain::{
     CWEPetitionKind, CommissionAuditEpisodeRequest, CommissionAuditEpisodeResult,
     CreateAuditSubjectRequest, CreateEpisodeElementReviewRequest, CreateEpisodeRelationRequest,
     CreateEpisodeSolicitationEventRequest, CreateEpisodeSolicitationRequest,
-    CreateEpisodeWarrantRequest, CreateSynthesisReviewRelationRequest,
+    CreateEpisodeWarrantRequest, CreateInvoiceIssuedRequest, CreatePaymentReceivedRequest,
+    CreateReviewerPayoutRequest, CreateSynthesisReviewRelationRequest,
     CreateSynthesisReviewRequest, CurationOutcome, CurationTarget, DomainInstantiationDetail,
     DomainInstantiationSummary, EpisodeRelation, EvalTuple, Fact, FactId, FactResponseType,
     Principal, ReviewerProfile, Role, SessionUser, SynthesisReview, SynthesisReviewRelation,
@@ -25,8 +26,8 @@ use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use crate::{
     error::ApiError,
     repositories::{
-        audit_episodes, audit_subjects, auth, domain_instantiations, public_summary, relations,
-        users,
+        audit_episodes, audit_subjects, auth, commission_inquiries, domain_instantiations,
+        public_summary, relations, users,
     },
     state::AppState,
 };
@@ -89,6 +90,16 @@ struct CWEPetitionBody {
 }
 
 #[derive(Debug, Deserialize)]
+struct UpdateDisplayNameBody {
+    display_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SetRolesBody {
+    roles: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct CurationDecisionBody {
     target: CurationTarget,
     decision: CurationOutcome,
@@ -105,6 +116,9 @@ pub fn router(state: AppState) -> Router {
         .route("/api/auth/session", get(get_session))
         .route("/api/auth/sign-out", post(sign_out))
         .route("/api/users/:id", get(get_user))
+        .route("/api/account/display-name", post(update_own_display_name))
+        .route("/api/admin/accounts", get(list_accounts))
+        .route("/api/admin/accounts/:id/roles", post(set_account_roles))
         .route("/api/reviewer-profiles/:user_id", get(get_reviewer_profile))
         .route(
             "/api/audit-subjects",
@@ -161,6 +175,18 @@ pub fn router(state: AppState) -> Router {
             post(create_curation_decision),
         )
         .route(
+            "/api/audit-episodes/:id/facts/invoice-issued",
+            post(create_invoice_issued),
+        )
+        .route(
+            "/api/audit-episodes/:id/facts/payment-received",
+            post(create_payment_received),
+        )
+        .route(
+            "/api/audit-episodes/:id/facts/reviewer-payout",
+            post(create_reviewer_payout),
+        )
+        .route(
             "/api/audit-episodes/:id/relations",
             get(list_episode_relations).post(create_episode_relation),
         )
@@ -172,6 +198,14 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/synthesis-reviews/:id/relations",
             get(list_synthesis_relations).post(create_synthesis_relation),
+        )
+        .route(
+            "/api/commission-inquiries",
+            get(list_commission_inquiries).post(create_commission_inquiry),
+        )
+        .route(
+            "/api/commission-inquiries/:id/status",
+            post(update_commission_inquiry),
         )
         .route(
             "/api/public/audit-subjects/summaries",
@@ -243,8 +277,12 @@ fn require_role(session: &SessionUser, role: Role) -> Result<(), ApiError> {
     auth::require_role(session, role).map_err(ApiError::from)
 }
 
-fn session_cookie(token: &str, max_age_seconds: i64) -> String {
-    format!("{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={max_age_seconds}")
+fn session_cookie(token: &str, max_age_seconds: i64, secure: bool) -> String {
+    let secure_attr = if secure { "; Secure" } else { "" };
+
+    format!(
+        "{SESSION_COOKIE}={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={max_age_seconds}{secure_attr}"
+    )
 }
 
 // ── Auth handlers ───────────────────────────────────────────────
@@ -260,15 +298,26 @@ async fn request_magic_link(
         link.token
     );
 
-    // No mail delivery in the MVP: surface the link in the response and the
-    // server log so local development and pilots can proceed.
+    // The link is always logged so an operator can hand-deliver it until
+    // email delivery is wired up. It is returned in the response ONLY in
+    // dev-auth mode — in any shared deployment that would let anyone sign
+    // in as any address.
     tracing::info!(email = %link.email, %sign_in_url, "magic sign-in link issued");
 
-    Ok(Json(json!({
-        "email": link.email,
-        "expires_at": link.expires_at,
-        "sign_in_url": sign_in_url,
-    })))
+    if state.config.dev_auth {
+        Ok(Json(json!({
+            "email": link.email,
+            "expires_at": link.expires_at,
+            "sign_in_url": sign_in_url,
+        })))
+    } else {
+        crate::mailer::send_magic_link(&state, &link.email, &sign_in_url).await;
+
+        Ok(Json(json!({
+            "email": link.email,
+            "expires_at": link.expires_at,
+        })))
+    }
 }
 
 async fn complete_magic_link(
@@ -277,7 +326,7 @@ async fn complete_magic_link(
 ) -> Result<impl IntoResponse, ApiError> {
     let session = auth::complete_magic_link(&state.db, &body.token).await?;
     let max_age = (session.expires_at - Utc::now()).num_seconds().max(0);
-    let cookie = session_cookie(&session.token, max_age);
+    let cookie = session_cookie(&session.token, max_age, state.config.secure_cookies);
 
     Ok((
         AppendHeaders([(header::SET_COOKIE, cookie)]),
@@ -303,7 +352,10 @@ async fn sign_out(
     }
 
     Ok((
-        AppendHeaders([(header::SET_COOKIE, session_cookie("", 0))]),
+        AppendHeaders([(
+            header::SET_COOKIE,
+            session_cookie("", 0, state.config.secure_cookies),
+        )]),
         Json(json!({ "user": null })),
     ))
 }
@@ -315,6 +367,55 @@ async fn get_user(
     let user = users::find(&state.db, &id).await?;
 
     Ok(Json(user))
+}
+
+/// Self-service display-name update (account page / onboarding).
+async fn update_own_display_name(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<UpdateDisplayNameBody>,
+) -> Result<Json<User>, ApiError> {
+    let session = require_session(&state, &headers).await?;
+    let user =
+        users::update_display_name(&state.db, session.user_id.as_str(), &body.display_name).await?;
+
+    Ok(Json(user))
+}
+
+// ── Account administration (operator-only) ──────────────────────
+
+async fn list_accounts(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<users::AccountSummary>>, ApiError> {
+    let session = require_session(&state, &headers).await?;
+    require_role(&session, Role::Operator)?;
+
+    let accounts = users::list_accounts(&state.db).await?;
+
+    Ok(Json(accounts))
+}
+
+async fn set_account_roles(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(body): Json<SetRolesBody>,
+) -> Result<Json<users::AccountSummary>, ApiError> {
+    let session = require_session(&state, &headers).await?;
+    require_role(&session, Role::Operator)?;
+
+    // Operators cannot silently drop their own operator role — a soft
+    // guard against locking the last operator out.
+    if id == session.user_id.as_str() && !body.roles.iter().any(|role| role == "operator") {
+        return Err(ApiError::Forbidden(
+            "you cannot remove your own operator role".to_string(),
+        ));
+    }
+
+    let account = users::set_roles(&state.db, &id, &body.roles).await?;
+
+    Ok(Json(account))
 }
 
 async fn get_reviewer_profile(
@@ -362,10 +463,15 @@ async fn list_audit_subjects(
     Ok(Json(subjects))
 }
 
+/// Registering an audit subject is a durable write to the public audit
+/// graph; it requires an identified session.
 async fn create_audit_subject(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<CreateAuditSubjectRequest>,
 ) -> Result<Json<AuditSubject>, ApiError> {
+    require_session(&state, &headers).await?;
+
     let subject = audit_subjects::create(&state.db, request).await?;
 
     Ok(Json(subject))
@@ -391,11 +497,18 @@ async fn list_audit_episodes_for_subject(
     Ok(Json(episodes))
 }
 
+/// Commissioning creates a sponsor organization, an episode, a commission
+/// fact, and a membership — the most consequential write in the system.
+/// It requires an identified session; the commission form stays public up
+/// to submission, but the submitter must be signed in.
 async fn commission_audit_episode(
     State(state): State<AppState>,
     Path(id): Path<String>,
+    headers: HeaderMap,
     Json(request): Json<CommissionAuditEpisodeRequest>,
 ) -> Result<Json<CommissionAuditEpisodeResult>, ApiError> {
+    require_session(&state, &headers).await?;
+
     let result = audit_episodes::commission_for_subject(&state.db, &id, request).await?;
 
     Ok(Json(result))
@@ -528,6 +641,8 @@ async fn create_episode_element_review(
 
     let fact = audit_episodes::create_element_review_fact(&state.db, &id, request).await?;
 
+    crate::mailer::notify_review_submitted(&state, &id).await;
+
     Ok(Json(fact))
 }
 
@@ -566,7 +681,15 @@ async fn create_episode_solicitation(
     let session = require_session(&state, &headers).await?;
     require_role(&session, Role::Operator)?;
 
+    let issued_to = request.issued_to.clone();
     let fact = audit_episodes::create_solicitation_fact(&state.db, &id, request).await?;
+
+    // Notify the solicited reviewer by email when we can resolve one.
+    if let Some(user_id) = issued_to {
+        if let Ok(user) = users::find(&state.db, user_id.as_str()).await {
+            crate::mailer::notify_solicitation(&state, &user.email, &id).await;
+        }
+    }
 
     Ok(Json(fact))
 }
@@ -664,6 +787,78 @@ async fn create_curation_decision(
         body.decision,
         body.rationale,
         body.petitions,
+    )
+    .await?;
+
+    Ok(Json(fact))
+}
+
+// ── Commercial lifecycle facts (operator-only) ──────────────────
+//
+// Money movement is recorded on the audit record as administrative facts.
+// These never affect the evaluation tuple; an episode counts as funded
+// once an active payment_received fact exists.
+
+async fn create_invoice_issued(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<CreateInvoiceIssuedRequest>,
+) -> Result<Json<Fact>, ApiError> {
+    let session = require_session(&state, &headers).await?;
+    require_role(&session, Role::Operator)?;
+
+    let fact = audit_episodes::create_invoice_issued_fact(
+        &state.db,
+        &id,
+        Principal::User {
+            user_id: session.user_id.clone(),
+        },
+        request,
+    )
+    .await?;
+
+    Ok(Json(fact))
+}
+
+async fn create_payment_received(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<CreatePaymentReceivedRequest>,
+) -> Result<Json<Fact>, ApiError> {
+    let session = require_session(&state, &headers).await?;
+    require_role(&session, Role::Operator)?;
+
+    let fact = audit_episodes::create_payment_received_fact(
+        &state.db,
+        &id,
+        Principal::User {
+            user_id: session.user_id.clone(),
+        },
+        request,
+    )
+    .await?;
+
+    Ok(Json(fact))
+}
+
+async fn create_reviewer_payout(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<CreateReviewerPayoutRequest>,
+) -> Result<Json<Fact>, ApiError> {
+    let session = require_session(&state, &headers).await?;
+    require_role(&session, Role::Operator)?;
+
+    let fact = audit_episodes::create_reviewer_payout_fact(
+        &state.db,
+        &id,
+        Principal::User {
+            user_id: session.user_id.clone(),
+        },
+        request,
     )
     .await?;
 
@@ -784,6 +979,50 @@ async fn get_eval_tuple(
     let eval_tuple = audit_episodes::compute_eval_tuple(&state.db, &id, query).await?;
 
     Ok(Json(eval_tuple))
+}
+
+// ── Commission inquiries (two-stage intake) ─────────────────────
+
+/// Stage one, public: a short inquiry, not a commission. No session
+/// required — the barrier to *asking* stays low; the barrier to entering
+/// the audit graph stays at stage two.
+async fn create_commission_inquiry(
+    State(state): State<AppState>,
+    Json(request): Json<commission_inquiries::CreateCommissionInquiryRequest>,
+) -> Result<Json<commission_inquiries::CommissionInquiry>, ApiError> {
+    let inquiry = commission_inquiries::create(&state.db, request).await?;
+
+    // Surface new inquiries to the operator inbox via the mailer when one
+    // is configured; the inquiry is durably recorded either way.
+    crate::mailer::notify_new_inquiry(&state, &inquiry).await;
+
+    Ok(Json(inquiry))
+}
+
+async fn list_commission_inquiries(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<commission_inquiries::CommissionInquiry>>, ApiError> {
+    let session = require_session(&state, &headers).await?;
+    require_role(&session, Role::Operator)?;
+
+    let inquiries = commission_inquiries::list(&state.db).await?;
+
+    Ok(Json(inquiries))
+}
+
+async fn update_commission_inquiry(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    headers: HeaderMap,
+    Json(request): Json<commission_inquiries::UpdateCommissionInquiryRequest>,
+) -> Result<Json<commission_inquiries::CommissionInquiry>, ApiError> {
+    let session = require_session(&state, &headers).await?;
+    require_role(&session, Role::Operator)?;
+
+    let inquiry = commission_inquiries::update_status(&state.db, &id, request).await?;
+
+    Ok(Json(inquiry))
 }
 
 // ── Public summaries ────────────────────────────────────────────

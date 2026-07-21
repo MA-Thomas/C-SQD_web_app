@@ -1,6 +1,7 @@
 mod config;
 mod db;
 mod error;
+mod mailer;
 mod repositories;
 mod routes;
 mod state;

@@ -39,6 +39,48 @@ export function evalTupleValues(tuple: EvalTuple | null): TupleValues {
   };
 }
 
+/// One-sentence plain-language reading of the tuple. The five-dimension
+/// badge is honest but cognitively expensive as a first read; this line is
+/// the comprehension on-ramp that sits beside it. Pure presentation over
+/// the same values — never a sixth number.
+export function tupleVerdict(tuple: TupleValues): string | null {
+  if (!tuple) {
+    return null;
+  }
+
+  const problems = Math.round(tuple.problems);
+  const ethical = Math.round(tuple.ethicalConcerns);
+  const depth = tuple.scrutinyDepth;
+
+  const concerns: string[] = [];
+
+  if (problems > 0) {
+    concerns.push(
+      `${problems} upheld problem${problems === 1 ? "" : "s"}`,
+    );
+  }
+
+  if (ethical > 0) {
+    concerns.push(
+      `${ethical} ethical concern${ethical === 1 ? "" : "s"}`,
+    );
+  }
+
+  const concernPart =
+    concerns.length > 0
+      ? `Reviewers have surfaced ${concerns.join(" and ")}.`
+      : "No problems upheld so far.";
+
+  const depthPart =
+    depth >= 3
+      ? "Scrutiny is deep."
+      : depth > 0
+        ? "Scrutiny is still shallow."
+        : "This claim has not yet been reviewed in depth.";
+
+  return `${concernPart} ${depthPart}`;
+}
+
 export const TUPLE_ITEMS: TupleItemSpec[] = [
   {
     key: "problems",

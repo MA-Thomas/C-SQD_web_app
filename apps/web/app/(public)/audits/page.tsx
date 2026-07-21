@@ -2,7 +2,8 @@ import Link from "next/link";
 
 import { WorkCard } from "../../components/work-card";
 import { SectionRail, WorkListRow } from "../../components/work-list-row";
-import { getScholarlyObjects } from "../../lib/csqd-api";
+import { RegistryUnavailable } from "../../components/registry-unavailable";
+import { getScholarlyObjects, isApiReachable } from "../../lib/csqd-api";
 import {
   formatDate,
   getPublicAuditSummariesForObjects,
@@ -15,6 +16,21 @@ import {
 /// visitor has a particular paper in mind.
 export default async function AuditsPage() {
   const objects = await getScholarlyObjects();
+
+  if (objects.length === 0 && !(await isApiReachable())) {
+    return (
+      <>
+        <header className="pub-page-head">
+          <div>
+            <p className="pub-kicker">Audit reports</p>
+            <h1>Delivered Public Audits</h1>
+          </div>
+        </header>
+        <RegistryUnavailable />
+      </>
+    );
+  }
+
   const groups = groupScholarlyObjects(objects);
   const summaries = await getPublicAuditSummariesForObjects(
     groups.map((group) => group.primaryVersion),

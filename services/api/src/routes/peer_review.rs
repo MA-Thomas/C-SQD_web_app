@@ -43,6 +43,12 @@ struct WorkSearchQuery {
 }
 
 #[derive(Debug, Deserialize)]
+struct ListQuery {
+    limit: Option<i64>,
+    offset: Option<i64>,
+}
+
+#[derive(Debug, Deserialize)]
 struct ProblemAreaBrowseQuery {
     query: Option<String>,
     cwe_node_id: Option<String>,
@@ -108,10 +114,18 @@ pub fn router() -> Router<AppState> {
 
 // ── Article retrieval ───────────────────────────────────────────
 
+// Retrieval endpoints are GETs with side effects: they create scholarly
+// objects and audit subjects. They therefore require an identified session
+// — otherwise anyone can flood the registry unattributed. Local search
+// (`/api/work-search`, `/api/scholarly-objects`) stays public.
+
 async fn retrieve_arxiv_article(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<ArticleRetrievalQuery>,
 ) -> Result<Json<ArticleRetrievalResult>, ApiError> {
+    require_session(&state, &headers).await?;
+
     let result = article_retrieval::retrieve_arxiv(&state.db, &query.query).await?;
 
     Ok(Json(result))
@@ -119,8 +133,11 @@ async fn retrieve_arxiv_article(
 
 async fn retrieve_doi_article(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<ArticleRetrievalQuery>,
 ) -> Result<Json<ArticleRetrievalResult>, ApiError> {
+    require_session(&state, &headers).await?;
+
     let result = doi_retrieval::retrieve_doi(&state.db, &query.query).await?;
 
     Ok(Json(result))
@@ -128,8 +145,11 @@ async fn retrieve_doi_article(
 
 async fn retrieve_pubmed_article(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<ArticleRetrievalQuery>,
 ) -> Result<Json<ArticleRetrievalResult>, ApiError> {
+    require_session(&state, &headers).await?;
+
     let result = pubmed_retrieval::retrieve_pubmed(&state.db, &query.query).await?;
 
     Ok(Json(result))
@@ -137,8 +157,11 @@ async fn retrieve_pubmed_article(
 
 async fn retrieve_title_article(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Query(query): Query<ArticleRetrievalQuery>,
 ) -> Result<Json<ArticleRetrievalSet>, ApiError> {
+    require_session(&state, &headers).await?;
+
     let result = title_retrieval::retrieve_title(
         &state.db,
         &query.query,
@@ -151,19 +174,30 @@ async fn retrieve_title_article(
 
 // ── Library ─────────────────────────────────────────────────────
 
+/// The library is per-user account workspace: both reads and writes are
+/// scoped to the session identity.
 async fn list_library_items(
     State(state): State<AppState>,
+    headers: HeaderMap,
 ) -> Result<Json<Vec<LibraryItemSummary>>, ApiError> {
-    let items = user_library::list_items(&state.db).await?;
+    let session = require_session(&state, &headers).await?;
+    let items = user_library::list_items(&state.db, session.user_id.as_str()).await?;
 
     Ok(Json(items))
 }
 
 async fn add_library_item(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(request): Json<AddLibraryItemRequest>,
 ) -> Result<Json<LibraryItemSummary>, ApiError> {
-    let item = user_library::add_scholarly_object(&state.db, &request.scholarly_object_id).await?;
+    let session = require_session(&state, &headers).await?;
+    let item = user_library::add_scholarly_object(
+        &state.db,
+        session.user_id.as_str(),
+        &request.scholarly_object_id,
+    )
+    .await?;
 
     Ok(Json(item))
 }
@@ -172,8 +206,10 @@ async fn add_library_item(
 
 async fn list_scholarly_objects(
     State(state): State<AppState>,
+    Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<ScholarlyObjectSummary>>, ApiError> {
-    let objects = scholarly_objects::list_summaries(&state.db).await?;
+    let objects =
+        scholarly_objects::list_summaries_page(&state.db, query.limit, query.offset).await?;
 
     Ok(Json(objects))
 }

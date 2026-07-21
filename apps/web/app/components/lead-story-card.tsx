@@ -41,7 +41,7 @@ export function LeadStoryCard({
         {object.source_name ? ` · ${object.source_name}` : ""}
         {report ? ` · report ${formatDate(report.authored_at)}` : ""}
       </p>
-      <TupleBadge size="compact" tuple={summary?.tuple ?? null} />
+      <TupleBadge showVerdict size="compact" tuple={summary?.tuple ?? null} />
       <div className="pub-lead-related">
         <Link href={`${workHref}#latest-report`}>Read the full report</Link>
         <Link href={`${workHref}#element-reviews`}>

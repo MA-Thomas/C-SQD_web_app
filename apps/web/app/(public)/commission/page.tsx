@@ -1,5 +1,8 @@
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+
+import Link from "next/link";
 
 import {
   commissionAuditEpisode,
@@ -8,14 +11,25 @@ import {
   getAuditSubjects,
   getDomainInstantiation,
   getDomainInstantiations,
+  getSession,
+  submitCommissionInquiry,
   type DomainInstantiationSummary,
 } from "../../lib/csqd-api";
 
 type PageProps = {
   searchParams: Promise<{
     subject_id?: string;
+    inquiry?: string;
   }>;
 };
+
+const budgetBands = [
+  { value: "undisclosed", label: "Prefer not to say yet" },
+  { value: "under_5k", label: "Under $5k" },
+  { value: "5k_to_15k", label: "$5k – $15k" },
+  { value: "15k_to_50k", label: "$15k – $50k" },
+  { value: "over_50k", label: "Over $50k" },
+];
 
 /// The scoped claim leads: papers, models, and datasets are audited as
 /// artifacts only when the target genuinely is the artifact. For claim
@@ -50,8 +64,58 @@ const organizationTypes = [
 /// friction before intent). Submitting creates/reuses the AuditSubject and
 /// commissions the episode.
 export default async function CommissionPage({ searchParams }: PageProps) {
-  const { subject_id } = await searchParams;
+  const { subject_id, inquiry } = await searchParams;
   const selectedSubjectId = subject_id?.trim() ?? "";
+
+  // Two-stage intake: visitors without a session see the short inquiry
+  // form (stage one — a conversation opener, not a commitment). The full
+  // scoped commission form (stage two) appears for signed-in sponsors and
+  // operators, typically after a scoping conversation.
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join("; ");
+  const session = await getSession(cookieHeader);
+
+  if (inquiry === "received") {
+    return (
+      <>
+        <header className="pub-page-head">
+          <div>
+            <p className="pub-kicker">Commission</p>
+            <h1>Inquiry received</h1>
+            <p>
+              Thank you — your inquiry is recorded and an operator will reach
+              out to scope the audit with you: the target claim, the criteria
+              in scope, timeline, and funding. Nothing enters the public
+              audit record until a commission is agreed.
+            </p>
+          </div>
+        </header>
+        <div className="pub-empty">
+          <h3>While you wait</h3>
+          <p>
+            Browse delivered audit reports to see what you&apos;ll receive,
+            or read the method to see how decomposed audits work.
+          </p>
+          <div className="pub-auth-actions">
+            <Link className="secondary-action" href="/audits">
+              Audit reports
+            </Link>
+            <Link className="secondary-action" href="/method">
+              The method
+            </Link>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (!session) {
+    return <InquiryStage />;
+  }
+
   const [domains, subjects] = await Promise.all([
     getDomainInstantiations(),
     getAuditSubjects(),
@@ -180,8 +244,8 @@ export default async function CommissionPage({ searchParams }: PageProps) {
             <label>
               Sponsor organization
               <input
-                defaultValue="Northstar Bio Diligence"
                 name="sponsor_organization_name"
+                placeholder="Your organization's name"
                 required
                 type="text"
               />
@@ -202,9 +266,9 @@ export default async function CommissionPage({ searchParams }: PageProps) {
             <label>
               Funding amount
               <input
-                defaultValue="7500"
                 min="1"
                 name="funding_amount"
+                placeholder="e.g. 7500"
                 required
                 step="0.01"
                 type="number"
@@ -263,6 +327,11 @@ export default async function CommissionPage({ searchParams }: PageProps) {
           <button className="primary-action" type="submit">
             Commission audit
           </button>
+          <small className="muted-copy">
+            Submitting requires a signed-in identity — the commission is
+            recorded on the audit record with provenance. You&apos;ll be asked
+            to sign in if you aren&apos;t already.
+          </small>
         </form>
 
         <aside className="pub-action-rail" aria-label="Selected subject">
@@ -325,20 +394,40 @@ export default async function CommissionPage({ searchParams }: PageProps) {
 async function commissionAction(formData: FormData) {
   "use server";
 
+  // Server actions carry no browser cookies on their internal API fetches;
+  // forward the incoming request's cookies so the API can identify the
+  // submitter. Commissioning is a provenance-bearing write and requires a
+  // session.
+  const cookieStore = await cookies();
+  const cookieHeader = cookieStore
+    .getAll()
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join("; ");
+  const session = await getSession(cookieHeader);
+
+  if (!session) {
+    redirect(
+      "/sign-in?return_to=/commission&explain=Commissioning an audit records a sponsor identity on the audit record, so it requires sign-in.",
+    );
+  }
+
   const existingSubjectId = stringField(formData, "subject_id");
   const domainInstantiationId = stringField(formData, "domain_instantiation_id");
   let subjectId = existingSubjectId;
 
   if (!subjectId) {
-    const subject = await createAuditSubject({
-      domain_instantiation_id: domainInstantiationId,
-      subject_type: stringField(formData, "subject_type") || "scoped_claim",
-      title: nullableStringField(formData, "subject_title"),
-      claim_statement: nullableStringField(formData, "claim_statement"),
-      scope_conditions: parseScopeConditions(
-        stringField(formData, "scope_conditions"),
-      ),
-    });
+    const subject = await createAuditSubject(
+      {
+        domain_instantiation_id: domainInstantiationId,
+        subject_type: stringField(formData, "subject_type") || "scoped_claim",
+        title: nullableStringField(formData, "subject_title"),
+        claim_statement: nullableStringField(formData, "claim_statement"),
+        scope_conditions: parseScopeConditions(
+          stringField(formData, "scope_conditions"),
+        ),
+      },
+      cookieHeader,
+    );
 
     subjectId = subject?.id ?? "";
   }
@@ -348,23 +437,27 @@ async function commissionAction(formData: FormData) {
   }
 
   const amount = Number(stringField(formData, "funding_amount"));
-  const result = await commissionAuditEpisode(subjectId, {
-    label: stringField(formData, "label"),
-    sponsor_organization_name: stringField(formData, "sponsor_organization_name"),
-    sponsor_organization_type:
-      stringField(formData, "sponsor_organization_type") || "other",
-    funding: {
-      amount: Number.isFinite(amount) ? amount : 0,
-      currency: (stringField(formData, "funding_currency") || "USD").toUpperCase(),
+  const result = await commissionAuditEpisode(
+    subjectId,
+    {
+      label: stringField(formData, "label"),
+      sponsor_organization_name: stringField(formData, "sponsor_organization_name"),
+      sponsor_organization_type:
+        stringField(formData, "sponsor_organization_type") || "other",
+      funding: {
+        amount: Number.isFinite(amount) ? amount : 0,
+        currency: (stringField(formData, "funding_currency") || "USD").toUpperCase(),
+      },
+      scope_cwe_node_ids: formData
+        .getAll("scope_cwe_node_ids")
+        .map((value) => String(value).trim())
+        .filter(Boolean),
+      deadline: rfc3339Field(formData, "deadline"),
+      confidential: formData.get("confidential") === "true",
+      notes: nullableStringField(formData, "notes"),
     },
-    scope_cwe_node_ids: formData
-      .getAll("scope_cwe_node_ids")
-      .map((value) => String(value).trim())
-      .filter(Boolean),
-    deadline: rfc3339Field(formData, "deadline"),
-    confidential: formData.get("confidential") === "true",
-    notes: nullableStringField(formData, "notes"),
-  });
+    cookieHeader,
+  );
 
   if (!result) {
     redirect(`/commission?subject_id=${subjectId}`);
@@ -386,6 +479,176 @@ async function commissionAction(formData: FormData) {
   }
 
   redirect(`/audit-episodes/${result.episode.id}`);
+}
+
+/// Stage one: the public inquiry. Low barrier to asking; the audit graph
+/// stays untouched until an operator scopes a real commission.
+function InquiryStage() {
+  return (
+    <>
+      <header className="pub-page-head">
+        <div>
+          <p className="pub-kicker">Commission</p>
+          <h1>Commission an Audit</h1>
+          <p>
+            Commissioned audits start with a conversation, not a checkout.
+            Tell us what you need scrutinized and how to reach you; an
+            operator will scope the audit with you — target claim, criteria,
+            reviewers, timeline, and funding — before anything is committed
+            to the record.
+          </p>
+        </div>
+        <Link className="secondary-action" href="/method">
+          How the method works
+        </Link>
+      </header>
+
+      <div className="pub-commission-layout">
+        <form action={inquiryAction} className="pub-panel audit-form">
+          <div className="pub-panel-head">
+            <div>
+              <p className="pub-kicker">Stage one</p>
+              <h2>Audit inquiry</h2>
+            </div>
+          </div>
+
+          <div className="pub-form-row">
+            <label>
+              Your name
+              <input name="contact_name" required type="text" />
+            </label>
+            <label>
+              Work email
+              <input name="contact_email" required type="email" />
+            </label>
+          </div>
+
+          <div className="pub-form-row">
+            <label>
+              Organization
+              <input
+                name="organization_name"
+                placeholder="Optional"
+                type="text"
+              />
+            </label>
+            <label>
+              Organization type
+              <select defaultValue="other" name="organization_type">
+                {organizationTypes.map((organizationType) => (
+                  <option key={organizationType} value={organizationType}>
+                    {formatLabel(organizationType)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <label>
+            What should be audited?
+            <textarea
+              name="subject_description"
+              placeholder="The claim, paper, model, dataset, or protocol — in your own words. Links welcome."
+              required
+              rows={4}
+            />
+          </label>
+
+          <label>
+            Decision context
+            <textarea
+              name="decision_context"
+              placeholder="Optional: what decision does this audit inform? (licensing, investment, publication, policy…)"
+              rows={3}
+            />
+          </label>
+
+          <label>
+            Budget band
+            <select defaultValue="undisclosed" name="budget_band">
+              {budgetBands.map((band) => (
+                <option key={band.value} value={band.value}>
+                  {band.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button className="primary-action" type="submit">
+            Send inquiry
+          </button>
+          <small className="muted-copy">
+            No account needed for an inquiry. Already scoped an audit with
+            us? <Link href="/sign-in?return_to=/commission">Sign in</Link> to
+            use the full commission form.
+          </small>
+        </form>
+
+        <aside className="pub-action-rail" aria-label="How commissioning works">
+          <div className="pub-panel">
+            <h3>How commissioning works</h3>
+            <dl className="pub-facts">
+              <div>
+                <dt>1 · Inquiry</dt>
+                <dd>This form. An operator replies to scope the audit.</dd>
+              </div>
+              <div>
+                <dt>2 · Scoping</dt>
+                <dd>
+                  Target claim, criteria in scope, reviewer plan, timeline,
+                  and funding are agreed in conversation.
+                </dd>
+              </div>
+              <div>
+                <dt>3 · Commission</dt>
+                <dd>
+                  The commission is recorded on the audit record with full
+                  provenance; reviews begin.
+                </dd>
+              </div>
+              <div>
+                <dt>4 · Delivery</dt>
+                <dd>
+                  Criterion-level ElementReviews are synthesized into an
+                  audit report — public or confidential, as agreed.
+                </dd>
+              </div>
+            </dl>
+          </div>
+          <div className="pub-panel">
+            <h3>Why not a checkout?</h3>
+            <p className="muted-copy">
+              Every audit is scoped to a bounded claim and its decision
+              context. A conversation first produces better scopes, better
+              reviewer matches, and honest pricing — and nothing enters the
+              audit record until it is real.
+            </p>
+          </div>
+        </aside>
+      </div>
+    </>
+  );
+}
+
+async function inquiryAction(formData: FormData) {
+  "use server";
+
+  const result = await submitCommissionInquiry({
+    contact_name: stringField(formData, "contact_name"),
+    contact_email: stringField(formData, "contact_email"),
+    organization_name: nullableStringField(formData, "organization_name"),
+    organization_type: stringField(formData, "organization_type") || "other",
+    subject_description: stringField(formData, "subject_description"),
+    decision_context: nullableStringField(formData, "decision_context"),
+    budget_band: stringField(formData, "budget_band") || "undisclosed",
+  });
+
+  if (!result) {
+    // Validation or rate-limit failure: return to the form.
+    redirect("/commission");
+  }
+
+  redirect("/commission?inquiry=received");
 }
 
 function preferredDomain(domains: DomainInstantiationSummary[]) {

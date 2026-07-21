@@ -1,0 +1,28 @@
+# C-SQD API — multi-stage build.
+#
+#   docker build -f infra/Dockerfile.api -t csqd-api .
+#   docker run -p 8080:8080 \
+#     -e DATABASE_URL=... -e CSQD_WEB_BASE_URL=... \
+#     -e CSQD_DEV_AUTH=0 -e CSQD_SECURE_COOKIES=1 csqd-api
+#
+FROM rust:1-bookworm AS builder
+WORKDIR /app
+
+COPY Cargo.toml Cargo.lock ./
+COPY crates ./crates
+COPY services ./services
+
+RUN cargo build --release -p csqd-api
+
+FROM debian:bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/target/release/csqd-api /usr/local/bin/csqd-api
+
+ENV CSQD_API_PORT=8080
+ENV CSQD_API_BIND=0.0.0.0
+EXPOSE 8080
+
+CMD ["csqd-api"]

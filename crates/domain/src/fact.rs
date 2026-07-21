@@ -93,6 +93,43 @@ pub struct CreateEpisodeSolicitationEventRequest {
     pub note: Option<String>,
 }
 
+/// Operator request to record an invoice against an episode's commission.
+/// The commission fact is resolved from the episode when not supplied.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateInvoiceIssuedRequest {
+    #[serde(default)]
+    pub commission_fact_id: Option<FactId>,
+    pub amount: Money,
+    #[serde(default)]
+    pub invoice_ref: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+/// Operator request to record a sponsor payment. An active PaymentReceived
+/// fact is what makes an episode count as funded.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreatePaymentReceivedRequest {
+    #[serde(default)]
+    pub commission_fact_id: Option<FactId>,
+    pub amount: Money,
+    #[serde(default)]
+    pub invoice_fact_id: Option<FactId>,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+/// Operator request to record a reviewer payout.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateReviewerPayoutRequest {
+    pub paid_to: UserId,
+    pub amount: Money,
+    #[serde(default)]
+    pub solicitation_fact_id: Option<FactId>,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FactPayload {
@@ -198,6 +235,39 @@ pub enum FactPayload {
         rationale: Option<String>,
         petitions: Vec<FactId>,
     },
+    /// Commercial lifecycle facts. Money movement around a commissioned
+    /// audit is recorded as provenance-bearing administrative acts on the
+    /// audit record itself — never as mutable billing state, and never as
+    /// input to the evaluation tuple. An episode counts as *funded* when an
+    /// active `PaymentReceived` fact exists for its commission: a derived
+    /// view, like everything else.
+    InvoiceIssued {
+        /// The `AuditCommission` fact this invoice bills.
+        commission: FactId,
+        /// The sponsor being invoiced.
+        issued_to: Principal,
+        amount: Money,
+        /// External invoice identifier (accounting system, PDF ref).
+        invoice_ref: Option<String>,
+        note: Option<String>,
+    },
+    PaymentReceived {
+        /// The `AuditCommission` fact this payment funds.
+        commission: FactId,
+        /// The sponsor the payment came from.
+        received_from: Principal,
+        amount: Money,
+        /// The `InvoiceIssued` fact this payment settles, when invoiced.
+        invoice: Option<FactId>,
+        note: Option<String>,
+    },
+    ReviewerPayout {
+        paid_to: UserId,
+        amount: Money,
+        /// The `ERSolicitation` fact this payout compensates, when solicited.
+        solicitation: Option<FactId>,
+        note: Option<String>,
+    },
 }
 
 /// How an artifact claim is supposed to connect to the target claim.
@@ -258,6 +328,9 @@ pub enum FactPayloadKind {
     CwePetition,
     CurationDecision,
     WarrantAssertion,
+    InvoiceIssued,
+    PaymentReceived,
+    ReviewerPayout,
 }
 
 impl FactPayload {
@@ -273,6 +346,9 @@ impl FactPayload {
             Self::FeaturePetition { .. } => FactPayloadKind::FeaturePetition,
             Self::CWEPetition { .. } => FactPayloadKind::CwePetition,
             Self::CurationDecision { .. } => FactPayloadKind::CurationDecision,
+            Self::InvoiceIssued { .. } => FactPayloadKind::InvoiceIssued,
+            Self::PaymentReceived { .. } => FactPayloadKind::PaymentReceived,
+            Self::ReviewerPayout { .. } => FactPayloadKind::ReviewerPayout,
         }
     }
 }
@@ -290,6 +366,9 @@ impl FactPayloadKind {
             Self::CwePetition => "cwe_petition",
             Self::CurationDecision => "curation_decision",
             Self::WarrantAssertion => "warrant_assertion",
+            Self::InvoiceIssued => "invoice_issued",
+            Self::PaymentReceived => "payment_received",
+            Self::ReviewerPayout => "reviewer_payout",
         }
     }
 }
@@ -309,6 +388,9 @@ impl TryFrom<&str> for FactPayloadKind {
             "cwe_petition" => Ok(Self::CwePetition),
             "curation_decision" => Ok(Self::CurationDecision),
             "warrant_assertion" => Ok(Self::WarrantAssertion),
+            "invoice_issued" => Ok(Self::InvoiceIssued),
+            "payment_received" => Ok(Self::PaymentReceived),
+            "reviewer_payout" => Ok(Self::ReviewerPayout),
             other => Err(format!("unknown fact payload kind: {other}")),
         }
     }

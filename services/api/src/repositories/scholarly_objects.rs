@@ -9,14 +9,29 @@ use sqlx::{postgres::PgRow, PgPool, Row};
 use super::RepositoryError;
 
 pub async fn list_summaries(db: &PgPool) -> Result<Vec<ScholarlyObjectSummary>, RepositoryError> {
+    list_summaries_page(db, None, None).await
+}
+
+/// Server-side pagination. `limit` defaults to 50 and caps at 200; the
+/// frontend can walk the registry in pages instead of loading everything.
+pub async fn list_summaries_page(
+    db: &PgPool,
+    limit: Option<i64>,
+    offset: Option<i64>,
+) -> Result<Vec<ScholarlyObjectSummary>, RepositoryError> {
+    let limit = limit.unwrap_or(50).clamp(1, 200);
+    let offset = offset.unwrap_or(0).max(0);
     let rows = sqlx::query(&format!(
         r#"
         {}
         ORDER BY COALESCE(swg.updated_at, so.updated_at) DESC, swv.version_rank ASC NULLS LAST, so.created_at ASC
-        LIMIT 50
+        LIMIT $1
+        OFFSET $2
         "#,
         scholarly_summary_select_sql()
     ))
+    .bind(limit)
+    .bind(offset)
     .fetch_all(db)
     .await?;
 

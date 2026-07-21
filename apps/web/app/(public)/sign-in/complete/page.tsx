@@ -44,6 +44,29 @@ function CompleteSignIn() {
             // best-effort
           }
 
+          // Onboarding: a display name still equal to the derived
+          // email-local-part guess means the user never chose one — route
+          // through account setup first, preserving their destination.
+          const derivedName = result.user.email
+            .split("@")[0]
+            ?.replace(/[._-]/g, " ")
+            .trim();
+
+          if (
+            derivedName &&
+            result.user.display_name.trim().toLowerCase() ===
+              derivedName.toLowerCase()
+          ) {
+            try {
+              window.localStorage.setItem("csqd_return_to", returnTo);
+            } catch {
+              // best-effort
+            }
+
+            router.replace("/account?welcome=1");
+            return;
+          }
+
           router.replace(returnTo);
         } else {
           setState("failed");

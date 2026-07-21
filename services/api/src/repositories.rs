@@ -6,6 +6,7 @@ pub mod audit_episodes;
 pub mod audit_subjects;
 pub mod auth;
 pub mod claim_audits;
+pub mod commission_inquiries;
 pub mod doi_retrieval;
 pub mod domain_instantiations;
 pub mod evidence_artifacts;
@@ -27,6 +28,7 @@ pub enum RepositoryError {
     NotFound { entity: &'static str, id: String },
     Unauthorized(String),
     Forbidden(String),
+    RateLimited(String),
 }
 
 impl From<sqlx::Error> for RepositoryError {

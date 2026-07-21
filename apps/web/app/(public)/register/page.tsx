@@ -1,7 +1,11 @@
+import { cookies } from "next/headers";
 import Link from "next/link";
 
+import { RegistryUnavailable } from "../../components/registry-unavailable";
 import {
   formatLabel,
+  getSession,
+  isApiReachable,
   retrieveArticle,
   searchScholarlyObjects,
 } from "../../lib/csqd-api";
@@ -29,6 +33,7 @@ export default async function RegisterPage({ searchParams }: PageProps) {
   let objects = query ? await searchScholarlyObjects(query) : [];
   let groups = groupScholarlyObjects(objects);
   let retrievalError: string | null = null;
+  let needsSignInForRetrieval = false;
   const shouldRetrieve =
     query &&
     (groups.length === 0 ||
@@ -40,15 +45,34 @@ export default async function RegisterPage({ searchParams }: PageProps) {
         )));
 
   if (shouldRetrieve) {
-    const retrieval = await retrieveArticle(query, { includePreprints });
+    // External retrieval registers durable audit subjects, so the API
+    // requires an identified session; forward the request cookies.
+    const cookieStore = await cookies();
+    const cookieHeader = cookieStore
+      .getAll()
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join("; ");
+    const session = await getSession(cookieHeader);
 
-    if (retrieval.error) {
-      retrievalError = retrieval.error;
+    if (!session) {
+      needsSignInForRetrieval = true;
     } else {
-      objects = await searchScholarlyObjects(query);
-      groups = groupScholarlyObjects(objects);
+      const retrieval = await retrieveArticle(
+        query,
+        { includePreprints },
+        cookieHeader,
+      );
+
+      if (retrieval.error) {
+        retrievalError = retrieval.error;
+      } else {
+        objects = await searchScholarlyObjects(query);
+        groups = groupScholarlyObjects(objects);
+      }
     }
   }
+
+  const registryDown = groups.length === 0 && !(await isApiReachable());
 
   return (
     <>
@@ -100,7 +124,26 @@ export default async function RegisterPage({ searchParams }: PageProps) {
         </div>
       ) : null}
 
-      {groups.length === 0 ? (
+      {registryDown ? (
+        <RegistryUnavailable />
+      ) : needsSignInForRetrieval && groups.length === 0 ? (
+        <div className="pub-empty">
+          <h3>Sign in to retrieve this work</h3>
+          <p>
+            No local record matched. Retrieving from external sources (DOI,
+            arXiv, PubMed, title search) registers a durable audit subject,
+            so it requires a signed-in identity. Local search stays public.
+          </p>
+          <Link
+            className="primary-action"
+            href={`/sign-in?return_to=${encodeURIComponent(
+              `/register?q=${encodeURIComponent(query)}${includePreprints ? "&include_preprints=true" : ""}`,
+            )}`}
+          >
+            Sign in to continue
+          </Link>
+        </div>
+      ) : groups.length === 0 ? (
         <div className="pub-empty">
           <h3>{query ? "No work found" : "Search scholarly works"}</h3>
           <p>

@@ -1,5 +1,7 @@
+import { AccountAdmin } from "../../components/account-admin";
 import { AuthGate } from "../../components/auth-gate";
 import { EpisodeConsole } from "../../components/episode-console";
+import { InquiryConsole } from "../../components/inquiry-console";
 
 export default function OperationsPage() {
   return (
@@ -11,6 +13,8 @@ export default function OperationsPage() {
       title="Audit Operations Requires Sign In"
     >
       <EpisodeConsole variant="operations" />
+      <InquiryConsole />
+      <AccountAdmin />
     </AuthGate>
   );
 }

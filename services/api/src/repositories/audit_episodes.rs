@@ -78,7 +78,10 @@ pub async fn list_summaries(db: &PgPool) -> Result<Vec<AuditEpisodeSummary>, Rep
             COUNT(DISTINCT esr.id) FILTER (
                 WHERE esr.status IN ('draft', 'current')
             ) AS synthesis_review_count,
-            COALESCE(MAX(f.occurred_at), ae.authored_at) AS latest_activity_at
+            COALESCE(MAX(f.occurred_at), ae.authored_at) AS latest_activity_at,
+            BOOL_OR(
+                f.status = 'active' AND f.payload_kind = 'payment_received'
+            ) AS funding_confirmed
         FROM audit_episodes ae
         JOIN audit_subjects aus ON aus.id = ae.subject_id
         LEFT JOIN organizations org
@@ -474,6 +477,205 @@ pub async fn create_solicitation_event_fact(
             role: FactRole::SolicitationLifecycle,
             principal_value: &principal_value,
             source_system: "csqd_solicitation_event_api",
+        },
+    )
+    .await?;
+    tx.commit().await?;
+
+    Ok(fact)
+}
+
+// ── Commercial lifecycle facts ──────────────────────────────────
+//
+// Invoices, sponsor payments, and reviewer payouts are recorded as
+// administrative facts with episode memberships — immutable, attributed,
+// and visible on the audit trail. They never touch the evaluation tuple.
+// "Funded" is derived: an episode is funded when an active
+// payment_received fact exists for its commission.
+
+/// The episode's sponsor principal (`authored_by`), used as the invoice /
+/// payment counterparty.
+async fn find_episode_sponsor_principal(
+    db: &PgPool,
+    episode_id: &str,
+) -> Result<Principal, RepositoryError> {
+    let row = sqlx::query(
+        r#"
+        SELECT authored_by
+        FROM audit_episodes
+        WHERE id::text = $1
+        "#,
+    )
+    .bind(episode_id)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| RepositoryError::NotFound {
+        entity: "audit_episode",
+        id: episode_id.to_string(),
+    })?;
+    let authored_by: Value = row.get("authored_by");
+
+    serde_json::from_value(authored_by)
+        .map_err(|error| RepositoryError::Domain(format!("invalid episode principal: {error}")))
+}
+
+fn validate_positive_amount(amount: &csqd_domain::Money) -> Result<(), RepositoryError> {
+    if !amount.amount.is_finite() || amount.amount <= 0.0 {
+        return Err(RepositoryError::Domain(
+            "amount must be a positive number".to_string(),
+        ));
+    }
+
+    if amount.currency.trim().is_empty() {
+        return Err(RepositoryError::Domain(
+            "currency cannot be empty".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
+pub async fn create_invoice_issued_fact(
+    db: &PgPool,
+    episode_id: &str,
+    operator: Principal,
+    request: csqd_domain::CreateInvoiceIssuedRequest,
+) -> Result<Fact, RepositoryError> {
+    validate_positive_amount(&request.amount)?;
+
+    let episode_context = find_episode_context(db, episode_id).await?;
+    let sponsor = find_episode_sponsor_principal(db, episode_id).await?;
+    let commission = match &request.commission_fact_id {
+        Some(value) if !value.as_str().trim().is_empty() => {
+            validate_episode_fact_kind(db, episode_id, value.as_str(), "audit_commission").await?;
+            value.clone()
+        }
+        _ => find_episode_commission_fact_id(db, episode_id).await?,
+    };
+    let principal_value = serde_json::to_value(&operator)
+        .map_err(|error| RepositoryError::Domain(format!("invalid principal: {error}")))?;
+    let payload = FactPayload::InvoiceIssued {
+        commission,
+        issued_to: sponsor,
+        amount: request.amount,
+        invoice_ref: trimmed_optional(request.invoice_ref),
+        note: trimmed_optional(request.note),
+    };
+
+    let mut tx = db.begin().await?;
+    let fact = insert_fact_with_membership(
+        &mut tx,
+        InsertEpisodeFact {
+            subject_id: episode_context.subject_id.clone(),
+            domain_instantiation_id: episode_context.domain_instantiation_id.clone(),
+            episode_id: episode_id.to_string(),
+            payload: &payload,
+            role: FactRole::Administrative,
+            principal_value: &principal_value,
+            source_system: "csqd_commercial_api",
+        },
+    )
+    .await?;
+    tx.commit().await?;
+
+    Ok(fact)
+}
+
+pub async fn create_payment_received_fact(
+    db: &PgPool,
+    episode_id: &str,
+    operator: Principal,
+    request: csqd_domain::CreatePaymentReceivedRequest,
+) -> Result<Fact, RepositoryError> {
+    validate_positive_amount(&request.amount)?;
+
+    let episode_context = find_episode_context(db, episode_id).await?;
+    let sponsor = find_episode_sponsor_principal(db, episode_id).await?;
+    let commission = match &request.commission_fact_id {
+        Some(value) if !value.as_str().trim().is_empty() => {
+            validate_episode_fact_kind(db, episode_id, value.as_str(), "audit_commission").await?;
+            value.clone()
+        }
+        _ => find_episode_commission_fact_id(db, episode_id).await?,
+    };
+    let invoice = match &request.invoice_fact_id {
+        Some(value) if !value.as_str().trim().is_empty() => {
+            validate_episode_fact_kind(db, episode_id, value.as_str(), "invoice_issued").await?;
+            Some(value.clone())
+        }
+        _ => None,
+    };
+    let principal_value = serde_json::to_value(&operator)
+        .map_err(|error| RepositoryError::Domain(format!("invalid principal: {error}")))?;
+    let payload = FactPayload::PaymentReceived {
+        commission,
+        received_from: sponsor,
+        amount: request.amount,
+        invoice,
+        note: trimmed_optional(request.note),
+    };
+
+    let mut tx = db.begin().await?;
+    let fact = insert_fact_with_membership(
+        &mut tx,
+        InsertEpisodeFact {
+            subject_id: episode_context.subject_id.clone(),
+            domain_instantiation_id: episode_context.domain_instantiation_id.clone(),
+            episode_id: episode_id.to_string(),
+            payload: &payload,
+            role: FactRole::Administrative,
+            principal_value: &principal_value,
+            source_system: "csqd_commercial_api",
+        },
+    )
+    .await?;
+    tx.commit().await?;
+
+    Ok(fact)
+}
+
+pub async fn create_reviewer_payout_fact(
+    db: &PgPool,
+    episode_id: &str,
+    operator: Principal,
+    request: csqd_domain::CreateReviewerPayoutRequest,
+) -> Result<Fact, RepositoryError> {
+    validate_positive_amount(&request.amount)?;
+
+    if request.paid_to.as_str().trim().is_empty() {
+        return Err(RepositoryError::Domain(
+            "paid_to user id cannot be empty".to_string(),
+        ));
+    }
+
+    let episode_context = find_episode_context(db, episode_id).await?;
+    let solicitation = match &request.solicitation_fact_id {
+        Some(value) if !value.as_str().trim().is_empty() => {
+            validate_episode_fact_kind(db, episode_id, value.as_str(), "er_solicitation").await?;
+            Some(value.clone())
+        }
+        _ => None,
+    };
+    let principal_value = serde_json::to_value(&operator)
+        .map_err(|error| RepositoryError::Domain(format!("invalid principal: {error}")))?;
+    let payload = FactPayload::ReviewerPayout {
+        paid_to: request.paid_to,
+        amount: request.amount,
+        solicitation,
+        note: trimmed_optional(request.note),
+    };
+
+    let mut tx = db.begin().await?;
+    let fact = insert_fact_with_membership(
+        &mut tx,
+        InsertEpisodeFact {
+            subject_id: episode_context.subject_id.clone(),
+            domain_instantiation_id: episode_context.domain_instantiation_id.clone(),
+            episode_id: episode_id.to_string(),
+            payload: &payload,
+            role: FactRole::Administrative,
+            principal_value: &principal_value,
+            source_system: "csqd_commercial_api",
         },
     )
     .await?;
@@ -1541,6 +1743,10 @@ fn row_to_audit_episode_summary(row: PgRow) -> Result<AuditEpisodeSummary, Repos
         synthesis_review_count,
         latest_activity_at: row.get("latest_activity_at"),
         synthesis_ready: element_review_count > 0 && synthesis_review_count == 0,
+        funding_confirmed: row
+            .try_get::<Option<bool>, _>("funding_confirmed")
+            .unwrap_or(None)
+            .unwrap_or(false),
     })
 }
 

@@ -113,7 +113,7 @@ export default async function ClaimAuditPage({ params }: PageProps) {
             </p>
           )}
           <div className="pub-work-tuple">
-            <TupleBadge tuple={evalTupleValues(tuple)} />
+            <TupleBadge showVerdict tuple={evalTupleValues(tuple)} />
           </div>
         </header>
 

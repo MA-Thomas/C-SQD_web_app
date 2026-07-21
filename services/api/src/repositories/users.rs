@@ -250,6 +250,154 @@ pub(crate) fn row_to_user(
     })
 }
 
+/// Operator view of an account row: identity + roles, for the role-granting
+/// panel. Role grants previously required direct SQL, which was
+/// provenance-invisible — ironic for this product.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AccountSummary {
+    pub id: String,
+    pub email: String,
+    pub display_name: String,
+    pub roles: Vec<String>,
+    pub status: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+pub async fn list_accounts(db: &PgPool) -> Result<Vec<AccountSummary>, RepositoryError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT
+            id::text AS id,
+            email,
+            display_name,
+            roles,
+            status,
+            created_at
+        FROM users
+        ORDER BY created_at DESC
+        LIMIT 500
+        "#,
+    )
+    .fetch_all(db)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| AccountSummary {
+            id: row.get("id"),
+            email: row.get("email"),
+            display_name: row.get("display_name"),
+            roles: row.get("roles"),
+            status: row.get("status"),
+            created_at: row.get("created_at"),
+        })
+        .collect())
+}
+
+/// Replaces the stored role set. `member` is always retained; roles must be
+/// known. The reviewer-profile-derived reviewer role continues to merge in
+/// at session time regardless.
+pub async fn set_roles(
+    db: &PgPool,
+    user_id: &str,
+    roles: &[String],
+) -> Result<AccountSummary, RepositoryError> {
+    let mut normalized: Vec<String> = Vec::new();
+
+    for role in roles {
+        let role = role.trim().to_lowercase();
+
+        if role.is_empty() {
+            continue;
+        }
+
+        Role::try_from(role.as_str())
+            .map_err(|_| RepositoryError::Domain(format!("unknown role: {role}")))?;
+
+        if !normalized.contains(&role) {
+            normalized.push(role);
+        }
+    }
+
+    if !normalized.iter().any(|role| role == "member") {
+        normalized.insert(0, "member".to_string());
+    }
+
+    let row = sqlx::query(
+        r#"
+        UPDATE users
+        SET roles = $2, updated_at = now()
+        WHERE id::text = $1
+        RETURNING
+            id::text AS id,
+            email,
+            display_name,
+            roles,
+            status,
+            created_at
+        "#,
+    )
+    .bind(user_id)
+    .bind(&normalized)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| RepositoryError::NotFound {
+        entity: "user",
+        id: user_id.to_string(),
+    })?;
+
+    Ok(AccountSummary {
+        id: row.get("id"),
+        email: row.get("email"),
+        display_name: row.get("display_name"),
+        roles: row.get("roles"),
+        status: row.get("status"),
+        created_at: row.get("created_at"),
+    })
+}
+
+/// Self-service display-name update (the account page / onboarding step).
+pub async fn update_display_name(
+    db: &PgPool,
+    user_id: &str,
+    display_name: &str,
+) -> Result<User, RepositoryError> {
+    let display_name = display_name.trim();
+
+    if display_name.is_empty() || display_name.len() > 120 {
+        return Err(RepositoryError::Domain(
+            "display name must be between 1 and 120 characters".to_string(),
+        ));
+    }
+
+    let row = sqlx::query(
+        r#"
+        UPDATE users
+        SET display_name = $2, updated_at = now()
+        WHERE id::text = $1
+        RETURNING
+            id::text AS id,
+            email,
+            display_name,
+            roles,
+            status,
+            status_metadata,
+            created_at
+        "#,
+    )
+    .bind(user_id)
+    .bind(display_name)
+    .fetch_optional(db)
+    .await?
+    .ok_or_else(|| RepositoryError::NotFound {
+        entity: "user",
+        id: user_id.to_string(),
+    })?;
+    let reviewer_profile = find_reviewer_profile(db, user_id).await.ok();
+
+    row_to_user(row, reviewer_profile)
+}
+
 /// Roles stored on the users row (the `roles` text[] column), merged with the
 /// reviewer profile signal.
 pub async fn roles_for_user(db: &PgPool, user_id: &UserId) -> Result<Vec<Role>, RepositoryError> {

@@ -96,11 +96,10 @@ pub fn compute_eval_tuple(
         }
 
         match &fact.payload {
-            FactPayload::AuditCommission { scope, funding, .. } => {
+            FactPayload::AuditCommission { scope, .. } => {
                 s = s.max(stakes_signal(
                     &ctx.config.stakes_operationalization,
                     scope.len(),
-                    funding.amount,
                 ));
             }
             FactPayload::ElementReview {
@@ -129,7 +128,9 @@ pub fn compute_eval_tuple(
             }
             // Warrant assertions are the links under scrutiny, not scrutiny
             // itself: they shape the audit graph but only element reviews of
-            // them move N/M/L.
+            // them move N/M/L. Commercial facts (invoices, payments,
+            // payouts) are administrative record-keeping and must never
+            // move the tuple — money does not change epistemic output.
             FactPayload::WarrantAssertion { .. }
             | FactPayload::ERSolicitation { .. }
             | FactPayload::SolicitationEvent { .. }
@@ -137,7 +138,10 @@ pub fn compute_eval_tuple(
             | FactPayload::EpisodeParticipation { .. }
             | FactPayload::FeaturePetition { .. }
             | FactPayload::CWEPetition { .. }
-            | FactPayload::CurationDecision { .. } => {}
+            | FactPayload::CurationDecision { .. }
+            | FactPayload::InvoiceIssued { .. }
+            | FactPayload::PaymentReceived { .. }
+            | FactPayload::ReviewerPayout { .. } => {}
         }
     }
 
@@ -190,9 +194,18 @@ fn expertise_weight(ctx: &EvalTupleContext<'_>, reviewer: &UserId) -> f64 {
 
 /// Stakes operationalization (`S`). MVP proxies, varied per definition so the
 /// domain hook is real; richer signals replace the bodies, not the structure.
-fn stakes_signal(definition: &StakesDefinition, scope_len: usize, funding_amount: f64) -> f64 {
-    let funding_signal = (funding_amount / 10_000.0).clamp(0.0, 2.0);
-    let base = scope_len as f64 + funding_signal;
+///
+/// Funding amounts are deliberately excluded from `S`. An earlier draft
+/// derived part of the stakes signal from the commission's funding, which
+/// let sponsor money raise a claim's public stakes score — a direct
+/// violation of the revenue-framing principle in `interpretation.md`
+/// ("revenue design should support the integrity and usefulness of the
+/// audit graph, not distort it"). Money entering the graph must not change
+/// the graph's epistemic output. Stakes should come from properties of the
+/// claim and its decision context (commissioned scope breadth for now;
+/// domain-specific consequence signals later), never from price.
+fn stakes_signal(definition: &StakesDefinition, scope_len: usize) -> f64 {
+    let base = scope_len as f64;
 
     match definition {
         StakesDefinition::ScientificSignificance => base,
@@ -248,7 +261,7 @@ mod tests {
     use chrono::{TimeZone, Utc};
 
     use crate::audit_episode::{EpisodeMembership, EpisodeMembershipStatus, FactRole};
-    use crate::common::{Money, Principal, Provenance, Timestamp};
+    use crate::common::{Principal, Provenance, Timestamp};
     use crate::domain_instantiation::{
         CWECriterionId, EvalTupleConfig, ScrutinyWeightParams, StakesDefinition, UptakeDefinition,
     };

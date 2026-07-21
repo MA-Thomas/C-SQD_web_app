@@ -172,6 +172,9 @@ export type AuditEpisodeSummary = AuditEpisode & {
   synthesis_review_count: number;
   latest_activity_at: string | null;
   synthesis_ready: boolean;
+  /// Derived: an active payment_received fact exists. Sponsor episodes
+  /// show "funding pending" until an operator confirms receipt.
+  funding_confirmed: boolean;
 };
 
 export type Money = {
@@ -455,8 +458,9 @@ export async function getAuditSubject(id: string): Promise<AuditSubject | null> 
 
 export async function createAuditSubject(
   request: CreateAuditSubjectRequest,
+  cookieHeader?: string,
 ): Promise<AuditSubject | null> {
-  return postJson<AuditSubject>("/api/audit-subjects", request);
+  return postJson<AuditSubject>("/api/audit-subjects", request, cookieHeader);
 }
 
 export async function getAuditEpisodesForSubject(
@@ -471,10 +475,12 @@ export async function getAuditEpisodesForSubject(
 export async function commissionAuditEpisode(
   subjectId: string,
   request: CommissionAuditEpisodeRequest,
+  cookieHeader?: string,
 ): Promise<CommissionAuditEpisodeResult | null> {
   return postJson<CommissionAuditEpisodeResult>(
     `/api/audit-subjects/${subjectId}/audit-episodes`,
     request,
+    cookieHeader,
   );
 }
 
@@ -684,48 +690,90 @@ export async function getArticleAccess(
 
 export async function retrieveArxivArticle(
   query: string,
+  cookieHeader?: string,
 ): Promise<ArticleRetrievalResponse> {
-  return retrieveArticleFromEndpoint("/api/article-retrieval/arxiv", query);
+  return retrieveArticleFromEndpoint(
+    "/api/article-retrieval/arxiv",
+    query,
+    {},
+    cookieHeader,
+  );
 }
 
 export async function retrieveDoiArticle(
   query: string,
+  cookieHeader?: string,
 ): Promise<ArticleRetrievalResponse> {
-  return retrieveArticleFromEndpoint("/api/article-retrieval/doi", query);
+  return retrieveArticleFromEndpoint(
+    "/api/article-retrieval/doi",
+    query,
+    {},
+    cookieHeader,
+  );
 }
 
 export async function retrievePubmedArticle(
   query: string,
+  cookieHeader?: string,
 ): Promise<ArticleRetrievalResponse> {
-  return retrieveArticleFromEndpoint("/api/article-retrieval/pubmed", query);
+  return retrieveArticleFromEndpoint(
+    "/api/article-retrieval/pubmed",
+    query,
+    {},
+    cookieHeader,
+  );
 }
 
 export async function retrieveTitleArticle(
   query: string,
   options: ArticleRetrievalOptions = {},
+  cookieHeader?: string,
 ): Promise<ArticleRetrievalResponse> {
-  return retrieveArticleFromEndpoint("/api/article-retrieval/title", query, {
-    include_preprints: options.includePreprints,
-  });
+  return retrieveArticleFromEndpoint(
+    "/api/article-retrieval/title",
+    query,
+    {
+      include_preprints: options.includePreprints,
+    },
+    cookieHeader,
+  );
 }
 
+/// Retrieval creates registry records, so the API requires a session;
+/// server-side callers must forward the request cookies.
 export async function retrieveArticle(
   query: string,
   options: ArticleRetrievalOptions = {},
+  cookieHeader?: string,
 ): Promise<ArticleRetrievalResponse> {
   if (queryContainsDoi(query)) {
-    return retrieveDoiArticle(query);
+    return retrieveDoiArticle(query, cookieHeader);
   }
 
   if (queryContainsArxivIdentifier(query)) {
-    return retrieveArxivArticle(query);
+    return retrieveArxivArticle(query, cookieHeader);
   }
 
   if (queryContainsPubmedIdentifier(query)) {
-    return retrievePubmedArticle(query);
+    return retrievePubmedArticle(query, cookieHeader);
   }
 
-  return retrieveTitleArticle(query, options);
+  return retrieveTitleArticle(query, options, cookieHeader);
+}
+
+/// Distinguishes "the registry is empty" from "the registry is
+/// unreachable". Data fetches in this module return empty fallbacks on
+/// failure so pages never crash; pages that would render an empty state
+/// should call this first and show an unavailable notice instead when the
+/// API itself is down.
+export async function isApiReachable(): Promise<boolean> {
+  try {
+    const response = await fetch(`${apiBaseUrl}/health`, { cache: "no-store" });
+
+    return response.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function fetchJson<T>(endpoint: string, fallback: T): Promise<T> {
@@ -745,15 +793,25 @@ async function fetchJson<T>(endpoint: string, fallback: T): Promise<T> {
   }
 }
 
-async function postJson<T>(endpoint: string, body: unknown): Promise<T | null> {
+async function postJson<T>(
+  endpoint: string,
+  body: unknown,
+  cookieHeader?: string,
+): Promise<T | null> {
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (cookieHeader) {
+      headers.Cookie = cookieHeader;
+    }
+
     const response = await fetch(`${apiBaseUrl}${endpoint}`, {
       body: JSON.stringify(body),
       cache: "no-store",
       credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers,
       method: "POST",
     });
 
@@ -771,6 +829,7 @@ async function retrieveArticleFromEndpoint(
   endpoint: string,
   query: string,
   extraParams: Record<string, boolean | string | undefined> = {},
+  cookieHeader?: string,
 ): Promise<ArticleRetrievalResponse> {
   const params = new URLSearchParams({ query });
   for (const [key, value] of Object.entries(extraParams)) {
@@ -782,6 +841,8 @@ async function retrieveArticleFromEndpoint(
   try {
     const response = await fetch(`${apiBaseUrl}${endpoint}?${params.toString()}`, {
       cache: "no-store",
+      credentials: "include",
+      headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
     });
 
     if (!response.ok) {
@@ -1020,10 +1081,12 @@ export type SessionUser = {
   roles: Array<"member" | "sponsor" | "reviewer" | "operator">;
 };
 
+/// `sign_in_url` is present only when the API runs in dev-auth mode; in
+/// deployed environments the link is delivered by email instead.
 export async function requestMagicLink(email: string): Promise<{
   email: string;
   expires_at: string;
-  sign_in_url: string;
+  sign_in_url?: string;
 } | null> {
   return apiSend(`/api/auth/request-link`, { email });
 }
@@ -1034,14 +1097,143 @@ export async function completeMagicLink(
   return apiSend(`/api/auth/complete`, { token });
 }
 
-export async function getSession(): Promise<SessionUser | null> {
-  const result = await apiGet<{ user: SessionUser | null }>(`/api/auth/session`);
+/// `cookieHeader` lets server components and server actions forward the
+/// incoming request's cookies (browser `fetch` sends them via
+/// `credentials: "include"`, but server-side fetches carry no cookies).
+export async function getSession(cookieHeader?: string): Promise<SessionUser | null> {
+  const result = await apiGet<{ user: SessionUser | null }>(
+    `/api/auth/session`,
+    cookieHeader,
+  );
 
   return result?.user ?? null;
 }
 
 export async function signOut(): Promise<void> {
   await apiSend(`/api/auth/sign-out`, {});
+}
+
+// ── Commission inquiries (two-stage intake) ─────────────────────
+
+export type CommissionInquiry = {
+  id: string;
+  contact_name: string;
+  contact_email: string;
+  organization_name: string | null;
+  organization_type: string;
+  subject_description: string;
+  decision_context: string | null;
+  budget_band: string;
+  status: "new" | "in_conversation" | "converted" | "declined";
+  converted_episode_id: string | null;
+  operator_note: string | null;
+  created_at: string;
+};
+
+export type CreateCommissionInquiryRequest = {
+  contact_name: string;
+  contact_email: string;
+  organization_name?: string | null;
+  organization_type?: string | null;
+  subject_description: string;
+  decision_context?: string | null;
+  budget_band?: string | null;
+};
+
+/// Stage one of commissioning: a public inquiry, recorded and routed to an
+/// operator for a scoping conversation. No session required.
+export async function submitCommissionInquiry(
+  request: CreateCommissionInquiryRequest,
+): Promise<CommissionInquiry | null> {
+  return apiSend<CommissionInquiry>(`/api/commission-inquiries`, request);
+}
+
+export async function getCommissionInquiries(): Promise<CommissionInquiry[]> {
+  return (await apiGet<CommissionInquiry[]>(`/api/commission-inquiries`)) ?? [];
+}
+
+export async function updateCommissionInquiry(
+  inquiryId: string,
+  body: {
+    status: CommissionInquiry["status"];
+    operator_note?: string | null;
+    converted_episode_id?: string | null;
+  },
+): Promise<CommissionInquiry | null> {
+  return apiSend<CommissionInquiry>(
+    `/api/commission-inquiries/${inquiryId}/status`,
+    body,
+  );
+}
+
+// ── Commercial lifecycle facts (operator) ───────────────────────
+
+export async function recordInvoiceIssued(
+  episodeId: string,
+  body: {
+    amount: Money;
+    invoice_ref?: string | null;
+    note?: string | null;
+  },
+): Promise<Fact | null> {
+  return apiSend<Fact>(`/api/audit-episodes/${episodeId}/facts/invoice-issued`, body);
+}
+
+export async function recordPaymentReceived(
+  episodeId: string,
+  body: {
+    amount: Money;
+    invoice_fact_id?: string | null;
+    note?: string | null;
+  },
+): Promise<Fact | null> {
+  return apiSend<Fact>(
+    `/api/audit-episodes/${episodeId}/facts/payment-received`,
+    body,
+  );
+}
+
+export async function recordReviewerPayout(
+  episodeId: string,
+  body: {
+    paid_to: string;
+    amount: Money;
+    solicitation_fact_id?: string | null;
+    note?: string | null;
+  },
+): Promise<Fact | null> {
+  return apiSend<Fact>(
+    `/api/audit-episodes/${episodeId}/facts/reviewer-payout`,
+    body,
+  );
+}
+
+// ── Account + administration ────────────────────────────────────
+
+export type AccountSummary = {
+  id: string;
+  email: string;
+  display_name: string;
+  roles: string[];
+  status: string;
+  created_at: string;
+};
+
+export async function updateDisplayName(
+  displayName: string,
+): Promise<{ display_name: string } | null> {
+  return apiSend(`/api/account/display-name`, { display_name: displayName });
+}
+
+export async function getAccounts(): Promise<AccountSummary[]> {
+  return (await apiGet<AccountSummary[]>(`/api/admin/accounts`)) ?? [];
+}
+
+export async function setAccountRoles(
+  userId: string,
+  roles: string[],
+): Promise<AccountSummary | null> {
+  return apiSend<AccountSummary>(`/api/admin/accounts/${userId}/roles`, { roles });
 }
 
 // ── Participation, petitions, responses ─────────────────────────
@@ -1109,11 +1301,12 @@ export async function submitChallengeResponse(
 
 // ── Shared credentialed fetch helpers ───────────────────────────
 
-async function apiGet<T>(endpoint: string): Promise<T | null> {
+async function apiGet<T>(endpoint: string, cookieHeader?: string): Promise<T | null> {
   try {
     const response = await fetch(`${apiBaseUrl}${endpoint}`, {
       cache: "no-store",
       credentials: "include",
+      headers: cookieHeader ? { Cookie: cookieHeader } : undefined,
     });
 
     if (!response.ok) {

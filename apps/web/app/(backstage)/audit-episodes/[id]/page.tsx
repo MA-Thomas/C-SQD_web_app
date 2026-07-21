@@ -1,4 +1,5 @@
 import { AuthGate } from "../../../components/auth-gate";
+import { CommercialPanel } from "../../../components/commercial-panel";
 
 type PageProps = {
   params: Promise<{
@@ -16,6 +17,8 @@ export default async function AuditEpisodeWorkspacePage({ params }: PageProps) {
       returnTo={`/audit-episodes/${id}`}
       role="operator"
       title="Episode Workspace Requires Sign In"
-    />
+    >
+      <CommercialPanel episodeId={id} />
+    </AuthGate>
   );
 }

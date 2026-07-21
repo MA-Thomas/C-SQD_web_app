@@ -120,7 +120,7 @@ export default async function WorkPage({ params }: PageProps) {
           ) : null}
           <WorkRecordDisclosure />
           <div className="pub-work-tuple">
-            <TupleBadge tuple={summary.tuple} />
+            <TupleBadge showVerdict tuple={summary.tuple} />
           </div>
         </header>
 

@@ -5,7 +5,8 @@ import { TupleBadge } from "../components/tuple-badge";
 import { TUPLE_ITEMS } from "../lib/tuple-items";
 import { WorkCard } from "../components/work-card";
 import { SectionRail, WorkListRow } from "../components/work-list-row";
-import { getScholarlyObjects } from "../lib/csqd-api";
+import { RegistryUnavailable } from "../components/registry-unavailable";
+import { getScholarlyObjects, isApiReachable } from "../lib/csqd-api";
 import {
   formatCount,
   getPublicAuditSummariesForObjects,
@@ -20,6 +21,23 @@ import {
 /// awaiting review — and a card grid across the registry.
 export default async function HomePage() {
   const objects = await getScholarlyObjects();
+
+  // An empty result can mean an empty registry or an unreachable API —
+  // never present the second as the first.
+  if (objects.length === 0 && !(await isApiReachable())) {
+    return (
+      <>
+        <header className="pub-page-head">
+          <div>
+            <p className="pub-kicker">Public audit registry</p>
+            <h1>Today in audits</h1>
+          </div>
+        </header>
+        <RegistryUnavailable />
+      </>
+    );
+  }
+
   const groups = groupScholarlyObjects(objects);
   const summaries = await getPublicAuditSummariesForObjects(
     groups.map((group) => group.primaryVersion),

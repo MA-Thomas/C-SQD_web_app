@@ -8,13 +8,24 @@ MIGRATION_FILE="$ROOT_DIR/db/migrations/000001_initial_schema.sql"
 MIGRATIONS_DIR="$ROOT_DIR/db/migrations"
 SEEDS_DIR="$ROOT_DIR/db/seeds"
 RESET_DB=false
+APPLY_SEEDS=true
 
-if [[ "${1:-}" == "--reset" ]]; then
-  RESET_DB=true
-elif [[ $# -gt 0 ]]; then
-  echo "Usage: scripts/setup_db.sh [--reset]" >&2
-  exit 2
-fi
+for arg in "$@"; do
+  case "$arg" in
+    --reset)
+      RESET_DB=true
+      ;;
+    --no-seeds)
+      # Clean database for pilot/production: schema and migrations only.
+      # Demo audits, sponsors, and reports in db/seeds are NOT applied.
+      APPLY_SEEDS=false
+      ;;
+    *)
+      echo "Usage: scripts/setup_db.sh [--reset] [--no-seeds]" >&2
+      exit 2
+      ;;
+  esac
+done
 
 for command in docker psql; do
   if ! command -v "$command" >/dev/null 2>&1; then
@@ -126,11 +137,16 @@ done
 
 # Seed files are idempotent (every statement uses ON CONFLICT), so apply all of
 # them in lexical order on every run. New db/seeds/*.sql files are picked up
-# automatically.
-for seed in "$SEEDS_DIR"/*.sql; do
-  [[ -e "$seed" ]] || continue
-  echo "Applying seed $(basename "$seed")..."
-  psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$seed"
-done
+# automatically. Skipped with --no-seeds (pilot/production databases must
+# never contain the demo audits).
+if [[ "$APPLY_SEEDS" == true ]]; then
+  for seed in "$SEEDS_DIR"/*.sql; do
+    [[ -e "$seed" ]] || continue
+    echo "Applying seed $(basename "$seed")..."
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$seed"
+  done
+else
+  echo "Skipping demo seeds (--no-seeds)."
+fi
 
 echo "Local database is ready at $DATABASE_URL"

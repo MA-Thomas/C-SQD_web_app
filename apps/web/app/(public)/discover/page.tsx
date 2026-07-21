@@ -1,10 +1,12 @@
 import Link from "next/link";
 
+import { RegistryUnavailable } from "../../components/registry-unavailable";
 import { StatusPill } from "../../components/status-pill";
 import {
   browseProblemAreaWorks,
   formatLabel,
   getScholarlyObjects,
+  isApiReachable,
   searchScholarlyObjects,
 } from "../../lib/csqd-api";
 import {
@@ -75,6 +77,21 @@ export default async function DiscoverPage({ searchParams }: PageProps) {
     getAcademicCweNodes(),
     getDiscoverObjects(query, criterionId),
   ]);
+
+  if (objects.length === 0 && !(await isApiReachable())) {
+    return (
+      <>
+        <header className="pub-page-head">
+          <div>
+            <p className="pub-kicker">Discover</p>
+            <h1>Directed Discovery</h1>
+          </div>
+        </header>
+        <RegistryUnavailable />
+      </>
+    );
+  }
+
   const groups = groupScholarlyObjects(objects);
   const summaries = await getPublicAuditSummariesForObjects(
     groups.map((group) => group.primaryVersion),
@@ -129,9 +146,14 @@ export default async function DiscoverPage({ searchParams }: PageProps) {
             and shows why each one is surfaced.
           </p>
         </div>
-        <Link className="secondary-action" href="/register">
-          Register a missing work
-        </Link>
+        <div className="pub-head-actions">
+          <Link className="secondary-action" href="/claims">
+            Claims under audit
+          </Link>
+          <Link className="secondary-action" href="/register">
+            Register a missing work
+          </Link>
+        </div>
       </header>
 
       <form action="/discover" className="pub-filterbar">

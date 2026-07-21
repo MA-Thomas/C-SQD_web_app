@@ -48,6 +48,75 @@ const methodSections = [
   },
 ];
 
+/// The working vocabulary, kept deliberately precise. Each entry pairs the
+/// formal term with a plain-language on-ramp and the reason the precision
+/// is load-bearing. The glosses are teaching aids, not replacements: audit
+/// records cite these terms exactly, so readers can always resolve what a
+/// record means.
+const vocabulary = [
+  {
+    term: "AuditSubject",
+    plain: "The thing under audit — usually a scoped claim.",
+    why: "Distinguishes the epistemic target from the artifacts around it. A paper is not automatically the subject; often the subject is a claim the paper makes, and the paper is evidence.",
+  },
+  {
+    term: "Fact",
+    plain: "One recorded audit act: a review, a commission, a challenge, a decision.",
+    why: "Facts are immutable, timestamped, and provenance-bearing. Nothing on the record is ever silently edited — later facts respond to earlier ones.",
+  },
+  {
+    term: "AuditEpisode",
+    plain: "One coherent audit question, pursued over time.",
+    why: "Separates the durable subject (audited many times, by different sponsors) from each bounded investigation of it.",
+  },
+  {
+    term: "EpisodeMembership",
+    plain: "The recorded claim that a fact belongs to an episode.",
+    why: "Membership is itself asserted, attributed, and retractable — so even the structure of an audit is auditable.",
+  },
+  {
+    term: "ElementReview",
+    plain: "A focused review of one criterion — one dimension of the claim.",
+    why: "The mediating-assessment unit. Decomposed judgments are assessed independently before any overall verdict, which is the platform's core methodological commitment.",
+  },
+  {
+    term: "SynthesisReview",
+    plain: "The integrative audit report.",
+    why: "Synthesis is authored and attributable — a distinct epistemic act from the element reviews it integrates, never an automatic average.",
+  },
+  {
+    term: "Warrant link",
+    plain: "Why an attached paper is supposed to bear on the target claim.",
+    why: "Makes the inference from evidence to claim explicit and auditable, instead of counting citations as votes.",
+  },
+  {
+    term: "CRWE",
+    plain: "Common Research Weakness Enumeration — the shared criterion taxonomy.",
+    why: "Reviews attach to explicit, named criteria rather than vague overall impressions, so agreement and disagreement stay legible across audits.",
+  },
+  {
+    term: "Evaluation tuple",
+    plain:
+      "The five-part audit summary: Problems, Ethical concerns, Stakes, Scrutiny depth, Uptake.",
+    why: "Formally E(A | R, T_eval) → (N, M, S, L, U): a derived view over the immutable record, recomputable for any reviewer community R and reference time T_eval. Not a stored score, and not purchasable — funding amounts are deliberately excluded from it.",
+  },
+  {
+    term: "DomainInstantiation",
+    plain: "A configured audit domain, like Academic Peer Review.",
+    why: "Criteria, stakes definitions, and evaluation configuration are owned per domain; nothing pretends one taxonomy fits all fields.",
+  },
+  {
+    term: "Provenance",
+    plain: "Who recorded what, when, from where.",
+    why: "Every fact carries it. Trust in the registry is meant to be inspectable, not asserted.",
+  },
+  {
+    term: "Challenge",
+    plain: "A recorded contestation of a review or report.",
+    why: "Dissent is added to the record rather than erasing it — the challenged artifact stays visible alongside its contestation and any response.",
+  },
+];
+
 const crweExamples = [
   "Methodological adequacy",
   "Statistical adequacy",
@@ -83,6 +152,7 @@ export default function MethodPage() {
             {section.title}
           </a>
         ))}
+        <a href="#vocabulary">Vocabulary</a>
       </nav>
 
       {methodSections.map((section) => (
@@ -128,6 +198,39 @@ export default function MethodPage() {
           ) : null}
         </article>
       ))}
+
+      <article id="vocabulary">
+        <p className="pub-kicker">Reference</p>
+        <h2>Vocabulary</h2>
+        <p>
+          C-SQD keeps a precise working vocabulary on purpose. Audit records
+          are citable artifacts, and citable artifacts need terms that mean
+          exactly one thing: an ElementReview is not a comment, a
+          SynthesisReview is not a summary, and a challenge is not a reply.
+          Around the site you&apos;ll usually meet the plain-language
+          version first — this table is the bridge from those on-ramps to
+          the exact terms the audit record itself uses. The formal notation
+          behind several of these entries (and more provenance detail
+          throughout the site) is available via the{" "}
+          <strong>Advanced</strong> toggle in the header.
+        </p>
+        <dl className="pub-def-list pub-vocab-list">
+          {vocabulary.map((entry) => (
+            <div key={entry.term}>
+              <dt>{entry.term}</dt>
+              <dd>
+                {entry.plain}
+                <small>{entry.why}</small>
+              </dd>
+            </div>
+          ))}
+        </dl>
+        <p className="pub-filter-note">
+          These terms come from the C-SQD/FEN schema, where each has a full
+          formal definition. If a term on any page is unfamiliar, this
+          section is the canonical place to resolve it.
+        </p>
+      </article>
     </div>
   );
 }

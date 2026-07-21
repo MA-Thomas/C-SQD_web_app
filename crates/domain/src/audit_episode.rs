@@ -56,6 +56,12 @@ pub struct AuditEpisodeSummary {
     pub synthesis_review_count: i64,
     pub latest_activity_at: Option<Timestamp>,
     pub synthesis_ready: bool,
+    /// Derived: an active `PaymentReceived` fact exists for this episode.
+    /// Sponsor-funded episodes count as funded only once payment is
+    /// operator-confirmed; public surfaces should show "funding pending"
+    /// until then.
+    #[serde(default)]
+    pub funding_confirmed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

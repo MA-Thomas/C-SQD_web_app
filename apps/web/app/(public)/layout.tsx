@@ -9,8 +9,16 @@ export default function PublicLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === "1";
+
   return (
     <div className="pub-shell">
+      {demoMode ? (
+        <div className="pub-demo-banner" role="note">
+          Demonstration environment — the audits, sponsors, and reports shown
+          are illustrative seed data, not real audit activity.
+        </div>
+      ) : null}
       <SiteHeader />
       <main className="pub-main">{children}</main>
       <footer className="pub-footer">
@@ -18,6 +26,8 @@ export default function PublicLayout({
           <span>C-SQD · public registry and method for epistemic audits</span>
           <nav aria-label="Footer">
             <Link href="/method">Method</Link>
+            <Link href="/method#vocabulary">Vocabulary</Link>
+            <Link href="/claims">Claims under audit</Link>
             <Link href="/domains">Domains</Link>
             <Link href="/criteria">Criteria</Link>
             <Link href="/register">Register a work</Link>

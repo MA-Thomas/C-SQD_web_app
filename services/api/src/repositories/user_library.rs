@@ -7,9 +7,10 @@ use sqlx::{postgres::PgRow, PgPool, Row};
 
 use super::{audit_subjects, RepositoryError};
 
-const DEMO_LIBRARY_USER_ID: &str = "00000000-0000-0000-0000-000000000002";
-
-pub async fn list_items(db: &PgPool) -> Result<Vec<LibraryItemSummary>, RepositoryError> {
+pub async fn list_items(
+    db: &PgPool,
+    user_id: &str,
+) -> Result<Vec<LibraryItemSummary>, RepositoryError> {
     let sql = format!(
         r#"
         {}
@@ -17,16 +18,14 @@ pub async fn list_items(db: &PgPool) -> Result<Vec<LibraryItemSummary>, Reposito
         "#,
         library_base_select_sql()
     );
-    let rows = sqlx::query(&sql)
-        .bind(DEMO_LIBRARY_USER_ID)
-        .fetch_all(db)
-        .await?;
+    let rows = sqlx::query(&sql).bind(user_id).fetch_all(db).await?;
 
     rows.into_iter().map(row_to_library_item).collect()
 }
 
 pub async fn add_scholarly_object(
     db: &PgPool,
+    user_id: &str,
     scholarly_object_id: &str,
 ) -> Result<LibraryItemSummary, RepositoryError> {
     let subject_id =
@@ -45,16 +44,17 @@ pub async fn add_scholarly_object(
             updated_at = now()
         "#,
     )
-    .bind(DEMO_LIBRARY_USER_ID)
+    .bind(user_id)
     .bind(&subject_id)
     .execute(db)
     .await?;
 
-    find_item_by_subject(db, &subject_id).await
+    find_item_by_subject(db, user_id, &subject_id).await
 }
 
 async fn find_item_by_subject(
     db: &PgPool,
+    user_id: &str,
     subject_id: &str,
 ) -> Result<LibraryItemSummary, RepositoryError> {
     let sql = format!(
@@ -66,7 +66,7 @@ async fn find_item_by_subject(
         library_base_select_sql()
     );
     let rows = sqlx::query(&sql)
-        .bind(DEMO_LIBRARY_USER_ID)
+        .bind(user_id)
         .bind(subject_id)
         .fetch_all(db)
         .await?;

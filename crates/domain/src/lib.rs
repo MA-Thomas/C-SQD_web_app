@@ -39,7 +39,8 @@ pub use evidence::{
 pub use fact::{
     CWEPetitionKind, ConfidenceLevel, CreateEpisodeElementReviewRequest,
     CreateEpisodeSolicitationEventRequest, CreateEpisodeSolicitationRequest,
-    CreateEpisodeWarrantRequest, CurationOutcome, CurationTarget, Fact, FactPayload,
+    CreateEpisodeWarrantRequest, CreateInvoiceIssuedRequest, CreatePaymentReceivedRequest,
+    CreateReviewerPayoutRequest, CurationOutcome, CurationTarget, Fact, FactPayload,
     FactPayloadKind, FactStatus, Finding as FactFinding, FindingSeverity as FactFindingSeverity,
     InferenceType, ParticipationAction, ResponseType as FactResponseType,
 };

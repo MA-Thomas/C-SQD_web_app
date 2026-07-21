@@ -1,7 +1,7 @@
 "use client";
 
 import { useAdvancedMode } from "../lib/advanced-mode";
-import { TUPLE_ITEMS, type TupleValues } from "../lib/tuple-items";
+import { TUPLE_ITEMS, tupleVerdict, type TupleValues } from "../lib/tuple-items";
 
 /// Re-exported for existing importers of this module's types.
 export type { TupleItemSpec, TupleValues } from "../lib/tuple-items";
@@ -38,11 +38,16 @@ function MagnitudeDots({ value }: { value: number }) {
 export function TupleBadge({
   tuple,
   size = "regular",
+  showVerdict = false,
 }: {
   tuple: TupleValues;
   size?: "compact" | "regular";
+  /// Render a one-sentence plain-language reading beneath the badge — the
+  /// comprehension on-ramp for readers who don't yet know the notation.
+  showVerdict?: boolean;
 }) {
   const { advanced } = useAdvancedMode();
+  const verdict = showVerdict ? tupleVerdict(tuple) : null;
 
   if (!tuple) {
     return (
@@ -56,7 +61,7 @@ export function TupleBadge({
     );
   }
 
-  return (
+  const badge = (
     <div
       className={`tuple-badge tuple-${size}`}
       role="group"
@@ -87,6 +92,17 @@ export function TupleBadge({
       {advanced ? (
         <span className="tuple-notation">E(A | R, T_eval)</span>
       ) : null}
+    </div>
+  );
+
+  if (!verdict) {
+    return badge;
+  }
+
+  return (
+    <div className="tuple-with-verdict">
+      {badge}
+      <p className="tuple-verdict">{verdict}</p>
     </div>
   );
 }

@@ -1,13 +1,17 @@
 import Link from "next/link";
 
+import { RegistryUnavailable } from "../../components/registry-unavailable";
 import {
   formatLabel,
   getClaimAuditIndex,
+  isApiReachable,
   type ClaimAuditIndexEntry,
 } from "../../lib/csqd-api";
 
 export default async function ClaimsIndexPage() {
   const claimAudits = await getClaimAuditIndex();
+  const registryDown =
+    claimAudits.length === 0 && !(await isApiReachable());
 
   return (
     <>
@@ -26,7 +30,9 @@ export default async function ClaimsIndexPage() {
         </Link>
       </header>
 
-      {claimAudits.length === 0 ? (
+      {registryDown ? (
+        <RegistryUnavailable />
+      ) : claimAudits.length === 0 ? (
         <div className="pub-empty">
           <h3>No claim audits yet</h3>
           <p>

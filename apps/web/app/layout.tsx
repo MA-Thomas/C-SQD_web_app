@@ -23,8 +23,29 @@ const serif = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "C-SQD",
-  description: "Public epistemic audit registry",
+  title: {
+    default: "C-SQD · Public epistemic audit registry",
+    template: "%s · C-SQD",
+  },
+  description:
+    "Commissioned and public audits of scientific and technical claims — structured criterion-level reviews, synthesis reports, and challenges, all on the record.",
+  icons: {
+    icon: "/csqd-logo.png",
+  },
+  openGraph: {
+    title: "C-SQD · Public epistemic audit registry",
+    description:
+      "Structured, decomposed audits of important scientific and technical claims: criterion-level reviews, synthesis reports, and challenge trails with full provenance.",
+    siteName: "C-SQD",
+    type: "website",
+    images: ["/csqd-logo.png"],
+  },
+  twitter: {
+    card: "summary",
+    title: "C-SQD · Public epistemic audit registry",
+    description:
+      "Structured, decomposed audits of important scientific and technical claims.",
+  },
 };
 
 export default function RootLayout({

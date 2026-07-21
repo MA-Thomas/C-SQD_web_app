@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { getAuditEpisodes, type AuditEpisodeSummary } from "../lib/csqd-api";
+import {
+  getAuditEpisodes,
+  isApiReachable,
+  type AuditEpisodeSummary,
+} from "../lib/csqd-api";
 import { formatDate } from "../lib/public-audit";
 
 type ConsoleVariant = "sponsor" | "reviewer" | "operations";
@@ -52,16 +56,28 @@ function deliveryState(episode: AuditEpisodeSummary) {
 /// episode workspace.
 export function EpisodeConsole({ variant }: { variant: ConsoleVariant }) {
   const [episodes, setEpisodes] = useState<AuditEpisodeSummary[] | null>(null);
+  const [apiDown, setApiDown] = useState(false);
   const copy = VARIANT_COPY[variant];
 
   useEffect(() => {
     let cancelled = false;
 
-    void getAuditEpisodes().then((result) => {
+    void (async () => {
+      const result = await getAuditEpisodes();
+
+      if (cancelled) {
+        return;
+      }
+
+      // Empty could mean "no episodes" or "API unreachable" — check.
+      if (result.length === 0 && !(await isApiReachable())) {
+        setApiDown(true);
+      }
+
       if (!cancelled) {
         setEpisodes(result);
       }
-    });
+    })();
 
     return () => {
       cancelled = true;
@@ -78,6 +94,14 @@ export function EpisodeConsole({ variant }: { variant: ConsoleVariant }) {
       </div>
       {episodes === null ? (
         <p className="muted-copy">Loading episodes…</p>
+      ) : apiDown ? (
+        <div className="empty-state" role="alert">
+          <h2>The audit registry is unreachable</h2>
+          <p>
+            The C-SQD API could not be reached — this console cannot show
+            episode state. Check that the API and database are running.
+          </p>
+        </div>
       ) : episodes.length === 0 ? (
         <div className="empty-state">
           <h2>No audit episodes yet</h2>
@@ -90,6 +114,7 @@ export function EpisodeConsole({ variant }: { variant: ConsoleVariant }) {
               <th>Episode</th>
               <th>Subject</th>
               <th>Sponsor</th>
+              <th>Funding</th>
               <th>ElementReviews</th>
               <th>Delivery state</th>
               <th>Last activity</th>
@@ -102,6 +127,13 @@ export function EpisodeConsole({ variant }: { variant: ConsoleVariant }) {
                 <td>{episode.label}</td>
                 <td>{episode.subject_title ?? "Untitled subject"}</td>
                 <td>{episode.sponsor_name ?? "Public"}</td>
+                <td>
+                  {episode.sponsor_name
+                    ? episode.funding_confirmed
+                      ? "Funded"
+                      : "Funding pending"
+                    : "—"}
+                </td>
                 <td>{episode.element_review_count}</td>
                 <td>{deliveryState(episode)}</td>
                 <td>

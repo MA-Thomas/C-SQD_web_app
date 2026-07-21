@@ -15,7 +15,7 @@ function SignInForm() {
   const [error, setError] = useState<string | null>(null);
   const [issued, setIssued] = useState<{
     email: string;
-    sign_in_url: string;
+    sign_in_url?: string;
   } | null>(null);
   const returnTo = safeReturnPath(searchParams.get("return_to")) ?? "/discover";
   const explain = searchParams.get("explain");
@@ -76,17 +76,37 @@ function SignInForm() {
       {explain ? <p className="pub-auth-note">{explain}</p> : null}
 
       {issued ? (
-        <div>
-          <p>
-            A sign-in link was issued for <strong>{issued.email}</strong>. In
-            this preview environment no email is sent — use the link directly:
-          </p>
-          <div className="pub-auth-actions">
-            <a className="primary-action" href={issued.sign_in_url}>
-              Complete sign-in
-            </a>
+        issued.sign_in_url ? (
+          <div>
+            <p>
+              A sign-in link was issued for <strong>{issued.email}</strong>.
+              In this preview environment no email is sent — use the link
+              directly:
+            </p>
+            <div className="pub-auth-actions">
+              <a className="primary-action" href={issued.sign_in_url}>
+                Complete sign-in
+              </a>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div>
+            <p>
+              A sign-in link was sent to <strong>{issued.email}</strong>.
+              Check your inbox — the link works for 15 minutes and can be
+              used once.
+            </p>
+            <div className="pub-auth-actions">
+              <button
+                className="secondary-action"
+                onClick={() => setIssued(null)}
+                type="button"
+              >
+                Use a different address
+              </button>
+            </div>
+          </div>
+        )
       ) : (
         <form onSubmit={submit}>
           <label htmlFor="sign-in-email">Email address</label>
