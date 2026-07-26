@@ -113,6 +113,50 @@ define_id!(
     /// (`EpisodeEvidenceArtifact`).
     EvidenceArtifactId
 );
+define_id!(
+    /// Identifies a durable human, organization, or system identity principal.
+    IdentityPrincipalId
+);
+define_id!(
+    /// Identifies a link between an authenticated account and an identity principal.
+    AccountPrincipalLinkId
+);
+define_id!(
+    /// Identifies an external authentication identity linked to an account.
+    AuthenticationIdentityId
+);
+define_id!(
+    /// Identifies an evidence-backed assertion about an identity principal.
+    IdentityAssertionId
+);
+define_id!(
+    /// Identifies an append-only identity-domain event.
+    IdentityEventId
+);
+define_id!(
+    /// Identifies a human's membership in an organization.
+    OrganizationMembershipId
+);
+define_id!(
+    /// Identifies a human or organization sponsorship of an audit episode.
+    SponsorshipId
+);
+define_id!(
+    /// Identifies a scoped grant of authority.
+    AuthorityGrantId
+);
+define_id!(
+    /// Identifies an append-only revocation of an authority grant.
+    AuthorityRevocationId
+);
+define_id!(
+    /// Identifies an auditable authorization decision.
+    AccessDecisionId
+);
+define_id!(
+    /// Identifies a versioned authorization policy.
+    PolicyId
+);
 
 #[cfg(feature = "sqlx")]
 mod sqlx_impls {
@@ -163,6 +207,17 @@ mod sqlx_impls {
     impl_sqlx_id!(OrganizationId);
     impl_sqlx_id!(TagId);
     impl_sqlx_id!(EvidenceArtifactId);
+    impl_sqlx_id!(IdentityPrincipalId);
+    impl_sqlx_id!(AccountPrincipalLinkId);
+    impl_sqlx_id!(AuthenticationIdentityId);
+    impl_sqlx_id!(IdentityAssertionId);
+    impl_sqlx_id!(IdentityEventId);
+    impl_sqlx_id!(OrganizationMembershipId);
+    impl_sqlx_id!(SponsorshipId);
+    impl_sqlx_id!(AuthorityGrantId);
+    impl_sqlx_id!(AuthorityRevocationId);
+    impl_sqlx_id!(AccessDecisionId);
+    impl_sqlx_id!(PolicyId);
 }
 
 #[cfg(test)]

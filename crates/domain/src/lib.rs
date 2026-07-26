@@ -46,9 +46,11 @@ pub use fact::{
 };
 pub use health::ApiHealth;
 pub use ids::{
-    AuditEpisodeId, AuditSubjectId, CWENodeId, CommunityId, DomainInstantiationId,
-    EvidenceArtifactId, FactId, MembershipId, OrganizationId, RelationId, SectionId,
-    SynthesisReviewId, TagId, UserId,
+    AccessDecisionId, AccountPrincipalLinkId, AuditEpisodeId, AuditSubjectId,
+    AuthenticationIdentityId, AuthorityGrantId, AuthorityRevocationId, CWENodeId, CommunityId,
+    DomainInstantiationId, EvidenceArtifactId, FactId, IdentityAssertionId, IdentityEventId,
+    IdentityPrincipalId, MembershipId, OrganizationId, OrganizationMembershipId, PolicyId,
+    RelationId, SectionId, SponsorshipId, SynthesisReviewId, TagId, UserId,
 };
 pub use organization::{Organization, OrganizationType};
 pub use solicitation::{PaymentCondition, PaymentScheme, SolicitationEvent, SolicitationEventType};
