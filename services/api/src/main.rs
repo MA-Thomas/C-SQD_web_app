@@ -2,11 +2,11 @@ mod config;
 mod db;
 mod error;
 mod mailer;
-mod repositories;
 mod routes;
 mod state;
 
 use config::Config;
+pub(crate) use csqd_api::repositories;
 use state::AppState;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 

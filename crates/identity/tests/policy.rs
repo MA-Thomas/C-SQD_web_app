@@ -6,12 +6,13 @@ use csqd_domain::{
 };
 use csqd_identity::{
     evaluate_access, project_identity_state, AccountPrincipalLink, AssuranceLevel,
-    AuthenticationMethod, AuthorityGrant, AuthorityKind, AuthorityMutationTarget,
-    AuthorityRevocation, AuthorizationBasis, AuthorizationContext, AuthorizationOutcome,
-    AuthorizedAction, ConflictStatus, IdentityEvent, IdentityEventPayload, IdentityPrincipal,
-    IdentityPrincipalKind, InitialPolicyConfiguration, LinkStatus, NewAuthorityGrant,
-    NewOrganizationSponsorship, OrganizationPrincipalLink, PolicyEvaluationError, PolicyInput,
-    PolicyReasonCode, ResourceScope, SponsorVisibility, Sponsorship, ValidityPeriod,
+    AuditedPrincipalReference, AuditedRepresentation, AuthenticationMethod, AuthorityGrant,
+    AuthorityKind, AuthorityMutation, AuthorityRevocation, AuthorizationBasis,
+    AuthorizationContext, AuthorizationOutcome, AuthorizationRequest, AuthorizedAction,
+    ConflictStatus, IdentityEvent, IdentityEventPayload, IdentityPrincipal, IdentityPrincipalKind,
+    InitialPolicyConfiguration, LinkStatus, NewAuthorityGrant, NewOrganizationSponsorship,
+    OrganizationPrincipalLink, PolicyEvaluationError, PolicyInput, PolicyReasonCode, ResourceScope,
+    SponsorVisibility, Sponsorship, ValidityPeriod,
 };
 
 const ACTOR: &str = "actor";
@@ -163,11 +164,54 @@ fn input(
             authentication_assurance: assurance,
             authenticated_at: at(3, 50),
         },
-        action,
-        resource,
+        request: AuthorizationRequest::Access { action, resource },
         evaluated_at: at(4, 0),
         conflict_status: ConflictStatus::Clear,
-        authority_mutation_target: None,
+    }
+}
+
+fn proposed_grant(
+    id: &str,
+    actor: &str,
+    represented_organization: Option<&str>,
+    kind: AuthorityKind,
+    scope: ResourceScope,
+    permitted_actions: Vec<AuthorizedAction>,
+) -> AuthorityGrant {
+    AuthorityGrant::new(NewAuthorityGrant {
+        id: AuthorityGrantId::new(id),
+        actor_principal_id: IdentityPrincipalId::new(actor),
+        represented_organization_principal_id: represented_organization
+            .map(IdentityPrincipalId::new),
+        kind,
+        scope,
+        permitted_actions,
+        issued_by_principal_id: IdentityPrincipalId::new(ACTOR),
+        issued_at: at(4, 0),
+        validity: None,
+        evidence_refs: vec!["policy-mutation-test".into()],
+    })
+    .unwrap()
+}
+
+fn mutation_input(
+    mutation: AuthorityMutation,
+    assurance: AssuranceLevel,
+    represented_organization: Option<&str>,
+) -> PolicyInput {
+    PolicyInput {
+        context: AuthorizationContext {
+            account_id: UserId::new(ACCOUNT),
+            actor_principal_id: IdentityPrincipalId::new(ACTOR),
+            represented_organization_principal_id: represented_organization
+                .map(IdentityPrincipalId::new),
+            authentication_method: AuthenticationMethod::MultiFactor,
+            authentication_assurance: assurance,
+            authenticated_at: at(3, 50),
+        },
+        request: AuthorizationRequest::authority_mutation(mutation).unwrap(),
+        evaluated_at: at(4, 0),
+        conflict_status: ConflictStatus::Clear,
     }
 }
 
@@ -385,18 +429,6 @@ fn initial_policy_matrix_allows_each_documented_path() {
             None,
         ),
         input(
-            AuthorizedAction::GrantAuthority,
-            ResourceScope::Platform,
-            AssuranceLevel::High,
-            None,
-        ),
-        input(
-            AuthorizedAction::RevokeAuthority,
-            ResourceScope::Platform,
-            AssuranceLevel::High,
-            None,
-        ),
-        input(
             AuthorizedAction::ExportPrivateAudit,
             ResourceScope::AuditEpisode(AuditEpisodeId::new(EPISODE)),
             AssuranceLevel::High,
@@ -409,28 +441,46 @@ fn initial_policy_matrix_allows_each_documented_path() {
             None,
         ),
     ];
-    for case in &mut cases {
-        if matches!(
-            case.action,
-            AuthorizedAction::GrantAuthority | AuthorizedAction::RevokeAuthority
-        ) {
-            case.authority_mutation_target = Some(AuthorityMutationTarget {
-                actor_principal_id: IdentityPrincipalId::new(TARGET_ACTOR),
-                represented_organization_principal_id: None,
-                kind: AuthorityKind::PlatformOperator,
-                scope: ResourceScope::Platform,
-            });
-        }
-    }
+    cases.push(mutation_input(
+        AuthorityMutation::grant(proposed_grant(
+            "new-platform-operator",
+            TARGET_ACTOR,
+            None,
+            AuthorityKind::PlatformOperator,
+            ResourceScope::Platform,
+            vec![AuthorizedAction::ManageAccounts],
+        )),
+        AssuranceLevel::High,
+        None,
+    ));
+    let operator_grant = state
+        .authority_grant(&AuthorityGrantId::new("operator"))
+        .unwrap()
+        .clone();
+    cases.push(mutation_input(
+        AuthorityMutation::revoke(
+            operator_grant,
+            AuthorityRevocation::new(
+                AuthorityRevocationId::new("operator-revocation"),
+                AuthorityGrantId::new("operator"),
+                IdentityPrincipalId::new(ACTOR),
+                at(4, 0),
+                "operator rotation",
+            )
+            .unwrap(),
+        ),
+        AssuranceLevel::High,
+        None,
+    ));
 
     for case in cases {
         let decision = evaluate_access(&state, &policy, &case).unwrap();
         assert_eq!(
-            decision.outcome,
+            decision.outcome(),
             AuthorizationOutcome::Allowed,
             "unexpected decision for {:?}: {:?}",
-            case.action,
-            decision.reason_codes
+            case.action(),
+            decision.reason_codes()
         );
     }
 }
@@ -447,10 +497,10 @@ fn missing_authority_is_denied() {
     );
 
     let decision = evaluate_access(&state, &configuration(), &request).unwrap();
-    assert_eq!(decision.outcome, AuthorizationOutcome::Denied);
+    assert_eq!(decision.outcome(), AuthorizationOutcome::Denied);
     assert_eq!(
-        decision.reason_codes,
-        vec![PolicyReasonCode::AuthorityMissing]
+        decision.reason_codes(),
+        [PolicyReasonCode::AuthorityMissing]
     );
 }
 
@@ -475,8 +525,8 @@ fn expired_and_revoked_grants_are_denied_with_distinct_reasons() {
         &request,
     )
     .unwrap();
-    assert_eq!(expired.outcome, AuthorizationOutcome::Denied);
-    assert_eq!(expired.reason_codes, vec![PolicyReasonCode::GrantExpired]);
+    assert_eq!(expired.outcome(), AuthorizationOutcome::Denied);
+    assert_eq!(expired.reason_codes(), [PolicyReasonCode::GrantExpired]);
 
     let mut revoked_ledger = Ledger::base();
     reviewer_grant(&mut revoked_ledger, "revoked-reviewer", EPISODE, None);
@@ -499,8 +549,8 @@ fn expired_and_revoked_grants_are_denied_with_distinct_reasons() {
         &request,
     )
     .unwrap();
-    assert_eq!(revoked.outcome, AuthorizationOutcome::Denied);
-    assert_eq!(revoked.reason_codes, vec![PolicyReasonCode::GrantRevoked]);
+    assert_eq!(revoked.outcome(), AuthorizationOutcome::Denied);
+    assert_eq!(revoked.reason_codes(), [PolicyReasonCode::GrantRevoked]);
 }
 
 #[test]
@@ -526,10 +576,10 @@ fn organization_and_episode_scope_mismatches_are_denied() {
         &wrong_organization,
     )
     .unwrap();
-    assert_eq!(decision.outcome, AuthorizationOutcome::Denied);
+    assert_eq!(decision.outcome(), AuthorizationOutcome::Denied);
     assert_eq!(
-        decision.reason_codes,
-        vec![PolicyReasonCode::WrongOrganization]
+        decision.reason_codes(),
+        [PolicyReasonCode::WrongOrganization]
     );
 
     let mut episode_ledger = Ledger::base();
@@ -546,10 +596,10 @@ fn organization_and_episode_scope_mismatches_are_denied() {
         &wrong_episode,
     )
     .unwrap();
-    assert_eq!(decision.outcome, AuthorizationOutcome::Denied);
+    assert_eq!(decision.outcome(), AuthorizationOutcome::Denied);
     assert_eq!(
-        decision.reason_codes,
-        vec![PolicyReasonCode::WrongResourceScope]
+        decision.reason_codes(),
+        [PolicyReasonCode::WrongResourceScope]
     );
 }
 
@@ -576,13 +626,13 @@ fn assurance_and_authentication_age_produce_step_up_decisions() {
         None,
     );
     let decision = evaluate_access(&state, &configuration(), &low_assurance).unwrap();
-    assert_eq!(decision.outcome, AuthorizationOutcome::StepUpRequired);
+    assert_eq!(decision.outcome(), AuthorizationOutcome::StepUpRequired);
     assert_eq!(
-        decision.reason_codes,
-        vec![PolicyReasonCode::InsufficientAssurance]
+        decision.reason_codes(),
+        [PolicyReasonCode::InsufficientAssurance]
     );
     assert!(matches!(
-        decision.authorization_basis,
+        decision.authorization_basis(),
         Some(AuthorizationBasis::AuthorityGrant(_))
     ));
 
@@ -594,29 +644,29 @@ fn assurance_and_authentication_age_produce_step_up_decisions() {
     );
     stale_authentication.context.authenticated_at = at(3, 30);
     let decision = evaluate_access(&state, &configuration(), &stale_authentication).unwrap();
-    assert_eq!(decision.outcome, AuthorizationOutcome::StepUpRequired);
+    assert_eq!(decision.outcome(), AuthorizationOutcome::StepUpRequired);
     assert_eq!(
-        decision.reason_codes,
-        vec![PolicyReasonCode::AuthenticationTooOld]
+        decision.reason_codes(),
+        [PolicyReasonCode::AuthenticationTooOld]
     );
 
-    let mut grant_operator = input(
-        AuthorizedAction::GrantAuthority,
-        ResourceScope::Platform,
+    let grant_operator = mutation_input(
+        AuthorityMutation::grant(proposed_grant(
+            "new-operator",
+            TARGET_ACTOR,
+            None,
+            AuthorityKind::PlatformOperator,
+            ResourceScope::Platform,
+            vec![AuthorizedAction::ManageAccounts],
+        )),
         AssuranceLevel::Medium,
         None,
     );
-    grant_operator.authority_mutation_target = Some(AuthorityMutationTarget {
-        actor_principal_id: IdentityPrincipalId::new(TARGET_ACTOR),
-        represented_organization_principal_id: None,
-        kind: AuthorityKind::PlatformOperator,
-        scope: ResourceScope::Platform,
-    });
     let decision = evaluate_access(&state, &configuration(), &grant_operator).unwrap();
-    assert_eq!(decision.outcome, AuthorizationOutcome::StepUpRequired);
+    assert_eq!(decision.outcome(), AuthorizationOutcome::StepUpRequired);
     assert_eq!(
-        decision.reason_codes,
-        vec![PolicyReasonCode::InsufficientAssurance]
+        decision.reason_codes(),
+        [PolicyReasonCode::InsufficientAssurance]
     );
 }
 
@@ -634,10 +684,13 @@ fn unresolved_review_conflict_requires_manual_review() {
     request.conflict_status = ConflictStatus::Unresolved;
 
     let decision = evaluate_access(&state, &configuration(), &request).unwrap();
-    assert_eq!(decision.outcome, AuthorizationOutcome::ManualReviewRequired);
     assert_eq!(
-        decision.reason_codes,
-        vec![PolicyReasonCode::UnresolvedConflict]
+        decision.outcome(),
+        AuthorizationOutcome::ManualReviewRequired
+    );
+    assert_eq!(
+        decision.reason_codes(),
+        [PolicyReasonCode::UnresolvedConflict]
     );
 }
 
@@ -657,24 +710,23 @@ fn policy_inputs_are_validated_and_decisions_convert_to_audit_records() {
         Err(PolicyEvaluationError::AuthenticationAfterEvaluation)
     );
 
-    let missing_target = input(
-        AuthorizedAction::GrantAuthority,
-        ResourceScope::Platform,
-        AssuranceLevel::High,
-        None,
-    );
-    assert_eq!(
-        evaluate_access(&state, &configuration(), &missing_target),
-        Err(PolicyEvaluationError::MissingAuthorityMutationTarget)
-    );
-
     request.context.authenticated_at = at(3, 50);
+    let mut malformed_authority_request = request.clone();
+    malformed_authority_request.request = AuthorizationRequest::Access {
+        action: AuthorizedAction::GrantAuthority,
+        resource: ResourceScope::Platform,
+    };
+    assert!(matches!(
+        evaluate_access(&state, &configuration(), &malformed_authority_request),
+        Err(PolicyEvaluationError::InvalidRequest(_))
+    ));
+
     let decision = evaluate_access(&state, &configuration(), &request).unwrap();
     let decision_id = AccessDecisionId::new("decision");
     let audit_record = decision.to_access_decision(decision_id.clone()).unwrap();
     assert_eq!(
         audit_record.reason_codes(),
-        ["allowed_authenticated_principal"]
+        [PolicyReasonCode::AllowedAuthenticatedPrincipal]
     );
     assert_eq!(
         serde_json::to_value(PolicyReasonCode::WrongResourceScope).unwrap(),
@@ -690,6 +742,71 @@ fn policy_inputs_are_validated_and_decisions_convert_to_audit_records() {
     assert!(project_identity_state(&ledger.events)
         .unwrap()
         .access_decision(&decision_id)
+        .is_some());
+}
+
+#[test]
+fn denied_policy_decisions_remain_replayable_audit_records() {
+    let mut ledger = Ledger::base();
+    let state = project_identity_state(&ledger.events).unwrap();
+
+    let mut unlinked_request = input(
+        AuthorizedAction::ManageAccounts,
+        ResourceScope::Platform,
+        AssuranceLevel::High,
+        None,
+    );
+    unlinked_request.context.account_id = UserId::new("unlinked-account");
+    let unlinked_decision = evaluate_access(&state, &configuration(), &unlinked_request)
+        .unwrap()
+        .to_access_decision(AccessDecisionId::new("unlinked-denial"))
+        .unwrap();
+    assert_eq!(unlinked_decision.outcome(), AuthorizationOutcome::Denied);
+    assert_eq!(
+        unlinked_decision.actor_reference(),
+        &AuditedPrincipalReference::Known(IdentityPrincipalId::new(ACTOR))
+    );
+    ledger.push_at(
+        at(4, 0),
+        IdentityEventPayload::AccessDecisionRecorded {
+            decision: unlinked_decision,
+        },
+    );
+
+    let inactive_organization_request = input(
+        AuthorizedAction::CommissionAudit,
+        ResourceScope::Organization(OrganizationId::new("missing-organization-record")),
+        AssuranceLevel::Medium,
+        Some("missing-organization-principal"),
+    );
+    let organization_decision =
+        evaluate_access(&state, &configuration(), &inactive_organization_request)
+            .unwrap()
+            .to_access_decision(AccessDecisionId::new("inactive-organization-denial"))
+            .unwrap();
+    assert_eq!(
+        organization_decision.reason_codes(),
+        [PolicyReasonCode::RepresentedOrganizationInactive]
+    );
+    assert_eq!(
+        organization_decision.representation(),
+        &AuditedRepresentation::Unresolved(IdentityPrincipalId::new(
+            "missing-organization-principal"
+        ))
+    );
+    ledger.push_at(
+        at(4, 0),
+        IdentityEventPayload::AccessDecisionRecorded {
+            decision: organization_decision,
+        },
+    );
+
+    let replayed = project_identity_state(&ledger.events).unwrap();
+    assert!(replayed
+        .access_decision(&AccessDecisionId::new("unlinked-denial"))
+        .is_some());
+    assert!(replayed
+        .access_decision(&AccessDecisionId::new("inactive-organization-denial"))
         .is_some());
 }
 
@@ -723,10 +840,10 @@ fn future_issued_grant_is_denied_as_not_yet_valid() {
         &request,
     )
     .unwrap();
-    assert_eq!(decision.outcome, AuthorizationOutcome::Denied);
+    assert_eq!(decision.outcome(), AuthorizationOutcome::Denied);
     assert_eq!(
-        decision.reason_codes,
-        vec![PolicyReasonCode::GrantNotYetValid]
+        decision.reason_codes(),
+        [PolicyReasonCode::GrantNotYetValid]
     );
 }
 
@@ -746,48 +863,73 @@ fn authority_mutation_enforces_target_scope_and_prevents_self_escalation() {
     );
     let state = project_identity_state(&ledger.events).unwrap();
 
-    let mut organization_grant = input(
-        AuthorizedAction::GrantAuthority,
-        ResourceScope::Organization(OrganizationId::new("organization-record")),
+    let organization_grant = mutation_input(
+        AuthorityMutation::grant(proposed_grant(
+            "new-organization-representative",
+            TARGET_ACTOR,
+            Some(ORGANIZATION),
+            AuthorityKind::OrganizationRepresentative,
+            ResourceScope::Organization(OrganizationId::new("organization-record")),
+            vec![AuthorizedAction::ViewSponsoredAudit],
+        )),
         AssuranceLevel::High,
         Some(ORGANIZATION),
     );
-    organization_grant.authority_mutation_target = Some(AuthorityMutationTarget {
-        actor_principal_id: IdentityPrincipalId::new(TARGET_ACTOR),
-        represented_organization_principal_id: Some(IdentityPrincipalId::new(ORGANIZATION)),
-        kind: AuthorityKind::OrganizationRepresentative,
-        scope: ResourceScope::Organization(OrganizationId::new("organization-record")),
-    });
     let allowed = evaluate_access(&state, &configuration(), &organization_grant).unwrap();
-    assert_eq!(allowed.outcome, AuthorizationOutcome::Allowed);
-
-    let mut platform_grant = organization_grant.clone();
-    platform_grant.resource = ResourceScope::Platform;
-    platform_grant.authority_mutation_target = Some(AuthorityMutationTarget {
-        actor_principal_id: IdentityPrincipalId::new(TARGET_ACTOR),
-        represented_organization_principal_id: None,
-        kind: AuthorityKind::PlatformOperator,
-        scope: ResourceScope::Platform,
-    });
-    let denied = evaluate_access(&state, &configuration(), &platform_grant).unwrap();
-    assert_eq!(denied.outcome, AuthorizationOutcome::Denied);
+    assert_eq!(allowed.outcome(), AuthorizationOutcome::Allowed);
+    let retained_grant = allowed
+        .request()
+        .authority_mutation_target()
+        .unwrap()
+        .grant_record();
     assert_eq!(
-        denied.reason_codes,
-        vec![PolicyReasonCode::AuthorityKindNotPermitted]
+        retained_grant.permitted_actions(),
+        [AuthorizedAction::ViewSponsoredAudit]
+    );
+    assert_eq!(
+        allowed
+            .to_access_decision(AccessDecisionId::new("grant-decision"))
+            .unwrap()
+            .request(),
+        allowed.request()
     );
 
-    let mut self_grant = organization_grant;
-    self_grant.authority_mutation_target = Some(AuthorityMutationTarget {
-        actor_principal_id: IdentityPrincipalId::new(ACTOR),
-        represented_organization_principal_id: Some(IdentityPrincipalId::new(ORGANIZATION)),
-        kind: AuthorityKind::OrganizationRepresentative,
-        scope: ResourceScope::Organization(OrganizationId::new("organization-record")),
-    });
-    let denied = evaluate_access(&state, &configuration(), &self_grant).unwrap();
-    assert_eq!(denied.outcome, AuthorizationOutcome::Denied);
+    let platform_grant = mutation_input(
+        AuthorityMutation::grant(proposed_grant(
+            "new-platform-operator",
+            TARGET_ACTOR,
+            None,
+            AuthorityKind::PlatformOperator,
+            ResourceScope::Platform,
+            vec![AuthorizedAction::ManageAccounts],
+        )),
+        AssuranceLevel::High,
+        Some(ORGANIZATION),
+    );
+    let denied = evaluate_access(&state, &configuration(), &platform_grant).unwrap();
+    assert_eq!(denied.outcome(), AuthorizationOutcome::Denied);
     assert_eq!(
-        denied.reason_codes,
-        vec![PolicyReasonCode::SelfEscalationNotAllowed]
+        denied.reason_codes(),
+        [PolicyReasonCode::AuthorityKindNotPermitted]
+    );
+
+    let self_grant = mutation_input(
+        AuthorityMutation::grant(proposed_grant(
+            "self-organization-representative",
+            ACTOR,
+            Some(ORGANIZATION),
+            AuthorityKind::OrganizationRepresentative,
+            ResourceScope::Organization(OrganizationId::new("organization-record")),
+            vec![AuthorizedAction::ViewSponsoredAudit],
+        )),
+        AssuranceLevel::High,
+        Some(ORGANIZATION),
+    );
+    let denied = evaluate_access(&state, &configuration(), &self_grant).unwrap();
+    assert_eq!(denied.outcome(), AuthorizationOutcome::Denied);
+    assert_eq!(
+        denied.reason_codes(),
+        [PolicyReasonCode::SelfEscalationNotAllowed]
     );
 }
 
@@ -829,29 +971,48 @@ fn every_authorized_action_fails_closed_for_an_unlinked_account() {
             | AuthorizedAction::RevokeAuthority => ResourceScope::Platform,
             _ => ResourceScope::AuditEpisode(AuditEpisodeId::new(EPISODE)),
         };
-        let mut request = input(action, resource.clone(), AssuranceLevel::VeryHigh, None);
+        let target_grant = proposed_grant(
+            "fail-closed-target",
+            TARGET_ACTOR,
+            None,
+            AuthorityKind::PlatformOperator,
+            resource.clone(),
+            vec![AuthorizedAction::ManageAccounts],
+        );
+        let mut request = match action {
+            AuthorizedAction::GrantAuthority => mutation_input(
+                AuthorityMutation::grant(target_grant),
+                AssuranceLevel::VeryHigh,
+                None,
+            ),
+            AuthorizedAction::RevokeAuthority => mutation_input(
+                AuthorityMutation::revoke(
+                    target_grant,
+                    AuthorityRevocation::new(
+                        AuthorityRevocationId::new("fail-closed-revocation"),
+                        AuthorityGrantId::new("fail-closed-target"),
+                        IdentityPrincipalId::new(ACTOR),
+                        at(4, 0),
+                        "fail-closed test",
+                    )
+                    .unwrap(),
+                ),
+                AssuranceLevel::VeryHigh,
+                None,
+            ),
+            _ => input(action, resource, AssuranceLevel::VeryHigh, None),
+        };
         request.context.account_id = UserId::new("unlinked-account");
-        if matches!(
-            action,
-            AuthorizedAction::GrantAuthority | AuthorizedAction::RevokeAuthority
-        ) {
-            request.authority_mutation_target = Some(AuthorityMutationTarget {
-                actor_principal_id: IdentityPrincipalId::new(TARGET_ACTOR),
-                represented_organization_principal_id: None,
-                kind: AuthorityKind::PlatformOperator,
-                scope: resource,
-            });
-        }
 
         let decision = evaluate_access(&state, &configuration(), &request).unwrap();
         assert_eq!(
-            decision.outcome,
+            decision.outcome(),
             AuthorizationOutcome::Denied,
             "{action:?} did not fail closed"
         );
         assert_eq!(
-            decision.reason_codes,
-            vec![PolicyReasonCode::AccountPrincipalMismatch]
+            decision.reason_codes(),
+            [PolicyReasonCode::AccountPrincipalMismatch]
         );
     }
 }

@@ -5,14 +5,15 @@ use csqd_domain::{
     OrganizationMembershipId, PolicyId, Principal, Timestamp, UserId,
 };
 use csqd_identity::{
-    project_identity_state, project_identity_state_at, AccountPrincipalLink, AssertionStatus,
-    AssuranceLevel, AuthenticationMethod, AuthorityGrant, AuthorityKind, AuthorityRevocation,
-    AuthorizationBasis, AuthorizationOutcome, AuthorizedAction, IdentityAssertion,
-    IdentityAssertionKind, IdentityEvent, IdentityEventPayload, IdentityPrincipal,
-    IdentityPrincipalKind, IdentityProjectionError, LinkStatus, NewAccessDecision,
-    NewAuthorityGrant, NewIdentityAssertion, NewOrganizationMembership, OrganizationMembership,
-    OrganizationMembershipRole, OrganizationMembershipStatus, OrganizationPrincipalLink,
-    ResourceScope, ValidityPeriod,
+    project_identity_state, project_identity_state_at, AccessDecisionResult, AccountPrincipalLink,
+    AssertionStatus, AssuranceLevel, AuthenticationMethod, AuthorityGrant, AuthorityKind,
+    AuthorityRevocation, AuthorizationBasis, AuthorizationRequest, AuthorizedAction,
+    IdentityAssertion, IdentityAssertionKind, IdentityEvent, IdentityEventPayload,
+    IdentityPrincipal, IdentityPrincipalKind, IdentityProjectionError, LinkStatus,
+    NewAccessDecision, NewAuthorityGrant, NewIdentityAssertion, NewOrganizationMembership,
+    NewOrganizationSponsorship, OrganizationMembership, OrganizationMembershipRole,
+    OrganizationMembershipStatus, OrganizationPrincipalLink, PolicyReasonCode, ResourceScope,
+    SponsorVisibility, Sponsorship, ValidityPeriod,
 };
 
 fn at(hour: u32) -> Timestamp {
@@ -476,6 +477,62 @@ fn organization_grant_scope_must_match_the_linked_business_record() {
 }
 
 #[test]
+fn organization_sponsorship_requires_the_exact_commissioning_grant_semantics() {
+    let grant = AuthorityGrant::new(NewAuthorityGrant {
+        id: AuthorityGrantId::new("reviewer-shaped-commission-grant"),
+        actor_principal_id: IdentityPrincipalId::new("actor"),
+        represented_organization_principal_id: Some(IdentityPrincipalId::new("organization")),
+        kind: AuthorityKind::EpisodeReviewer,
+        scope: ResourceScope::Organization(OrganizationId::new("organization-record")),
+        permitted_actions: vec![AuthorizedAction::CommissionAudit],
+        issued_by_principal_id: IdentityPrincipalId::new("issuer"),
+        issued_at: at(1),
+        validity: None,
+        evidence_refs: vec![],
+    })
+    .unwrap();
+    let sponsorship = Sponsorship::organization(NewOrganizationSponsorship {
+        id: csqd_domain::SponsorshipId::new("invalid-organization-sponsorship"),
+        episode_id: csqd_domain::AuditEpisodeId::new("episode"),
+        organization_principal_id: IdentityPrincipalId::new("organization"),
+        actor_principal_id: IdentityPrincipalId::new("actor"),
+        authority_grant_id: AuthorityGrantId::new("reviewer-shaped-commission-grant"),
+        visibility: SponsorVisibility::Named,
+        created_at: at(1),
+    })
+    .unwrap();
+    let events = vec![
+        principal_event(1, "actor", IdentityPrincipalKind::Human),
+        principal_event(2, "issuer", IdentityPrincipalKind::Human),
+        principal_event(3, "organization", IdentityPrincipalKind::Organization),
+        event(
+            4,
+            at(0),
+            IdentityEventPayload::OrganizationPrincipalLinked {
+                link: OrganizationPrincipalLink {
+                    organization_id: OrganizationId::new("organization-record"),
+                    principal_id: IdentityPrincipalId::new("organization"),
+                    established_by: Principal::Platform,
+                    established_at: at(0),
+                },
+            },
+        ),
+        event(5, at(1), IdentityEventPayload::AuthorityGranted { grant }),
+        event(
+            6,
+            at(1),
+            IdentityEventPayload::SponsorshipRecorded { sponsorship },
+        ),
+    ];
+
+    assert!(matches!(
+        project_identity_state(&events),
+        Err(IdentityProjectionError::SponsorshipGrantMismatch(id))
+            if id == "invalid-organization-sponsorship"
+    ));
+}
+
+#[test]
 fn supersession_requires_semantic_lineage() {
     let first = IdentityAssertion::new(NewIdentityAssertion {
         id: IdentityAssertionId::new("assertion-1"),
@@ -544,19 +601,22 @@ fn access_decision_rejects_a_nonexistent_authority_basis() {
     let decision = csqd_identity::AccessDecision::new(NewAccessDecision {
         id: AccessDecisionId::new("decision"),
         account_id: UserId::new("account"),
-        actor_principal_id: IdentityPrincipalId::new("actor"),
-        represented_organization_principal_id: None,
+        actor_reference: csqd_identity::AuditedPrincipalReference::Known(IdentityPrincipalId::new(
+            "actor",
+        )),
+        representation: csqd_identity::AuditedRepresentation::None,
         authentication_method: AuthenticationMethod::MagicLink,
         authentication_assurance: AssuranceLevel::Medium,
         authenticated_at: at(0),
-        action: AuthorizedAction::SubmitElementReview,
-        scope: ResourceScope::AuditEpisode(csqd_domain::AuditEpisodeId::new("episode")),
-        outcome: AuthorizationOutcome::Allowed,
+        request: AuthorizationRequest::Access {
+            action: AuthorizedAction::SubmitElementReview,
+            resource: ResourceScope::AuditEpisode(csqd_domain::AuditEpisodeId::new("episode")),
+        },
+        result: AccessDecisionResult::Allowed {
+            basis: AuthorizationBasis::AuthorityGrant(AuthorityGrantId::new("missing-grant")),
+            reason: PolicyReasonCode::AllowedAuthorityGrant,
+        },
         policy_id: PolicyId::new("policy"),
-        authorization_basis: Some(AuthorizationBasis::AuthorityGrant(AuthorityGrantId::new(
-            "missing-grant",
-        ))),
-        reason_codes: vec!["allowed_authority_grant".into()],
         evaluated_at: at(1),
     })
     .unwrap();

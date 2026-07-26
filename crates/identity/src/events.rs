@@ -198,7 +198,14 @@ impl fmt::Display for IdentityEventValidationError {
     }
 }
 
-impl std::error::Error for IdentityEventValidationError {}
+impl std::error::Error for IdentityEventValidationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Model(error) => Some(error),
+            Self::InvalidInitialStatus(_) | Self::EmptyValue(_) => None,
+        }
+    }
+}
 
 fn require_initial_status(
     condition: bool,

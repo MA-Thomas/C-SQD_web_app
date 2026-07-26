@@ -89,7 +89,13 @@ An `AuthorityGrant` should identify:
 
 An active human principal may commission an audit on their own behalf without an organization authority grant. Acting for an organization always requires explicit organizational authority.
 
-An authorization decision should be reproducible from the grant, session assurance, policy version, action, and resource.
+An authorization decision should be reproducible from the grant, session
+assurance, policy version, action, and resource. Grant and revocation decisions
+retain the complete proposed mutation—including the target grant, permitted
+actions, validity, and revocation record—rather than only its authority kind
+and scope. Denials retain the attempted identity context even when the account,
+principal, or represented organization did not resolve, because that failure
+is the reason being audited.
 
 ## 4. Core Model
 
@@ -110,6 +116,39 @@ An authorization decision should be reproducible from the grant, session assuran
 | `IdentityEvent` | Append-only event used to derive current identity and authority state. |
 
 The existing `users` table may serve as the initial `Account` representation. Existing `users.roles` should become a compatibility projection during migration, not the long-term authority source.
+
+### Persistence boundary
+
+PostgreSQL persistence uses two coordinated representations:
+
+- `identity_events` is the append-only, explicitly sequenced source for
+  deterministic Rust replay;
+- relational identity tables are transactionally maintained query indexes for
+  foreign keys, uniqueness, active-grant lookup, and operational reporting;
+- each indexed row also retains the validated Rust record as JSON so enum and
+  scope evolution remains owned by `csqd-identity`, rather than duplicated in
+  SQL decoding code;
+- access-decision JSON retains typed reason codes, a structurally valid
+  outcome/basis combination, the complete authorization request, and explicit
+  `Known`/`Unresolved`/`None` audited principal-reference variants while the
+  relational action, scope, and outcome columns remain query indexes;
+- access-decision principal references are mandatory JSON values rather than
+  nullable foreign-key columns; dedicated relation tables index only references
+  that resolved to known principals;
+- repository mutations acquire one transaction-scoped ledger lock, append
+  events, replay the complete ledger inside the transaction, update relational
+  indexes, and then commit;
+- failed replay or an index constraint rolls back the complete mutation while
+  allowing gaps in the database sequence, which are ordering tokens rather
+  than aggregate counts.
+
+Migration `000005_identity_persistence.sql` backfills accounts, organizations,
+reviewer eligibility, and compatibility authority without modifying
+`users.roles`, and creates the typed access-decision schema directly. Legacy
+organization-sponsored episodes identify their
+organization but not the authenticated human actor. They are retained as
+`actor_attribution_required` compatibility rows and are intentionally excluded
+from canonical sponsorship events until that missing provenance is resolved.
 
 ## 5. Resource Scopes and Actions
 

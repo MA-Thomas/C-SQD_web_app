@@ -8,10 +8,10 @@ use csqd_domain::{
 };
 
 use crate::{
-    AccessDecision, AccountPrincipalLink, AssertionStatus, AuthenticationIdentity,
-    AuthenticationIdentityStatus, AuthorityGrant, AuthorityKind, AuthorityRevocation,
-    AuthorizationBasis, IdentityAssertion, IdentityEvent, IdentityEventPayload,
-    IdentityEventValidationError, IdentityPrincipal, IdentityPrincipalKind,
+    AccessDecision, AccountPrincipalLink, AssertionStatus, AuditedRepresentation,
+    AuthenticationIdentity, AuthenticationIdentityStatus, AuthorityGrant, AuthorityKind,
+    AuthorityRevocation, AuthorizationBasis, IdentityAssertion, IdentityEvent,
+    IdentityEventPayload, IdentityEventValidationError, IdentityPrincipal, IdentityPrincipalKind,
     IdentityPrincipalStatus, LinkStatus, OrganizationMembership, OrganizationMembershipStatus,
     OrganizationPrincipalLink, ResourceScope, SponsoringParty, Sponsorship,
 };
@@ -278,74 +278,98 @@ impl IdentityState {
         &self,
         decision: &AccessDecision,
     ) -> Result<(), IdentityProjectionError> {
+        if decision.outcome() == crate::AuthorizationOutcome::Denied {
+            return Ok(());
+        }
+
+        let Some(actor_id) = decision.actor_reference().known_principal_id() else {
+            return Err(IdentityProjectionError::InvalidAccessDecision {
+                id: decision.id().to_string(),
+                reason: "non-denied decision has an unresolved actor principal",
+            });
+        };
+        let represented_organization = match decision.representation() {
+            AuditedRepresentation::None => None,
+            AuditedRepresentation::Known(organization_id) => Some(organization_id),
+            AuditedRepresentation::Unresolved(_) => {
+                return Err(IdentityProjectionError::InvalidAccessDecision {
+                    id: decision.id().to_string(),
+                    reason: "non-denied decision has an unresolved represented organization",
+                });
+            }
+        };
+
         let account_principal = self
-            .active_principal_for_account(&decision.account_id, &decision.evaluated_at)
+            .active_principal_for_account(decision.account_id(), decision.evaluated_at())
             .ok_or_else(|| IdentityProjectionError::InvalidAccessDecision {
-                id: decision.id.to_string(),
+                id: decision.id().to_string(),
                 reason: "account does not resolve to an active principal",
             })?;
-        if account_principal.id != decision.actor_principal_id {
+        if &account_principal.id != actor_id {
             return Err(IdentityProjectionError::InvalidAccessDecision {
-                id: decision.id.to_string(),
+                id: decision.id().to_string(),
                 reason: "account and actor principal do not match",
             });
         }
-        if let Some(organization) = &decision.represented_organization_principal_id {
-            if !self.principal_is_active_at(organization, &decision.evaluated_at)
+        if let Some(organization) = represented_organization {
+            if !self.principal_is_active_at(organization, decision.evaluated_at())
                 || self
-                    .organization_id_for_principal(organization, &decision.evaluated_at)
+                    .organization_id_for_principal(organization, decision.evaluated_at())
                     .is_none()
             {
                 return Err(IdentityProjectionError::InvalidAccessDecision {
-                    id: decision.id.to_string(),
+                    id: decision.id().to_string(),
                     reason: "represented organization is inactive or unlinked",
                 });
             }
         }
 
-        match &decision.authorization_basis {
-            None => Ok(()),
+        match decision.authorization_basis() {
+            None => Err(IdentityProjectionError::InvalidAccessDecision {
+                id: decision.id().to_string(),
+                reason: "non-denied decision is missing an authorization basis",
+            }),
             Some(AuthorizationBasis::AuthenticatedPrincipal)
-                if decision.action == crate::AuthorizedAction::RegisterPublicAuditSubject
-                    && decision.represented_organization_principal_id.is_none() =>
+                if decision.action() == crate::AuthorizedAction::RegisterPublicAuditSubject
+                    && decision.represented_organization_principal_id().is_none() =>
             {
                 Ok(())
             }
             Some(AuthorizationBasis::PersonalCapacity)
-                if decision.action == crate::AuthorizedAction::CommissionAudit
-                    && decision.represented_organization_principal_id.is_none() =>
+                if decision.action() == crate::AuthorizedAction::CommissionAudit
+                    && decision.represented_organization_principal_id().is_none() =>
             {
                 Ok(())
             }
             Some(
                 AuthorizationBasis::AuthenticatedPrincipal | AuthorizationBasis::PersonalCapacity,
             ) => Err(IdentityProjectionError::InvalidAccessDecision {
-                id: decision.id.to_string(),
+                id: decision.id().to_string(),
                 reason: "authorization basis does not support the action or representation",
             }),
             Some(AuthorizationBasis::PersonalSponsorship(sponsorship_id)) => {
                 let sponsorship = self.sponsorships.get(sponsorship_id).ok_or_else(|| {
                     IdentityProjectionError::InvalidAccessDecision {
-                        id: decision.id.to_string(),
+                        id: decision.id().to_string(),
                         reason: "personal sponsorship basis does not exist",
                     }
                 })?;
-                let valid = decision.action == crate::AuthorizedAction::ViewSponsoredAudit
-                    && decision.represented_organization_principal_id.is_none()
-                    && sponsorship.created_at <= decision.evaluated_at
+                let valid = decision.action() == crate::AuthorizedAction::ViewSponsoredAudit
+                    && decision.represented_organization_principal_id().is_none()
+                    && sponsorship.created_at <= *decision.evaluated_at()
                     && matches!(
-                        (&sponsorship.sponsor, &decision.scope),
+                        (&sponsorship.sponsor, decision.scope()),
                         (
                             SponsoringParty::Individual(sponsor),
                             ResourceScope::AuditEpisode(episode_id)
-                        ) if sponsor == &decision.actor_principal_id
+                        ) if sponsor == decision.actor_principal_id()
                             && episode_id == &sponsorship.episode_id
                     );
                 if valid {
                     Ok(())
                 } else {
                     Err(IdentityProjectionError::InvalidAccessDecision {
-                        id: decision.id.to_string(),
+                        id: decision.id().to_string(),
                         reason: "personal sponsorship basis does not match actor and resource",
                     })
                 }
@@ -353,32 +377,32 @@ impl IdentityState {
             Some(AuthorizationBasis::AuthorityGrant(grant_id)) => {
                 let grant = self.authority_grants.get(grant_id).ok_or_else(|| {
                     IdentityProjectionError::InvalidAccessDecision {
-                        id: decision.id.to_string(),
+                        id: decision.id().to_string(),
                         reason: "authority grant basis does not exist",
                     }
                 })?;
                 let organization_matches = grant.kind == AuthorityKind::PlatformOperator
                     && matches!(grant.scope, ResourceScope::Platform)
                     || grant.represented_organization_principal_id
-                        == decision.represented_organization_principal_id;
-                let scope_matches = grant.scope == decision.scope
+                        == decision.represented_organization_principal_id().cloned();
+                let scope_matches = &grant.scope == decision.scope()
                     || grant.kind == AuthorityKind::PlatformOperator
                         && matches!(grant.scope, ResourceScope::Platform)
                     || self.organization_grant_supports_episode(
                         grant,
-                        &decision.scope,
-                        &decision.evaluated_at,
+                        decision.scope(),
+                        decision.evaluated_at(),
                     );
-                if grant.actor_principal_id == decision.actor_principal_id
-                    && grant.permitted_actions.contains(&decision.action)
+                if &grant.actor_principal_id == decision.actor_principal_id()
+                    && grant.permitted_actions.contains(&decision.action())
                     && organization_matches
                     && scope_matches
-                    && self.grant_is_active_at(grant_id, &decision.evaluated_at)
+                    && self.grant_is_active_at(grant_id, decision.evaluated_at())
                 {
                     Ok(())
                 } else {
                     Err(IdentityProjectionError::InvalidAccessDecision {
-                        id: decision.id.to_string(),
+                        id: decision.id().to_string(),
                         reason: "authority grant basis does not support the decision",
                     })
                 }
@@ -665,19 +689,28 @@ impl IdentityState {
                             id: grant_id.to_string(),
                         }
                     })?;
-                    if grant.actor_principal_id != sponsorship.actor_principal_id
-                        || grant.represented_organization_principal_id
-                            != sponsorship.represented_organization_principal_id
-                    {
+                    let organization_principal_id = sponsorship
+                        .represented_organization_principal_id
+                        .as_ref()
+                        .ok_or_else(|| {
+                            IdentityProjectionError::SponsorshipGrantMismatch(
+                                sponsorship.id.to_string(),
+                            )
+                        })?;
+                    let organization_id = require_organization_principal(
+                        &self.organization_principal_links,
+                        organization_principal_id,
+                    )?;
+                    if !grant.supports_organization_commission(
+                        &sponsorship.actor_principal_id,
+                        organization_principal_id,
+                        organization_id,
+                    ) {
                         return Err(IdentityProjectionError::SponsorshipGrantMismatch(
                             sponsorship.id.to_string(),
                         ));
                     }
-                    if !grant
-                        .permitted_actions
-                        .contains(&crate::AuthorizedAction::CommissionAudit)
-                        || !self.grant_is_active_at(grant_id, &sponsorship.created_at)
-                    {
+                    if !self.grant_is_active_at(grant_id, &sponsorship.created_at) {
                         return Err(IdentityProjectionError::SponsorshipGrantMismatch(
                             sponsorship.id.to_string(),
                         ));
@@ -747,17 +780,16 @@ impl IdentityState {
                 )?;
             }
             IdentityEventPayload::AccessDecisionRecorded { decision } => {
-                require_principal(&self.principals, &decision.actor_principal_id)?;
-                if decision.evaluated_at != event.recorded_at {
+                if decision.evaluated_at() != &event.recorded_at {
                     return Err(IdentityProjectionError::InvalidAccessDecision {
-                        id: decision.id.to_string(),
+                        id: decision.id().to_string(),
                         reason: "decision evaluation time must equal its ledger recording time",
                     });
                 }
                 self.validate_access_decision(decision)?;
                 insert_unique(
                     &mut self.access_decisions,
-                    decision.id.clone(),
+                    decision.id().clone(),
                     decision.clone(),
                     "access decision",
                 )?;
@@ -1357,4 +1389,11 @@ impl fmt::Display for IdentityProjectionError {
     }
 }
 
-impl std::error::Error for IdentityProjectionError {}
+impl std::error::Error for IdentityProjectionError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::InvalidEvent { source, .. } => Some(source),
+            _ => None,
+        }
+    }
+}

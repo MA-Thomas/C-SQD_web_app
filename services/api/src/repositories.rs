@@ -10,6 +10,7 @@ pub mod commission_inquiries;
 pub mod doi_retrieval;
 pub mod domain_instantiations;
 pub mod evidence_artifacts;
+pub mod identity;
 pub mod public_summary;
 pub mod pubmed_retrieval;
 pub mod relations;

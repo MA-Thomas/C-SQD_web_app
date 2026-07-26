@@ -341,3 +341,210 @@ A strict clippy run including dependencies reaches the pre-existing `clippy::lar
 - Session 4: add the forward PostgreSQL migration, idempotent legacy backfill,
   organization-principal links, SQLx identity repository, active-grant queries,
   and projection/query equivalence tests without removing legacy roles.
+
+## 2026-07-26 — Session 4: PostgreSQL migration and repository
+
+### Completed
+
+- Added forward migration `000005_identity_persistence.sql` with:
+  - append-only, explicitly sequenced identity events;
+  - durable principals, account links, organization links, authentication
+    identities, assertions, memberships, sponsorships, authority grants,
+    revocations, and access decisions;
+  - foreign keys, lifecycle checks, validity-window checks, and a partial
+    unique index preventing duplicate active account links;
+  - indexed relational fields plus the validated Rust record as JSON.
+- Backfilled every current account to a human principal and active account
+  link, and every organization to a one-to-one organization principal link.
+- Backfilled legacy operator roles as platform-operator grants.
+- Backfilled reviewer roles as low-assurance eligibility assertions rather
+  than episode authority.
+- Backfilled legacy sponsor roles as deliberately non-representational
+  compatibility grants that cannot authorize an organization commission.
+- Preserved legacy organization-sponsored episodes in sponsorship rows.
+  Because the old commission flow did not store the authenticated human actor,
+  those rows are marked `actor_attribution_required` and are not emitted as
+  canonical sponsorship events.
+- Kept `users.roles` and all current route behavior unchanged.
+- Added an API SQLx repository with:
+  - ordered event loading and deterministic replay;
+  - transaction-scoped ledger serialization;
+  - replay-before-commit validation;
+  - atomic principal/link creation;
+  - atomic grants, revocations, and grant replacement;
+  - active-grant queries aligned with Rust effective-time rules;
+  - validated access-decision persistence.
+- Added disposable PostgreSQL integration tests and a one-command runner.
+- Updated local database setup so clean seeded databases load demo source rows
+  before applying the identity persistence migration.
+
+### Decisions
+
+- The event ledger is canonical for semantic replay. Relational tables are
+  transactionally maintained query indexes and constraint boundaries.
+- Database append-sequence gaps after rolled-back transactions are valid;
+  sequence values define order, not event counts.
+- Repository writes serialize on one PostgreSQL advisory transaction lock so a
+  mutation validates against an unchanging ledger prefix.
+- Missing legacy actor provenance is represented explicitly instead of being
+  assigned to a guessed user or system principal.
+- Reviewer eligibility is evidence, not authority to review any episode.
+- Legacy roles remain a compatibility mechanism until route authorization
+  cuts over in later sessions.
+
+### Files and migrations
+
+- Added `db/migrations/000005_identity_persistence.sql`.
+- Added `services/api/src/repositories/identity.rs`.
+- Added `services/api/src/lib.rs`.
+- Added `services/api/tests/identity_postgres.rs`.
+- Added `scripts/test_identity_db.sh`.
+- Modified `services/api/Cargo.toml`.
+- Modified `services/api/src/main.rs`.
+- Modified `services/api/src/repositories.rs`.
+- Modified `scripts/setup_db.sh`.
+- Modified `CSQD_IDENTITY_ARCHITECTURE.md`.
+- Modified `CRATES_IDENTITY_BUILD_AND_TEST_GUIDE.md`.
+- The reference `IDENTITY/` directory was not modified.
+
+### Verification
+
+- Migration applied to a clean disposable PostgreSQL database: pass.
+- Migration upgraded a database containing all current seeds: pass.
+- Migration executed twice with unchanged identity row/event counts: pass.
+- Disposable database integration tests: pass — 3 tests covering
+  upgrade/idempotence/replay, constraints/duplicate links, active-query versus
+  Rust projection equivalence, atomic replacement, and rollback.
+- `cargo check -p csqd-api`: pass.
+- `cargo fmt --all -- --check`: pass.
+- `bash -n scripts/setup_db.sh scripts/test_identity_db.sh`: pass.
+- `cargo check --workspace`: pass with two pre-existing API dead-code warnings.
+- `cargo test --workspace`: pass — 78 unit and integration tests plus the
+  identity compile-fail documentation test; the three PostgreSQL tests are
+  ignored in the default run and passed separately against disposable
+  databases.
+- `cargo clippy -p csqd-identity --all-targets --no-deps -- -D warnings`: pass.
+- `cargo clippy -p csqd-api --all-targets --no-deps`: pass with four
+  pre-existing API warnings and no warnings in the new identity repository.
+- `git diff --check`: pass.
+
+### Known limitations
+
+- API routes still use legacy role checks and do not yet call the identity
+  policy or repository.
+- Existing authentication sessions are not yet resolved to identity
+  principals; that is Session 5.
+- Seven current demo organization-sponsored episodes have no recoverable human
+  actor and remain explicit compatibility rows pending Session 6 attribution
+  or replacement.
+- Final-active-operator protection is not yet wired into an operator
+  administration route.
+- Public identity and sponsor projections are not implemented.
+
+### Recommended next session
+
+- Session 5: resolve authenticated sessions to active human principals, carry
+  authentication method/time/assurance in server-side session context, and
+  preserve magic-link behavior while keeping route authorization unchanged
+  until each protected route is deliberately migrated.
+
+## 2026-07-26 — Session 4A: Rust type and authorization hardening
+
+### Completed
+
+- Made denied decisions replayable when denial was caused by:
+  - an unlinked or mismatched account;
+  - an inactive principal;
+  - an inactive or unlinked represented organization.
+- Added one shared organization-commissioning grant predicate used by policy
+  evaluation and sponsorship replay.
+- Required organization sponsorship to cite an active
+  `SponsorRepresentative` grant for the linked organization business record.
+- Replaced the optional, partial authority-mutation target with a typed request
+  carrying the complete proposed grant or grant-plus-revocation.
+- Retained the complete authorization request in both `PolicyDecision` and
+  `AccessDecision`.
+- Replaced string access-decision reasons with `PolicyReasonCode`.
+- Replaced the independent outcome and optional-basis fields with
+  `AccessDecisionResult`, whose variants structurally enforce:
+  - no basis for denials;
+  - a basis for allowed, step-up, and manual-review outcomes.
+- Added outcome-specific reason-code validation.
+- Rejected duplicate permitted actions and blank custom authentication method
+  labels.
+- Removed the signed-to-unsigned authentication-age cast and exposed wrapped
+  model errors through standard Rust error sources.
+- Replaced the boolean-heavy grant diagnostic accumulator with a typed set of
+  diagnostic flags.
+- Replaced ambiguous denial provenance with `AuditedPrincipalReference` and
+  `AuditedRepresentation`, which explicitly distinguish known, unresolved, and
+  absent representation states.
+- Defined the clean access-decision schema directly in
+  `000005_identity_persistence.sql`: canonical actor and representation
+  references are non-null JSON values, while dedicated relation tables contain
+  only resolved principal foreign keys.
+
+### Decisions
+
+- Failed identity resolution is valid denial provenance, not a malformed access
+  decision.
+- The same grant predicate is canonical for policy authorization and event
+  replay; persistence must not admit authority semantics the policy rejects.
+- Authority-mutation decisions prove the exact proposed mutation, including
+  permitted actions and validity, rather than authorizing only a kind/scope
+  outline.
+- Typed policy reasons are preserved through JSON and PostgreSQL persistence.
+- Rust uses enum variants for absent and unresolved identity provenance; SQL
+  `NULL` is not used to encode either state in access-decision references.
+- String-backed shared IDs remain the repository-wide compatibility
+  convention. Moving them to UUID-backed validated newtypes is deliberately
+  deferred because it affects every domain crate, seed fixture, and wire
+  boundary rather than only `csqd-identity`.
+
+### Files and migrations
+
+- Modified `crates/identity/src/error.rs`.
+- Modified `crates/identity/src/events.rs`.
+- Modified `crates/identity/src/lib.rs`.
+- Modified `crates/identity/src/model.rs`.
+- Modified `crates/identity/src/policy.rs`.
+- Modified `crates/identity/src/projection.rs`.
+- Modified `crates/identity/tests/policy.rs`.
+- Modified `crates/identity/tests/projection.rs`.
+- Updated the new, uncommitted
+  `db/migrations/000005_identity_persistence.sql` directly rather than adding a
+  transitional compatibility migration.
+- Modified `services/api/src/repositories/identity.rs`.
+- Modified `services/api/tests/identity_postgres.rs`.
+- Modified `CSQD_IDENTITY_ARCHITECTURE.md`.
+- Modified `CRATES_IDENTITY_BUILD_AND_TEST_GUIDE.md`.
+
+### Verification
+
+- `cargo test -p csqd-identity`: pass — 15 unit tests, 11 policy integration
+  tests, 12 projection integration tests, and 1 compile-fail documentation
+  test.
+- `cargo clippy -p csqd-identity --all-targets --no-deps -- -D warnings`:
+  pass.
+- `cargo test --workspace`: pass — including 19 API tests, 23 domain tests,
+  15 identity unit tests, 11 policy tests, 12 projection tests, and the
+  compile-fail documentation test; 4 database tests remain ignored in this
+  command by design.
+- `scripts/test_identity_db.sh`: pass — all 4 disposable PostgreSQL migration,
+  constraint, repository, rollback, and denial-provenance tests.
+- `cargo clippy -p csqd-api --all-targets --no-deps`: pass with 4 pre-existing
+  warnings outside the identity repository.
+
+### Known limitations
+
+- Shared IDs remain unchecked string newtypes until a separately reviewed
+  repository-wide UUID boundary migration.
+- API routes still use legacy role checks; this hardening changes the canonical
+  identity model and repository serialization but does not cut over route
+  authorization.
+
+### Recommended next session
+
+- Session 5 remains next: resolve authenticated sessions to active human
+  principals and carry authentication method, time, and assurance in the
+  server-side session context.

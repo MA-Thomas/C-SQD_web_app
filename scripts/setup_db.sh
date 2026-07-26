@@ -113,13 +113,15 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
    VALUES ('000001_initial_schema.sql')
    ON CONFLICT (version) DO NOTHING;"
 
-for migration in "$MIGRATIONS_DIR"/*.sql; do
+apply_migration() {
+  local migration="$1"
+  local version
   version="$(basename "$migration")"
-
   if [[ "$version" == "000001_initial_schema.sql" ]]; then
-    continue
+    return
   fi
 
+  local already_applied
   already_applied="$(
     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -At -c \
       "SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = '$version');"
@@ -133,6 +135,16 @@ for migration in "$MIGRATIONS_DIR"/*.sql; do
     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -q -c \
       "INSERT INTO schema_migrations (version) VALUES ('$version');"
   fi
+}
+
+for migration in "$MIGRATIONS_DIR"/*.sql; do
+  version="$(basename "$migration")"
+  if [[ "$APPLY_SEEDS" == true ]] && [[
+    "$version" == "000005_identity_persistence.sql"
+  ]]; then
+    continue
+  fi
+  apply_migration "$migration"
 done
 
 # Seed files are idempotent (every statement uses ON CONFLICT), so apply all of
@@ -145,6 +157,11 @@ if [[ "$APPLY_SEEDS" == true ]]; then
     echo "Applying seed $(basename "$seed")..."
     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$seed"
   done
+
+  # The identity persistence migration derives its initial identity ledger
+  # from existing application rows, including local demo data. Apply it once,
+  # in normal migration order, after those rows exist.
+  apply_migration "$MIGRATIONS_DIR/000005_identity_persistence.sql"
 else
   echo "Skipping demo seeds (--no-seeds)."
 fi

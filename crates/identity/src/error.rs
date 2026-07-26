@@ -5,6 +5,7 @@ use std::fmt;
 pub enum IdentityModelError {
     EmptyField(&'static str),
     EmptyCollection(&'static str),
+    DuplicateCollectionValue(&'static str),
     InvalidValidityPeriod,
     InconsistentMembership(&'static str),
     InconsistentSponsorship(&'static str),
@@ -17,6 +18,9 @@ impl fmt::Display for IdentityModelError {
             Self::EmptyField(field) => write!(formatter, "{field} must not be empty"),
             Self::EmptyCollection(field) => {
                 write!(formatter, "{field} must contain at least one value")
+            }
+            Self::DuplicateCollectionValue(field) => {
+                write!(formatter, "{field} must not contain duplicate values")
             }
             Self::InvalidValidityPeriod => {
                 formatter.write_str("validity end must be later than validity start")

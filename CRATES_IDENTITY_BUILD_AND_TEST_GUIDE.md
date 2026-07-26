@@ -318,7 +318,8 @@ Recommended properties:
 - immutable grant and revocation records;
 - explicit issuer and provenance fields;
 - distinct sponsor and actor principal references;
-- a nullable represented-organization and authority-grant reference;
+- explicit absence or unresolved-reference variants in canonical Rust records,
+  with relational foreign keys only for resolved principals;
 - named, generic, or confidential public-attribution policy;
 - no raw credential tokens;
 - no identity documents or biometric data.
@@ -503,6 +504,39 @@ Tests:
 - rollback leaves no partial authority state.
 
 Do not use the developer's normal database for destructive migration tests. Use a disposable database or transaction-isolated test schema.
+
+Implemented on 2026-07-26:
+
+- migration `000005_identity_persistence.sql` adds the identity ledger and
+  relational query indexes without removing legacy roles;
+- on a new seeded local database, demo rows are loaded before the identity
+  persistence migration so its one forward backfill sees the complete source
+  dataset;
+- `services/api/src/repositories/identity.rs` performs serialized transactional
+  writes, replay-before-commit validation, active-grant lookup, grant
+  replacement, and access-decision persistence;
+- `services/api/tests/identity_postgres.rs` creates and destroys a randomly
+  named PostgreSQL database per ignored integration test;
+- legacy organization sponsorships with no recoverable human actor are
+  retained as explicit `actor_attribution_required` compatibility rows, not
+  fabricated canonical sponsorship events.
+
+Post-audit hardening on 2026-07-26:
+
+- denied policy decisions remain replayable even when the account, principal,
+  or represented organization failed to resolve;
+- organization sponsorship replay and policy evaluation share the same exact
+  sponsor-representative grant semantics;
+- grant and revocation policy requests retain the complete target mutation in
+  the resulting access decision;
+- access-decision outcomes structurally determine whether an authorization
+  basis is present, and persisted reason codes remain typed;
+- access decisions use explicit `Known`/`Unresolved` actor references and
+  `None`/`Known`/`Unresolved` representation variants in Rust and mandatory
+  JSON fields in PostgreSQL; resolved foreign keys live in dedicated relation
+  tables;
+- duplicate permitted actions and blank custom authentication methods are
+  rejected at the domain boundary.
 
 ### Session 5 — Link current authentication to principals
 
@@ -824,6 +858,7 @@ Database and API smoke checks should run only after the project PostgreSQL conta
 
 ```sh
 scripts/setup_db.sh
+scripts/test_identity_db.sh
 npm run dev:api
 scripts/smoke_test.sh
 ```

@@ -25,20 +25,20 @@ mod projection;
 pub use error::IdentityModelError;
 pub use events::{IdentityEvent, IdentityEventPayload, IdentityEventValidationError};
 pub use model::{
-    AccessDecision, AccountPrincipalLink, AssertionStatus, AssuranceLevel, AuthenticationIdentity,
+    AccessDecision, AccessDecisionResult, AccountPrincipalLink, AssertionStatus, AssuranceLevel,
+    AuditedPrincipalReference, AuditedRepresentation, AuthenticationIdentity,
     AuthenticationIdentityKind, AuthenticationIdentityStatus, AuthenticationMethod, AuthorityGrant,
-    AuthorityKind, AuthorityRevocation, AuthorizationBasis, AuthorizationOutcome, AuthorizedAction,
-    IdentityAssertion, IdentityAssertionKind, IdentityPrincipal, IdentityPrincipalKind,
-    IdentityPrincipalStatus, LinkStatus, NewAccessDecision, NewAuthorityGrant,
-    NewIdentityAssertion, NewOrganizationMembership, NewOrganizationSponsorship,
-    OrganizationMembership, OrganizationMembershipRole, OrganizationMembershipStatus,
-    OrganizationPrincipalLink, ResourceScope, SponsorVisibility, SponsoringParty, Sponsorship,
-    ValidityPeriod,
+    AuthorityKind, AuthorityMutation, AuthorityRevocation, AuthorizationBasis,
+    AuthorizationOutcome, AuthorizationRequest, AuthorizedAction, IdentityAssertion,
+    IdentityAssertionKind, IdentityPrincipal, IdentityPrincipalKind, IdentityPrincipalStatus,
+    LinkStatus, NewAccessDecision, NewAuthorityGrant, NewIdentityAssertion,
+    NewOrganizationMembership, NewOrganizationSponsorship, OrganizationMembership,
+    OrganizationMembershipRole, OrganizationMembershipStatus, OrganizationPrincipalLink,
+    ResourceScope, SponsorVisibility, SponsoringParty, Sponsorship, ValidityPeriod,
 };
 pub use policy::{
-    evaluate_access, AuthorityMutationTarget, AuthorizationContext, ConflictStatus,
-    InitialPolicyConfiguration, PolicyDecision, PolicyEvaluationError, PolicyInput,
-    PolicyReasonCode,
+    evaluate_access, AuthorizationContext, ConflictStatus, InitialPolicyConfiguration,
+    PolicyDecision, PolicyEvaluationError, PolicyInput, PolicyReasonCode,
 };
 pub use projection::{
     project_identity_state, project_identity_state_at, IdentityProjectionError, IdentityState,

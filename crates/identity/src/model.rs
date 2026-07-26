@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use csqd_domain::{
     AccessDecisionId, AccountPrincipalLinkId, AuditEpisodeId, AuditSubjectId,
     AuthenticationIdentityId, AuthorityGrantId, AuthorityRevocationId, DomainInstantiationId,
@@ -175,6 +177,16 @@ pub enum AuthenticationMethod {
     Passkey,
     MultiFactor,
     Other(String),
+}
+
+impl AuthenticationMethod {
+    pub(crate) fn validate(&self) -> Result<(), IdentityModelError> {
+        if let Self::Other(label) = self {
+            ensure_text(label, "authentication_method")
+        } else {
+            Ok(())
+        }
+    }
 }
 
 /// Ordinal confidence used by authorization policy.
@@ -622,7 +634,7 @@ pub enum ResourceScope {
     PrivateEvidenceCollection(AuditEpisodeId),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthorizedAction {
     RegisterPublicAuditSubject,
@@ -727,6 +739,16 @@ impl AuthorityGrant {
         if self.permitted_actions.is_empty() {
             return Err(IdentityModelError::EmptyCollection("permitted_actions"));
         }
+        let unique_actions = self
+            .permitted_actions
+            .iter()
+            .copied()
+            .collect::<BTreeSet<_>>();
+        if unique_actions.len() != self.permitted_actions.len() {
+            return Err(IdentityModelError::DuplicateCollectionValue(
+                "permitted_actions",
+            ));
+        }
         if let Some(validity) = &self.validity {
             validity.validate()?;
         }
@@ -735,6 +757,26 @@ impl AuthorityGrant {
         }
 
         Ok(())
+    }
+
+    pub(crate) fn supports_organization_commission(
+        &self,
+        actor_principal_id: &IdentityPrincipalId,
+        organization_principal_id: &IdentityPrincipalId,
+        organization_id: &OrganizationId,
+    ) -> bool {
+        self.kind == AuthorityKind::SponsorRepresentative
+            && &self.actor_principal_id == actor_principal_id
+            && self.represented_organization_principal_id.as_ref()
+                == Some(organization_principal_id)
+            && matches!(
+                &self.scope,
+                ResourceScope::Organization(scoped_organization_id)
+                    if scoped_organization_id == organization_id
+            )
+            && self
+                .permitted_actions
+                .contains(&AuthorizedAction::CommissionAudit)
     }
 }
 
@@ -787,6 +829,140 @@ impl AuthorityRevocation {
     }
 }
 
+/// The complete authority mutation evaluated by policy and retained in the
+/// resulting audit decision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "mutation_type", rename_all = "snake_case")]
+pub enum AuthorityMutation {
+    Grant {
+        grant: Box<AuthorityGrant>,
+    },
+    Revoke {
+        grant: Box<AuthorityGrant>,
+        revocation: AuthorityRevocation,
+    },
+}
+
+impl AuthorityMutation {
+    pub fn grant(grant: AuthorityGrant) -> Self {
+        Self::Grant {
+            grant: Box::new(grant),
+        }
+    }
+
+    pub fn revoke(grant: AuthorityGrant, revocation: AuthorityRevocation) -> Self {
+        Self::Revoke {
+            grant: Box::new(grant),
+            revocation,
+        }
+    }
+
+    pub fn grant_record(&self) -> &AuthorityGrant {
+        match self {
+            Self::Grant { grant } | Self::Revoke { grant, .. } => grant,
+        }
+    }
+
+    pub fn revocation(&self) -> Option<&AuthorityRevocation> {
+        match self {
+            Self::Grant { .. } => None,
+            Self::Revoke { revocation, .. } => Some(revocation),
+        }
+    }
+
+    pub fn action(&self) -> AuthorizedAction {
+        match self {
+            Self::Grant { .. } => AuthorizedAction::GrantAuthority,
+            Self::Revoke { .. } => AuthorizedAction::RevokeAuthority,
+        }
+    }
+
+    pub fn scope(&self) -> &ResourceScope {
+        self.grant_record().scope()
+    }
+}
+
+/// A policy request whose shape makes authority-mutation targets mandatory and
+/// keeps them distinct from ordinary access checks.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "request_type", rename_all = "snake_case")]
+pub enum AuthorizationRequest {
+    Access {
+        action: AuthorizedAction,
+        resource: ResourceScope,
+    },
+    AuthorityMutation {
+        mutation: AuthorityMutation,
+    },
+}
+
+impl AuthorizationRequest {
+    pub fn access(
+        action: AuthorizedAction,
+        resource: ResourceScope,
+    ) -> Result<Self, IdentityModelError> {
+        let request = Self::Access { action, resource };
+        request.validate()?;
+        Ok(request)
+    }
+
+    pub fn authority_mutation(mutation: AuthorityMutation) -> Result<Self, IdentityModelError> {
+        let request = Self::AuthorityMutation { mutation };
+        request.validate()?;
+        Ok(request)
+    }
+
+    pub fn action(&self) -> AuthorizedAction {
+        match self {
+            Self::Access { action, .. } => *action,
+            Self::AuthorityMutation { mutation } => mutation.action(),
+        }
+    }
+
+    pub fn resource(&self) -> &ResourceScope {
+        match self {
+            Self::Access { resource, .. } => resource,
+            Self::AuthorityMutation { mutation } => mutation.scope(),
+        }
+    }
+
+    pub fn authority_mutation_target(&self) -> Option<&AuthorityMutation> {
+        match self {
+            Self::Access { .. } => None,
+            Self::AuthorityMutation { mutation } => Some(mutation),
+        }
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), IdentityModelError> {
+        match self {
+            Self::Access { action, .. } => {
+                if matches!(
+                    action,
+                    AuthorizedAction::GrantAuthority | AuthorizedAction::RevokeAuthority
+                ) {
+                    Err(IdentityModelError::InconsistentAccessDecision(
+                        "authority actions require a complete mutation target",
+                    ))
+                } else {
+                    Ok(())
+                }
+            }
+            Self::AuthorityMutation { mutation } => {
+                mutation.grant_record().validate()?;
+                if let Some(revocation) = mutation.revocation() {
+                    revocation.validate()?;
+                    if &revocation.grant_id != mutation.grant_record().id() {
+                        return Err(IdentityModelError::InconsistentAccessDecision(
+                            "revocation must target the retained authority grant",
+                        ));
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthorizationOutcome {
@@ -807,22 +983,145 @@ pub enum AuthorizationBasis {
     AuthorityGrant(AuthorityGrantId),
 }
 
+/// Principal reference retained by an authorization decision. `Known` means
+/// the identifier existed in the replayed identity graph at evaluation time;
+/// `Unresolved` preserves an attempted identifier without fabricating a
+/// foreign-key-safe principal.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuditedPrincipalReference {
+    Known(IdentityPrincipalId),
+    Unresolved(IdentityPrincipalId),
+}
+
+impl AuditedPrincipalReference {
+    pub fn principal_id(&self) -> &IdentityPrincipalId {
+        match self {
+            Self::Known(id) | Self::Unresolved(id) => id,
+        }
+    }
+
+    pub fn known_principal_id(&self) -> Option<&IdentityPrincipalId> {
+        match self {
+            Self::Known(id) => Some(id),
+            Self::Unresolved(_) => None,
+        }
+    }
+}
+
+/// Explicit representation context retained by an authorization decision.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AuditedRepresentation {
+    None,
+    Known(IdentityPrincipalId),
+    Unresolved(IdentityPrincipalId),
+}
+
+impl AuditedRepresentation {
+    pub fn principal_id(&self) -> Option<&IdentityPrincipalId> {
+        match self {
+            Self::None => None,
+            Self::Known(id) | Self::Unresolved(id) => Some(id),
+        }
+    }
+
+    pub fn known_principal_id(&self) -> Option<&IdentityPrincipalId> {
+        match self {
+            Self::Known(id) => Some(id),
+            Self::None | Self::Unresolved(_) => None,
+        }
+    }
+}
+
+/// Structurally valid authorization result. The enum prevents denied outcomes
+/// from carrying a basis and requires every non-denied outcome to retain one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "outcome", rename_all = "snake_case")]
+pub enum AccessDecisionResult {
+    Allowed {
+        basis: AuthorizationBasis,
+        reason: crate::PolicyReasonCode,
+    },
+    Denied {
+        reasons: Vec<crate::PolicyReasonCode>,
+    },
+    StepUpRequired {
+        basis: AuthorizationBasis,
+        reasons: Vec<crate::PolicyReasonCode>,
+    },
+    ManualReviewRequired {
+        basis: AuthorizationBasis,
+        reasons: Vec<crate::PolicyReasonCode>,
+    },
+}
+
+impl AccessDecisionResult {
+    pub fn outcome(&self) -> AuthorizationOutcome {
+        match self {
+            Self::Allowed { .. } => AuthorizationOutcome::Allowed,
+            Self::Denied { .. } => AuthorizationOutcome::Denied,
+            Self::StepUpRequired { .. } => AuthorizationOutcome::StepUpRequired,
+            Self::ManualReviewRequired { .. } => AuthorizationOutcome::ManualReviewRequired,
+        }
+    }
+
+    pub fn authorization_basis(&self) -> Option<&AuthorizationBasis> {
+        match self {
+            Self::Allowed { basis, .. }
+            | Self::StepUpRequired { basis, .. }
+            | Self::ManualReviewRequired { basis, .. } => Some(basis),
+            Self::Denied { .. } => None,
+        }
+    }
+
+    pub fn reason_codes(&self) -> &[crate::PolicyReasonCode] {
+        match self {
+            Self::Allowed { reason, .. } => std::slice::from_ref(reason),
+            Self::Denied { reasons }
+            | Self::StepUpRequired { reasons, .. }
+            | Self::ManualReviewRequired { reasons, .. } => reasons,
+        }
+    }
+
+    pub(crate) fn validate(&self) -> Result<(), IdentityModelError> {
+        let reasons = self.reason_codes();
+        if reasons.is_empty() {
+            return Err(IdentityModelError::EmptyCollection("reason_codes"));
+        }
+        let valid_categories = match self {
+            Self::Allowed { reason, .. } => reason.is_allowed(),
+            Self::Denied { reasons } => reasons.iter().all(|reason| reason.is_denial()),
+            Self::StepUpRequired { reasons, .. } => {
+                reasons.iter().all(|reason| reason.is_step_up())
+            }
+            Self::ManualReviewRequired { reasons, .. } => {
+                reasons.iter().all(|reason| reason.is_manual_review())
+            }
+        };
+        if !valid_categories {
+            return Err(IdentityModelError::InconsistentAccessDecision(
+                "reason codes must agree with the authorization outcome",
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 /// Auditable result of evaluating a versioned policy.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AccessDecision {
     pub(crate) id: AccessDecisionId,
     pub(crate) account_id: UserId,
-    pub(crate) actor_principal_id: IdentityPrincipalId,
-    pub(crate) represented_organization_principal_id: Option<IdentityPrincipalId>,
+    pub(crate) actor_reference: AuditedPrincipalReference,
+    pub(crate) representation: AuditedRepresentation,
     pub(crate) authentication_method: AuthenticationMethod,
     pub(crate) authentication_assurance: AssuranceLevel,
     pub(crate) authenticated_at: Timestamp,
-    pub(crate) action: AuthorizedAction,
-    pub(crate) scope: ResourceScope,
-    pub(crate) outcome: AuthorizationOutcome,
+    pub(crate) request: AuthorizationRequest,
+    pub(crate) result: AccessDecisionResult,
     pub(crate) policy_id: PolicyId,
-    pub(crate) authorization_basis: Option<AuthorizationBasis>,
-    pub(crate) reason_codes: Vec<String>,
     pub(crate) evaluated_at: Timestamp,
 }
 
@@ -836,11 +1135,19 @@ impl AccessDecision {
     }
 
     pub fn actor_principal_id(&self) -> &IdentityPrincipalId {
-        &self.actor_principal_id
+        self.actor_reference.principal_id()
+    }
+
+    pub fn actor_reference(&self) -> &AuditedPrincipalReference {
+        &self.actor_reference
     }
 
     pub fn represented_organization_principal_id(&self) -> Option<&IdentityPrincipalId> {
-        self.represented_organization_principal_id.as_ref()
+        self.representation.principal_id()
+    }
+
+    pub fn representation(&self) -> &AuditedRepresentation {
+        &self.representation
     }
 
     pub fn authentication_method(&self) -> &AuthenticationMethod {
@@ -856,15 +1163,19 @@ impl AccessDecision {
     }
 
     pub fn action(&self) -> AuthorizedAction {
-        self.action
+        self.request.action()
     }
 
     pub fn scope(&self) -> &ResourceScope {
-        &self.scope
+        self.request.resource()
+    }
+
+    pub fn request(&self) -> &AuthorizationRequest {
+        &self.request
     }
 
     pub fn outcome(&self) -> AuthorizationOutcome {
-        self.outcome
+        self.result.outcome()
     }
 
     pub fn policy_id(&self) -> &PolicyId {
@@ -872,11 +1183,11 @@ impl AccessDecision {
     }
 
     pub fn authorization_basis(&self) -> Option<&AuthorizationBasis> {
-        self.authorization_basis.as_ref()
+        self.result.authorization_basis()
     }
 
-    pub fn reason_codes(&self) -> &[String] {
-        &self.reason_codes
+    pub fn reason_codes(&self) -> &[crate::PolicyReasonCode] {
+        self.result.reason_codes()
     }
 
     pub fn evaluated_at(&self) -> &Timestamp {
@@ -884,26 +1195,17 @@ impl AccessDecision {
     }
 
     pub fn new(spec: NewAccessDecision) -> Result<Self, IdentityModelError> {
-        let reason_codes = spec
-            .reason_codes
-            .into_iter()
-            .map(|value| required_text(value, "reason_code"))
-            .collect::<Result<Vec<_>, _>>()?;
-
         let decision = Self {
             id: spec.id,
             account_id: spec.account_id,
-            actor_principal_id: spec.actor_principal_id,
-            represented_organization_principal_id: spec.represented_organization_principal_id,
+            actor_reference: spec.actor_reference,
+            representation: spec.representation,
             authentication_method: spec.authentication_method,
             authentication_assurance: spec.authentication_assurance,
             authenticated_at: spec.authenticated_at,
-            action: spec.action,
-            scope: spec.scope,
-            outcome: spec.outcome,
+            request: spec.request,
+            result: spec.result,
             policy_id: spec.policy_id,
-            authorization_basis: spec.authorization_basis,
-            reason_codes,
             evaluated_at: spec.evaluated_at,
         };
         decision.validate()?;
@@ -912,36 +1214,29 @@ impl AccessDecision {
     }
 
     pub(crate) fn validate(&self) -> Result<(), IdentityModelError> {
-        if self.reason_codes.is_empty() {
-            return Err(IdentityModelError::EmptyCollection("reason_codes"));
-        }
-        for reason_code in &self.reason_codes {
-            ensure_text(reason_code, "reason_code")?;
+        self.authentication_method.validate()?;
+        self.request.validate()?;
+        self.result.validate()?;
+        if self.outcome() != AuthorizationOutcome::Denied {
+            if matches!(
+                self.actor_reference,
+                AuditedPrincipalReference::Unresolved(_)
+            ) {
+                return Err(IdentityModelError::InconsistentAccessDecision(
+                    "non-denied decisions require a known actor principal",
+                ));
+            }
+            if matches!(self.representation, AuditedRepresentation::Unresolved(_)) {
+                return Err(IdentityModelError::InconsistentAccessDecision(
+                    "non-denied decisions require a known represented organization",
+                ));
+            }
         }
         if self.authenticated_at > self.evaluated_at {
             return Err(IdentityModelError::InconsistentAccessDecision(
                 "authentication time must not follow evaluation time",
             ));
         }
-        match (self.outcome, self.authorization_basis.is_some()) {
-            (AuthorizationOutcome::Denied, true) => {
-                return Err(IdentityModelError::InconsistentAccessDecision(
-                    "denied decisions cannot claim an authorization basis",
-                ));
-            }
-            (
-                AuthorizationOutcome::Allowed
-                | AuthorizationOutcome::StepUpRequired
-                | AuthorizationOutcome::ManualReviewRequired,
-                false,
-            ) => {
-                return Err(IdentityModelError::InconsistentAccessDecision(
-                    "non-denied decisions require an authorization basis",
-                ));
-            }
-            _ => {}
-        }
-
         Ok(())
     }
 }
@@ -951,17 +1246,14 @@ impl AccessDecision {
 pub struct NewAccessDecision {
     pub id: AccessDecisionId,
     pub account_id: UserId,
-    pub actor_principal_id: IdentityPrincipalId,
-    pub represented_organization_principal_id: Option<IdentityPrincipalId>,
+    pub actor_reference: AuditedPrincipalReference,
+    pub representation: AuditedRepresentation,
     pub authentication_method: AuthenticationMethod,
     pub authentication_assurance: AssuranceLevel,
     pub authenticated_at: Timestamp,
-    pub action: AuthorizedAction,
-    pub scope: ResourceScope,
-    pub outcome: AuthorizationOutcome,
+    pub request: AuthorizationRequest,
+    pub result: AccessDecisionResult,
     pub policy_id: PolicyId,
-    pub authorization_basis: Option<AuthorizationBasis>,
-    pub reason_codes: Vec<String>,
     pub evaluated_at: Timestamp,
 }
 
@@ -1247,7 +1539,7 @@ mod tests {
 
     #[test]
     fn authority_grant_requires_at_least_one_action() {
-        let result = AuthorityGrant::new(NewAuthorityGrant {
+        let base = NewAuthorityGrant {
             id: AuthorityGrantId::new("grant-1"),
             actor_principal_id: principal_id("human-1"),
             represented_organization_principal_id: None,
@@ -1258,11 +1550,24 @@ mod tests {
             issued_at: timestamp(1),
             validity: None,
             evidence_refs: vec![],
-        });
+        };
+        let result = AuthorityGrant::new(base.clone());
 
         assert_eq!(
             result,
             Err(IdentityModelError::EmptyCollection("permitted_actions"))
+        );
+        assert_eq!(
+            AuthorityGrant::new(NewAuthorityGrant {
+                permitted_actions: vec![
+                    AuthorizedAction::SubmitElementReview,
+                    AuthorizedAction::SubmitElementReview,
+                ],
+                ..base
+            }),
+            Err(IdentityModelError::DuplicateCollectionValue(
+                "permitted_actions"
+            ))
         );
     }
 
@@ -1271,30 +1576,28 @@ mod tests {
         let decision = AccessDecision::new(NewAccessDecision {
             id: AccessDecisionId::new("decision-1"),
             account_id: UserId::new("account-1"),
-            actor_principal_id: principal_id("human-1"),
-            represented_organization_principal_id: None,
+            actor_reference: AuditedPrincipalReference::Known(principal_id("human-1")),
+            representation: AuditedRepresentation::None,
             authentication_method: AuthenticationMethod::MagicLink,
             authentication_assurance: AssuranceLevel::Medium,
             authenticated_at: timestamp(0),
-            action: AuthorizedAction::CommissionAudit,
-            scope: ResourceScope::Platform,
-            outcome: AuthorizationOutcome::Allowed,
+            request: AuthorizationRequest::Access {
+                action: AuthorizedAction::CommissionAudit,
+                resource: ResourceScope::Platform,
+            },
+            result: AccessDecisionResult::Allowed {
+                basis: AuthorizationBasis::PersonalCapacity,
+                reason: crate::PolicyReasonCode::AllowedPersonalCapacity,
+            },
             policy_id: PolicyId::new("policy-commission-v1"),
-            authorization_basis: Some(AuthorizationBasis::PersonalSponsorship(SponsorshipId::new(
-                "sponsorship-1",
-            ))),
-            reason_codes: vec!["  personal_sponsor  ".to_string()],
             evaluated_at: timestamp(1),
         })
         .unwrap();
         let json = serde_json::to_value(decision).unwrap();
 
         assert_eq!(json["policy_id"], json!("policy-commission-v1"));
-        assert_eq!(
-            json["authorization_basis"],
-            json!({"personal_sponsorship": "sponsorship-1"})
-        );
-        assert_eq!(json["reason_codes"], json!(["personal_sponsor"]));
+        assert_eq!(json["result"]["basis"], json!("personal_capacity"));
+        assert_eq!(json["result"]["reason"], json!("allowed_personal_capacity"));
     }
 
     #[test]
@@ -1302,17 +1605,17 @@ mod tests {
         let base = NewAccessDecision {
             id: AccessDecisionId::new("decision-invalid"),
             account_id: UserId::new("account-1"),
-            actor_principal_id: principal_id("human-1"),
-            represented_organization_principal_id: None,
+            actor_reference: AuditedPrincipalReference::Known(principal_id("human-1")),
+            representation: AuditedRepresentation::None,
             authentication_method: AuthenticationMethod::MagicLink,
             authentication_assurance: AssuranceLevel::Medium,
             authenticated_at: timestamp(0),
-            action: AuthorizedAction::CommissionAudit,
-            scope: ResourceScope::Platform,
-            outcome: AuthorizationOutcome::Denied,
+            request: AuthorizationRequest::Access {
+                action: AuthorizedAction::CommissionAudit,
+                resource: ResourceScope::Platform,
+            },
+            result: AccessDecisionResult::Denied { reasons: vec![] },
             policy_id: PolicyId::new("policy-commission-v1"),
-            authorization_basis: None,
-            reason_codes: vec![],
             evaluated_at: timestamp(1),
         };
         assert_eq!(
@@ -1321,14 +1624,31 @@ mod tests {
         );
 
         let inconsistent = NewAccessDecision {
-            reason_codes: vec!["authority_missing".into()],
-            authorization_basis: Some(AuthorizationBasis::PersonalCapacity),
-            ..base
+            result: AccessDecisionResult::StepUpRequired {
+                basis: AuthorizationBasis::PersonalCapacity,
+                reasons: vec![crate::PolicyReasonCode::AuthorityMissing],
+            },
+            ..base.clone()
         };
         assert_eq!(
             AccessDecision::new(inconsistent),
             Err(IdentityModelError::InconsistentAccessDecision(
-                "denied decisions cannot claim an authorization basis"
+                "reason codes must agree with the authorization outcome"
+            ))
+        );
+
+        let unresolved_actor = NewAccessDecision {
+            actor_reference: AuditedPrincipalReference::Unresolved(principal_id("human-1")),
+            result: AccessDecisionResult::Allowed {
+                basis: AuthorizationBasis::PersonalCapacity,
+                reason: crate::PolicyReasonCode::AllowedPersonalCapacity,
+            },
+            ..base
+        };
+        assert_eq!(
+            AccessDecision::new(unresolved_actor),
+            Err(IdentityModelError::InconsistentAccessDecision(
+                "non-denied decisions require a known actor principal"
             ))
         );
     }
